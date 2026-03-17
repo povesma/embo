@@ -596,8 +596,7 @@ claude
 ## 📖 Additional Resources
 
 - **Main README**: Installation and quick start
-- **Command Docs**: `.claude/commands/rlm-mem/README.md`
-- **Implementation**: `IMPLEMENTATION_SUMMARY.md`
+- **Command Docs**: `README.md` (top-level)
 - **RLM Paper**: https://arxiv.org/abs/2512.24601
 
 ---

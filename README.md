@@ -8,7 +8,7 @@ RLM-Mem provides a complete workflow for working with large codebases (1000+ fil
 
 - **RLM (Recursive Language Model)**: Analyzes your codebase at scale, discovers patterns, estimates complexity
 - **Claude-Mem**: Provides semantic memory of past decisions, PRDs, implementations, and lessons learned
-- **12 Commands**: Cover the complete development lifecycle from planning to deployment
+- **9 Commands**: Cover the complete development lifecycle from planning to deployment
 
 ### How It Works
 
@@ -71,20 +71,29 @@ graph TD
 ### Nice to Have
 
 5. **Frontend Design Plugin** - For UI/UX design work
-   - Install: `/plugin marketplace add anthropics/claude-code` then `/plugin install frontend-design@claude-code-plugins`
+   - Step 1 — add to marketplace: `/plugin marketplace add anthropics/claude-code`
+   - Step 2 — install: `/plugin install frontend-design@claude-code-plugins`
 
 6. **Context7 MCP Server** - For library documentation lookups (no authentication required)
-   - Per-project: `claude mcp add --transport http context7 https://mcp.context7.com/mcp`
-   - All projects: `claude mcp add --transport http --scope user context7 https://mcp.context7.com/mcp`
+   - `claude mcp add --transport http --scope user context7 https://mcp.context7.com/mcp`
 
 ## 🚀 Installation
 
-### macOS Installation
+### macOS / Linux Installation
 
 ```bash
 # 1. Clone this repository
 cd ~/
-git clone <repository-url> rlm-mem
+git clone https://github.com/povesma/rlm-mem
+cd rlm-mem
+
+# 2. Run the install script (or follow manual steps below)
+bash install.sh
+```
+
+**Or install manually:**
+
+```bash
 cd rlm-mem
 
 # 2. Copy RLM scripts to Claude config
@@ -93,17 +102,22 @@ mkdir -p ~/.claude/agents
 cp .claude/rlm_scripts/rlm_repl.py ~/.claude/rlm_scripts/
 cp .claude/agents/rlm-subcall.md ~/.claude/agents/
 
-# 3. Copy command definitions
+# 3. Copy test subagents (optional but recommended)
+# test-backend and test-review work immediately
+# test-e2e-* require Playwright MCP (see "Nice to Have" prerequisites)
+cp .claude/agents/test-*.md ~/.claude/agents/
+
+# 4. Copy command definitions
 mkdir -p ~/.claude/commands
 cp -r .claude/commands/rlm-mem ~/.claude/commands/
 
-# 4. Make REPL script executable
+# 5. Make REPL script executable
 chmod +x ~/.claude/rlm_scripts/rlm_repl.py
 
-# 5. Verify Python 3 is available
+# 6. Verify Python 3 is available
 python3 --version  # Should show 3.8 or higher
 
-# 6. Test installation
+# 7. Test installation
 python3 ~/.claude/rlm_scripts/rlm_repl.py --help
 ```
 
@@ -118,7 +132,16 @@ usage: rlm_repl [-h] [--state STATE]
 ```powershell
 # 1. Clone this repository
 cd %USERPROFILE%
-git clone <repository-url> rlm-mem
+git clone https://github.com/povesma/rlm-mem
+cd rlm-mem
+
+# 2. Run the install script (or follow manual steps below)
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
+
+**Or install manually:**
+
+```powershell
 cd rlm-mem
 
 # 2. Create Claude config directories
@@ -130,10 +153,13 @@ mkdir %USERPROFILE%\.claude\commands
 copy .claude\rlm_scripts\rlm_repl.py %USERPROFILE%\.claude\rlm_scripts\
 copy .claude\agents\rlm-subcall.md %USERPROFILE%\.claude\agents\
 
-# 4. Copy command definitions
+# 4. Copy test subagents (optional but recommended)
+for %f in (.claude\agents\test-*.md) do copy "%f" %USERPROFILE%\.claude\agents\
+
+# 5. Copy command definitions
 xcopy .claude\commands\rlm-mem %USERPROFILE%\.claude\commands\rlm-mem\ /E /I
 
-# 5. Verify Python 3 is available
+# 6. Verify Python 3 is available
 python --version  # Should show 3.8 or higher
 # Or: py -3 --version
 
@@ -154,14 +180,19 @@ After installation, your `~/.claude/` directory will contain:
 ```
 ~/.claude/
 ├── agents/
-│   └── rlm-subcall.md          # RLM subagent for chunk analysis
+│   ├── rlm-subcall.md          # RLM subagent for chunk analysis
+│   ├── test-backend.md         # Backend test writer (pytest/vitest/jest/etc.)
+│   ├── test-review.md          # Adversarial coverage gap analyzer
+│   ├── test-e2e-planner.md     # E2E test plan generator (requires Playwright MCP)
+│   ├── test-e2e-generator.md   # Playwright test code generator (requires Playwright MCP)
+│   └── test-e2e-healer.md      # Failing test debugger/repair (requires Playwright MCP)
 ├── commands/
-│   └── rlm-mem/                # All 12 rlm-mem commands
-│       ├── discover/
-│       ├── plan/
-│       ├── develop/
-│       ├── review/
-│       └── git/
+│   └── rlm-mem/                # All 9 rlm-mem commands
+│       ├── discover/           # init, start, health
+│       ├── plan/               # prd, tech-design, tasks, check
+│       └── develop/            # impl, save
+├── hooks/
+│   └── context-guard.sh        # Context window warning hook (optional)
 └── rlm_scripts/
     └── rlm_repl.py             # Persistent REPL for RLM
 ```
@@ -216,21 +247,15 @@ This provides:
 
 ```
 /rlm-mem:develop:impl       # Implement with pattern discovery
-/rlm-mem:develop:build      # Build and test
-```
-
-### 5. Review & Commit
-
-```
-/rlm-mem:review:pr-review   # Review with impact analysis
-/rlm-mem:git:commit         # Smart commit message
+/rlm-mem:develop:save       # Wrap up session, persist context
 ```
 
 ## 📚 Available Commands
 
-### Discovery Phase (2 commands)
+### Discovery Phase (3 commands)
 - `/rlm-mem:discover:init` - Initialize RLM + claude-mem
 - `/rlm-mem:discover:start` - Start session with full context
+- `/rlm-mem:discover:health` - Verify all system dependencies are working
 
 ### Planning Phase (4 commands)
 - `/rlm-mem:plan:prd` - Generate PRD with codebase awareness
@@ -238,38 +263,131 @@ This provides:
 - `/rlm-mem:plan:tasks` - Task breakdown with complexity analysis
 - `/rlm-mem:plan:check` - Verify task completion status
 
-### Development Phase (3 commands)
+### Development Phase (2 commands)
 - `/rlm-mem:develop:impl` - Implement following patterns
-- `/rlm-mem:develop:build` - Build with RLM error analysis
-- `/rlm-mem:develop:sc` - Review screenshots
+- `/rlm-mem:develop:save` - Wrap up session, save to claude-mem
 
-### Review Phase (1 command)
-- `/rlm-mem:review:pr-review` - PR review with impact analysis
+## 🧪 Test Subagents
 
-### Git Phase (1 command)
-- `/rlm-mem:git:commit` - Smart commits with context
+RLM-Mem ships five specialized test subagents that run in isolated contexts to prevent implementation bias. Invoke them via the `Task` tool from within `/rlm-mem:develop:impl`.
+
+### Agents Overview
+
+| Agent | Model | Purpose | Requires |
+|-------|-------|---------|----------|
+| `test-backend` | Haiku | Write & run unit/integration tests. Auto-detects pytest, vitest, jest, go test, cargo test, phpunit. | Test framework in project |
+| `test-review` | Sonnet | Adversarial gap analysis — finds what tests missed. Does NOT write tests. | Nothing extra |
+| `test-e2e-planner` | Sonnet | Explore live app and produce a markdown test plan. | Playwright MCP server |
+| `test-e2e-generator` | Sonnet | Convert test plan into executable `.spec.ts` files, verifying selectors live. | Playwright MCP server |
+| `test-e2e-healer` | Sonnet | Debug and repair failing Playwright tests. Patches selectors, timing, and data issues. | Playwright MCP server |
+
+### When to Use Each Agent
+
+- **After backend changes**: run `test-backend` then `test-review`
+- **After frontend changes**: run `test-e2e-planner` → `test-e2e-generator` → `test-e2e-healer` (if failures)
+- **After any change**: run `test-review` last — it finds gaps the other agents missed
+
+### Playwright MCP Setup (for E2E agents)
+
+Add the Playwright MCP server to your global Claude config (`~/.claude/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "playwright-test": {
+      "command": "npx",
+      "args": ["@playwright/mcp@latest"]
+    }
+  }
+}
+```
+
+### Updating Playwright Forks
+
+The E2E agents (`test-e2e-planner`, `test-e2e-generator`, `test-e2e-healer`) are forks of Playwright's official agents. Each file contains an `UPSTREAM SOURCE` header with the source URL and fetch date.
+
+To update a Playwright fork when Playwright releases a new version:
+
+```bash
+# 1. Download the latest upstream agent
+curl -o /tmp/playwright-test-planner.agent.md \
+  https://raw.githubusercontent.com/microsoft/playwright/main/packages/playwright/src/agents/playwright-test-planner.agent.md
+
+# 2. Diff against your local copy
+diff /tmp/playwright-test-planner.agent.md \
+  ~/.claude/agents/test-e2e-planner.md
+
+# 3. Apply upstream changes manually, preserving lines marked # CUSTOM
+# Lines between <!-- # CUSTOM --> and <!-- # END CUSTOM --> are local additions
+# — keep them when merging upstream changes
+
+# 4. Update the fetched date in the UPSTREAM SOURCE header:
+# <!-- fetched: YYYY-MM-DD -->
+
+# 5. Copy updated file back to installation
+cp .claude/agents/test-e2e-planner.md ~/.claude/agents/
+```
+
+Repeat for `test-e2e-generator.md` and `test-e2e-healer.md`.
 
 ## 💡 Usage Tips
 
-### When to Use RLM-Mem vs Other Workflows
+### Command Tree Overview
 
-**Use rlm-mem/ when:**
+Four command trees are available after installation. Use the right one for the job:
+
+| Tree | Memory | Code Analysis | Use When |
+|------|--------|---------------|----------|
+| `/rlm-mem` | claude-mem | RLM | **Recommended default.** Quality-first. Full history + codebase intelligence. |
+| `/rlm` | None | RLM | No prior session history yet, or one-off large-codebase analysis. |
+| `/coding` | claude-mem | None | Fast work on familiar code. Lightweight — no RLM overhead. |
+| `/dev` | `ai-docs/` files | None | **Deprecated.** Context stored as checked-in markdown files instead of claude-mem. Poor memory management — files go stale, require manual maintenance. |
+
+> **`/dev` is deprecated.** It stores project context in an `ai-docs/` directory of markdown files that must be manually kept up to date. `/coding` replaces it with claude-mem — zero maintenance, semantic search, persistent across sessions.
+
+### When to Use Each Tree
+
+**Use `/rlm-mem` when:**
 - Planning any new feature (PRD/design/tasks)
 - Working in unfamiliar parts of codebase
 - Making architectural changes
 - Cross-module modifications
 - Quality > Speed
 
-**Use coding/ when:**
+**Use `/coding` when:**
 - Urgent hotfixes
 - Trivial changes (typos, configs)
 - Very familiar code areas
 - Small repos (<500 files)
 
+**Use `/rlm` when:**
+- First session on a new large codebase (no claude-mem history yet)
+- One-off analysis task where you don't need persistent memory
+
+**Avoid `/dev`** — use `/coding` instead.
+
+### Recommended Allowlist
+
+`/start` is designed to need minimal shell permissions. To make
+session startup fully frictionless (zero permission prompts),
+add these to your Claude Code allow-list in settings:
+
+```
+python3 ~/.claude/rlm_scripts/rlm_repl.py *
+git log *
+git diff *
+```
+
+On macOS/Linux: Claude Code settings → Permissions → Add allowed
+commands. On Windows, use the equivalent paths with backslashes.
+
+Once configured, `/rlm-mem:discover:start` runs without any
+interruptions.
+
 ### Performance Expectations
 
 - **Init**: 30-60s (one-time per repo)
-- **Start**: 20-30s (per session)
+- **Start**: 20-30s (per session, zero prompts with allowlist)
 - **Planning**: 30-60s per command
 - **Implementation**: +20s overhead per task
 
@@ -314,14 +432,11 @@ LANGUAGE_MAP = {
 
 ## 📖 Documentation
 
-- **Command Reference**: See `.claude/commands/rlm-mem/README.md`
-- **Implementation Details**: See `IMPLEMENTATION_SUMMARY.md`
 - **Troubleshooting**: See `TROUBLESHOOTING.md`
-- **Comparison with Original**: See `COMPARISON.md`
 
 ## 🔗 Related Projects
 
-- **[claude_code_RLM](https://github.com/brainqub3/claude_code_RLM)**: Original RLM for text files (our foundation)
+- **[claude_code_RLM](https://github.com/brainqub3/claude_code_RLM)**: Original RLM for text files (our foundation). RLM-Mem extends it to entire code repositories — adding multi-language indexing, git integration, and a full development workflow — and integrates claude-mem for persistent cross-session memory.
 - **[RLM Paper](https://arxiv.org/abs/2512.24601)**: Research paper on Recursive Language Models
 - **[Claude Code](https://claude.ai/download)**: Anthropic's official CLI
 
@@ -331,20 +446,20 @@ After installation, verify everything works:
 
 ```bash
 # 1. Check REPL script
-python3 ~/.claude/rlm_scripts/rlm_repl.py status
-# Expected: Error (no state yet) - this is OK
+python3 ~/.claude/rlm_scripts/rlm_repl.py --help
+# Expected: usage: rlm_repl [-h] ...
 
 # 2. Start Claude Code
 cd /path/to/test/project
 claude
 
-# 3. In Claude Code, check available commands
-# Type: /rlm-mem:
-# You should see all 12 commands in autocomplete
-
-# 4. Initialize test repo
+# 3. Initialize repo
 /rlm-mem:discover:init
 # Should index your repo and create .claude/rlm_state/
+
+# 4. Run the health check (recommended post-install verification)
+/rlm-mem:discover:health
+# All three rows should show ✅
 ```
 
 ## 🆘 Getting Help
@@ -403,7 +518,7 @@ Areas for contribution:
 
 **Built on the foundation of [claude_code_RLM](https://github.com/brainqub3/claude_code_RLM)** by [Brainqub3](https://brainqub3.com/).
 
-The original project provided the core RLM implementation for text processing. We extended it for code repositories and integrated claude-mem for historical context. See [COMPARISON.md](COMPARISON.md) for detailed differences.
+The original project provided the core RLM implementation for text processing. We extended it for code repositories and integrated claude-mem for historical context.
 
 **Thank you to:**
 - **[claude_code_RLM](https://github.com/brainqub3/claude_code_RLM)**: Original RLM implementation and inspiration

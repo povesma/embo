@@ -6,18 +6,9 @@ Check task completion status by analyzing actual code implementation.
 
 ### Step 1: Load Task List
 
-```bash
-# Find task files
-python3 ~/.claude/rlm_scripts/rlm_repl.py exec <<'PY'
-task_files = [
-    path for path, meta in repo_index['files'].items()
-    if 'tasks/' in path
-    and path.endswith('-tasks.md')
-    and '/archive/' not in path
-]
-print('\n'.join(sorted(task_files)))
-PY
-```
+Use the Glob tool to find task files:
+- Pattern: `tasks/**/*-tasks.md`
+- Exclude paths containing `/archive/`
 
 ### Step 2: Read Task File
 
@@ -52,9 +43,20 @@ PY
 
 ### Step 4: Update Task Status
 
-**For completed tasks**:
+**Task marking rules — apply strictly:**
+- **`[X]`** — ONLY when tested AND passing, or explicitly confirmed by user
+- **`[~]`** — code exists but not yet tested/verified (pending testing)
+- **`[ ]`** — not started
+- Code analysis showing a file/function exists → `[~]` at best, never `[X]`
+- Never upgrade to `[X]` based on code presence alone
+
+**For implemented-but-untested tasks** (code found, no test evidence):
+- Mark subtask as `[~]`
+- Parent stays `[ ]` until all subtasks are at least `[~]`, then becomes `[ ]` with a note
+
+**For confirmed-complete tasks** (tested, passing, or user-confirmed):
 - Mark subtask as `[X]`
-- If all subtasks done, mark parent as `[X]`
+- If all subtasks `[X]`, mark parent as `[X]`
 - Update ai-docs/ when parent complete:
   - ai-docs/API.md
   - ai-docs/ARCHITECTURE.md
@@ -73,15 +75,24 @@ mcp__plugin_claude-mem_mcp-search__save_memory(
 )
 ```
 
-### Step 5: Halt on First Incomplete
+### Step 5: Scope Drift Detection
+
+While checking tasks, if you find code that doesn't correspond
+to any task in the task list, flag it as potential scope drift.
+Report it in the status summary — do not silently accept
+untracked changes.
+
+### Step 6: Halt on First Incomplete
 
 Stop checking when you find first truly incomplete task
 
 ## Final Instructions
 
-1. Load and read task file
-2. For each `[ ]` task, use RLM to verify in code
-3. Update status for completed tasks
-4. Update ai-docs/ when parent tasks complete
-5. Save completions to claude-mem
-6. Halt at first incomplete
+1. Find task files using Glob tool: `tasks/**/*-tasks.md`
+2. Read the active task file
+3. For each `[ ]` task, use RLM to verify in code
+4. Update status: `[~]` if code found but untested, `[X]` only if tested/confirmed
+5. Flag any code found that doesn't match a task (scope drift)
+6. Update ai-docs/ when parent tasks are `[X]`
+7. Save completions to claude-mem
+8. Halt at first truly incomplete (`[ ]`) task

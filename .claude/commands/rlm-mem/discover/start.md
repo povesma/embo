@@ -35,130 +35,20 @@ python3 ~/.claude/rlm_scripts/rlm_repl.py status
 
 ### Step 2: Query Claude-Mem for Historical Context
 
-**2a. Search for project overview**:
 ```
-mcp__plugin_claude-mem_mcp-search__search(
-  query="project overview goals architecture",
-  project="{project_name}",
-  limit=5
-)
+mcp__plugin_claude-mem_mcp-search__search(query="project overview goals architecture", limit=5)
+mcp__plugin_claude-mem_mcp-search__search(query="implementation completed features recent work", limit=10, orderBy="created_at DESC")
+mcp__plugin_claude-mem_mcp-search__search(query="task list TODO in progress", limit=5)
 ```
+Fetch full observations for top results with `mcp__plugin_claude-mem_mcp-search__get_observations`.
 
-**2b. Search for recent work**:
-```
-mcp__plugin_claude-mem_mcp-search__search(
-  query="implementation completed features recent work",
-  project="{project_name}",
-  limit=10,
-  orderBy="created_at DESC"
-)
-```
+Extract: project goals, completed features, active tasks, recent decisions, known issues.
 
-**2c. Search for active tasks**:
-```
-mcp__plugin_claude-mem_mcp-search__search(
-  query="task list TODO in progress",
-  project="{project_name}",
-  limit=5
-)
-```
+### Step 3: Codebase Context
 
-**2d. Get full observations for top results**:
-```
-mcp__plugin_claude-mem_mcp-search__get_observations(
-  ids=[filtered_ids_from_above]
-)
-```
-
-**Extract from claude-mem**:
-- Project goals and purpose
-- Completed features
-- Active/pending tasks
-- Recent architectural decisions
-- Known issues or tech debt
-
-### Step 3: RLM Code Analysis
-
-**3a. Find documentation files via RLM**:
-```bash
-python3 ~/.claude/rlm_scripts/rlm_repl.py exec <<'PY'
-# Find documentation
-doc_files = [
-    path for path, meta in repo_index['files'].items()
-    if meta['lang'] in ['Markdown', 'Text', 'ReStructuredText']
-    and not meta['is_binary']
-    and ('README' in path.upper() or 'CLAUDE' in path.upper() or 'ai-docs' in path)
-]
-
-# Sort by relevance (root level first)
-doc_files.sort(key=lambda x: (x.count('/'), x))
-
-print('\n'.join(doc_files[:10]))
-PY
-```
-
-**3b. Find active task files**:
-```bash
-python3 ~/.claude/rlm_scripts/rlm_repl.py exec <<'PY'
-# Find task files (not archived)
-task_files = [
-    path for path, meta in repo_index['files'].items()
-    if 'tasks/' in path
-    and path.endswith('.md')
-    and '/archive/' not in path
-    and not meta['is_binary']
-]
-
-# Group by JIRA ID
-from collections import defaultdict
-import re
-
-tasks_by_jira = defaultdict(list)
-for tf in task_files:
-    match = re.search(r'([A-Z]+-\d+)', tf)
-    if match:
-        jira_id = match.group(1)
-        tasks_by_jira[jira_id].append(tf)
-
-# Print summary
-for jira_id, files in sorted(tasks_by_jira.items()):
-    print(f"{jira_id}: {len(files)} files")
-    for f in files:
-        print(f"  - {f}")
-PY
-```
-
-**3c. Analyze repository changes (if needed)**:
-```bash
-python3 ~/.claude/rlm_scripts/rlm_repl.py exec <<'PY'
-# Get recently modified files (requires git)
-import subprocess
-import json
-
-try:
-    result = subprocess.run(
-        ['git', 'log', '--pretty=format:', '--name-only', '--since=1.week.ago'],
-        capture_output=True,
-        text=True,
-        cwd=repo_index['repo_root']
-    )
-    recent_files = [f for f in result.stdout.split('\n') if f.strip()]
-
-    # Count modifications
-    from collections import Counter
-    mod_count = Counter(recent_files)
-
-    # Top 10 most modified
-    top_modified = mod_count.most_common(10)
-
-    print("Recently modified files:")
-    for file, count in top_modified:
-        lang = repo_index['files'].get(file, {}).get('lang', 'Unknown')
-        print(f"  {file} ({lang}): {count} changes")
-except Exception as e:
-    print(f"Could not get recent changes: {e}")
-PY
-```
+- Docs: Glob `**/README*.md`, `**/CLAUDE*.md` — read top-level only
+- Tasks: Glob `tasks/**/*-tasks.md` (exclude `/archive/`) — read active task files
+- Git: `git log --oneline -10` and `git diff --stat HEAD`
 
 ### Step 4: Synthesize Session Summary
 
@@ -282,65 +172,58 @@ Depending on what's available, provide appropriate detail:
 ## Example Output
 
 ```
-# 🚀 Session Started: app-astudio
+# 🚀 Session Started: {project_name}
 
 *Generated from RLM code analysis + claude-mem historical context*
 
 ## 📊 Project Overview
 
-Professional 3D scanning application for desktop platforms (Windows, macOS, Linux).
-Built with C++/Qt for performance and cross-platform support.
+{Short project description from README or claude-mem}
 
 **Repository Statistics** (RLM):
-- **Files**: 3,940 files (157.1 MB)
-- **Primary languages**:
-  - C/C++ (31.8%), C++ (22.2%), TypeScript (0.9%)
-- **Last indexed**: 2 hours ago
+- **Files**: {N} files ({size} MB) · **Languages**: {list}
+- **Last indexed**: {timestamp}
 
 ## ✅ Completed Features
-
-From claude-mem:
-- OAuth2 authentication system (AS-1234)
-- Real-time 3D preview (AS-1245)
-- Export to multiple formats (AS-1267)
+- {Feature A} ({task-id})
+- {Feature B} ({task-id})
 
 ## 🏗️ Current Architecture
-
-Clean Architecture pattern with Qt framework:
-- UI Layer: Qt QML/Widgets
-- Application Layer: C++ handlers
-- Domain Layer: Core business logic
-- Infrastructure: File I/O, networking
+{Architecture summary from claude-mem}
 
 ## 📝 Active Tasks
-
-### From Task Files (RLM):
-- AS-1289: Improve scanning accuracy (4 subtasks, 2 done)
-- AS-1290: Add cloud storage integration (planning phase)
-
-### From Memory (Claude-Mem):
-- Last worked on: AS-1289 subtask 3 (mesh optimization)
+- {TASK-1}: {description} ({N} subtasks, {M} done)
+- {TASK-2}: {description} (planning phase)
 
 ## 🔥 Recent Activity
-
-**Most Modified Files** (Past week):
-- src/scanning/mesh_processor.cpp: 5 changes
-- src/ui/preview_widget.qml: 3 changes
+- {file/path}: {N} changes
 
 ## 💡 Recommended Next Task
 
-**Suggestion**: Continue AS-1289 subtask 3 (mesh optimization)
+**Suggestion**: {task and subtask description}
 
 **Rationale**:
-- 2 of 4 subtasks complete
-- Recently modified files related to this task
-- Builds on completed work
-- High priority (from PRD)
+- {reason 1}
+- {reason 2}
 
 ## 🎯 Quick Actions
-
 Ready to code! 🎉
 ```
+
+## Context7
+
+When referencing any library, framework, or external API — use the Context7 MCP to look up current documentation rather than guessing. Call `mcp__context7__resolve-library-id` then `mcp__context7__get-library-docs`. Never invent API signatures or assume version-specific behaviour.
+
+## Docs-First Principle
+
+The normal flow is: PRD → tech-design → tasks → `/rlm-mem:develop:impl`. Docs should exist and be consistent with what's being built before any implementation starts.
+
+When the user asks to implement something after the session starts, check:
+- **Docs exist and are consistent** with the request → proceed directly to `/rlm-mem:develop:impl`
+- **Docs are missing, incomplete, or contradict** what's asked → stop, flag the gap, and offer to create/fix the relevant docs (PRD / tech-design / tasks) before implementing
+- **Minor changes** (typos, config tweaks, small refactors) → proceed without doc update
+
+The goal is not bureaucratic overhead — it is to catch cases where implementation would diverge from or outpace the documentation.
 
 ## Final Instructions
 
@@ -349,5 +232,5 @@ Ready to code! 🎉
 3. Analyze current state (RLM)
 4. Synthesize comprehensive summary
 5. Recommend next task (data-driven)
-6. DO NOT implement anything yet
-7. Wait for user to choose action
+6. DO NOT implement anything yet — wait for user to choose action
+7. When user requests implementation: check docs exist and are consistent — if not, flag and fix before proceeding
