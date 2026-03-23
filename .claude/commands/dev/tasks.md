@@ -22,11 +22,19 @@ historical velocity for realistic estimates.
 
 ## Process
 
+### Step 0: Load Profile
+
+Read `~/.claude/active-profile.yaml` if it exists. If not present,
+use defaults: rlm=true, memory_backend=claude-mem. Skip claude-mem
+velocity search (Step 2) if `tools.memory_backend` is `none`. Skip
+RLM complexity estimation (Step 3) if `tools.rlm` is `false`.
+
 ### Step 1: Load Context
 
 **Read Tech Design / PRD**:
 - From file: `tasks/{jira-id}-{feature}/...-tech-design.md`
 - Or search claude-mem for recent tech design
+  (skip if profile `tools.memory_backend` is `none`)
 - Optionally also load PRD for business context
 
 **Extract Jira ID**: From tech design filename or folder name. If not found,
@@ -195,17 +203,9 @@ implement the feature.
 
 ## Final Instructions
 1. **Create the task list file** as specified above
-2. **Index in claude-mem:**
-   - Read the tasks file you just created
-   - Use MCP tool `mcp__plugin_claude-mem_mcp-search__save_memory`:
-     ```
-     mcp__plugin_claude-mem_mcp-search__save_memory(
-       text="[JIRA: <JIRA-ID>]\n[TYPE: TASK-LIST]\n\n<full task list content>",
-       title="<JIRA-ID> <feature-name> - Task List",
-       project="<project-name>"
-     )
-     ```
-   - This makes the task list searchable in future sessions
+2. **Index in claude-mem:** Read the tasks file you just created —
+   the PostToolUse hook captures it as a claude-mem observation
+   automatically. No explicit save call needed.
 3. DO NOT start implementing the task list
 4. Use RLM complexity data + claude-mem velocity for realistic estimates
-5. Suggest `/rlm-mem:develop:impl` as next step
+5. Suggest `/dev:impl` as next step

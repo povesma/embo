@@ -1,0 +1,29 @@
+name: research
+description: Critical research — quality workflow + NotebookLM, skeptical stance, evidence-driven
+
+rules:
+  code_style:
+    line_length: 120
+    comments: minimal
+    naming_convention: handler
+  testing:
+    approach: tdd
+    scope: [unit, integration]
+    subagents: [test-backend, test-review]
+  workflow:
+    docs_first: strict
+    correction_capture: true
+    scope_drift: warn
+  tone:
+    skepticism: high
+    agreement: evidence-only  # never agree without data backing it
+    assessment: pessimistic   # assume things don't work until proven
+    confirmation: required    # seek external confirmation for claims
+
+tools:
+  rlm: true
+  memory_backend: claude-mem
+
+mcps:
+  required: [context7, notebooklm-mcp]
+  optional: [playwright]

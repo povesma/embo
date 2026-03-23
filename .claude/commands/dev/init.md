@@ -4,7 +4,7 @@ Bootstrap both RLM file indexing and claude-mem semantic memory for a project. T
 
 ## When to Use
 
-- **First time** working on a project with rlm-mem commands
+- **First time** working on a project with dev commands
 - **Migrating** from `dev/*` or `coding/*` workflows
 - **Re-indexing** after major repository changes
 - **New team member** onboarding
@@ -28,9 +28,16 @@ Bootstrap both RLM file indexing and claude-mem semantic memory for a project. T
 
 ## Process
 
+### Step 0: Load Profile
+
+Read `~/.claude/active-profile.yaml` if it exists. If not present,
+use defaults: rlm=true, memory_backend=claude-mem. Skip RLM init
+steps below if `tools.rlm` is `false`. Skip claude-mem bootstrap
+if `tools.memory_backend` is `none`.
+
 ### Step 1: Verify Prerequisites
 
-Check that both systems are available:
+Check that both systems are available (skip checks for disabled tools):
 ```bash
 # Check RLM
 python3 ~/.claude/rlm_scripts/rlm_repl.py --help
@@ -144,59 +151,14 @@ This baseline analysis was performed by RLM indexing at {timestamp}.
 
 **4d. Index existing tasks directory** (if exists):
 
-For each file in `/tasks/`:
-- **PRD files** (`*-prd.md`):
-  ```
-  mcp__plugin_claude-mem_mcp-search__save_memory(
-    text=f"[JIRA: {jira_id}]\n[TYPE: PRD]\n\n{content}",
-    title=f"{jira_id} - PRD",
-    project=project_name
-  )
-  ```
-
-- **Tech-design files** (`*-tech-design.md`):
-  ```
-  mcp__plugin_claude-mem_mcp-search__save_memory(
-    text=f"[JIRA: {jira_id}]\n[TYPE: TECH-DESIGN]\n\n{content}",
-    title=f"{jira_id} - Tech Design",
-    project=project_name
-  )
-  ```
-
-- **Task list files** (`*-tasks.md`):
-  ```
-  mcp__plugin_claude-mem_mcp-search__save_memory(
-    text=f"[JIRA: {jira_id}]\n[TYPE: TASK-LIST]\n\n{content}",
-    title=f"{jira_id} - Tasks",
-    project=project_name
-  )
-  ```
-
-- **Review files** (`*-review.md`):
-  ```
-  mcp__plugin_claude-mem_mcp-search__save_memory(
-    text=f"[JIRA: {jira_id}]\n[TYPE: CODE-REVIEW]\n\n{content}",
-    title=f"{jira_id} - Review",
-    project=project_name
-  )
-  ```
+For each file in `/tasks/` (prd, tech-design, tasks, review files):
+Read the file — the PostToolUse hook captures it as a claude-mem
+observation automatically. No explicit save call needed.
 
 **4e. Index configuration files**:
 
 If package.json, go.mod, Makefile, or similar exist:
-```
-mcp__plugin_claude-mem_mcp-search__save_memory(
-  text=f"""[TYPE: PROJECT-CONFIG]
-[PROJECT: {project_name}]
-
-# Project Configuration
-
-{config_content}
-""",
-  title=f"{project_name} - Configuration",
-  project=project_name
-)
-```
+Read the file — the PostToolUse hook captures it automatically.
 
 ### Step 5: Verify Integration
 
@@ -247,12 +209,12 @@ mcp__plugin_claude-mem_mcp-search__search(
 
 **Start your first session**:
 ```
-/rlm-mem:discover:start
+/dev:start
 ```
 
 **Or create a new feature**:
 ```
-/rlm-mem:plan:prd
+/dev:prd
 ```
 
 **Or search existing work**:
@@ -321,7 +283,7 @@ Search: "authentication" or "database schema" or "API design"
 - ✅ Project tagged: "app-astudio"
 
 ## Next Steps
-/rlm-mem:discover:start
+/dev:start
 ```
 
 ## Final Instructions
@@ -334,4 +296,4 @@ Search: "authentication" or "database schema" or "API design"
 6. Report comprehensive summary
 7. DO NOT start implementing anything
 8. DO NOT read entire source code files
-9. Suggest `/rlm-mem:discover:start` as next step
+9. Suggest `/dev:start` as next step

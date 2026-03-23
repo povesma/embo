@@ -42,10 +42,64 @@ match PRD, tech-design, and tasks. Therefore:
    - Large: update PRD + tech-design + tasks, ask user to
      confirm the doc changes before proceeding
 
-**Judgment call**: Be smart. The goal is maintaining idempotency
-for changes that matter, not creating bureaucratic overhead for
-every instruction. If updating docs costs more context/time than
-the change itself, skip the update.
+**Judgment call**: The clarification-level exception applies only to
+implementation details within an existing task subtask — such as
+choosing between two equivalent approaches, adjusting whitespace,
+or picking a variable name. If the change adds new behavior,
+modifies an API, or touches a file not listed in the task's
+"Relevant Files" section, it requires a doc update first.
+
+**Docs-first enforcement** (per profile `rules.workflow.docs_first`):
+- If `strict`: assess context before editing any code file —
+  documented task → proceed; research/POC → allow with note;
+  undocumented → warn, suggest documenting first
+- If `relaxed`: warn on undocumented changes but proceed
+- If `off`: no docs-first checks
+
+**Docs-after: keep documentation in sync.** After any code change
+that diverges from or extends what's documented:
+- Update the task list (mark done, add new subtasks)
+- Update tech-design if architecture/approach changed
+- Update PRD if requirements shifted
+- Update README.md if user-facing behavior changed (new commands,
+  new install steps, changed workflow)
+- Update CLAUDE.md if file structure or project constraints changed
+Do this immediately — not "later" or "in a follow-up." Stale docs
+are worse than no docs.
+
+## Correction Capture
+
+**Skip this section entirely if profile
+`rules.workflow.correction_capture` is `false`.**
+
+When the user corrects how you work — redirecting your approach,
+fixing your code style, telling you to verify externally, or
+suggesting a workflow improvement — silently save a correction
+observation to claude-mem. Do NOT announce that you are saving it.
+Do NOT interrupt the flow.
+
+**What to capture** (behavioral corrections):
+- "Use Context7 / check the web / read the docs" → category: verification
+- "Don't add comments / wrong naming / simplify" → category: code-style
+- "Skip this step / add a check for X" → category: workflow
+- "That's over-engineered / use a simpler approach" → category: approach
+- "We should always do X before Y" → category: process
+
+**What NOT to capture** (scope/design changes):
+- "Let's do feature B instead" — scope change
+- "Make that field optional" — design decision
+- "Skip task 3" — task prioritization
+
+**How to save**:
+```
+mcp__plugin_claude-mem_mcp-search__save_memory(
+  title="Correction: {short description}",
+  text="[TYPE: CORRECTION]\n[CATEGORY: {cat}]\n[WORKFLOW-STEP: impl]\n[SEVERITY: {pattern|one-off}]\n[STATUS: pending]\n\n**What happened**: {what you did}\n**What user wanted**: {their correction}\n**Context**: {task/file being worked on}"
+)
+```
+
+Save immediately when the correction occurs. Then continue with
+the corrected approach. No acknowledgment of the save.
 
 ## Task Completion Rules
 
@@ -73,9 +127,24 @@ the change itself, skip the update.
 
 ## Process
 
+### 0. Load Profile
+
+Read `~/.claude/active-profile.yaml` if it exists. If the file
+does not exist, use these defaults:
+- `rules.code_style`: line_length=120, comments=minimal,
+  naming_convention=handler
+- `rules.testing`: approach=tdd, scope=[unit, integration],
+  subagents=[test-backend, test-review]
+- `rules.workflow`: docs_first=strict, correction_capture=true,
+  scope_drift=warn
+- `tools`: rlm=true, memory_backend=claude-mem
+
+Apply the loaded values to all "per profile" references below.
+
 ### 1. Load Context
 
-**Search claude-mem for similar implementations:**
+**Search claude-mem for similar implementations**
+(skip if profile `tools.memory_backend` is `none`):
 ```
 mcp__plugin_claude-mem_mcp-search__search(
   query="{task_keywords} implementation pattern",
@@ -84,11 +153,12 @@ mcp__plugin_claude-mem_mcp-search__search(
 )
 ```
 
-**Initialize RLM:**
+**Initialize RLM**
+(skip if profile `tools.rlm` is `false`):
 ```bash
 python3 ~/.claude/rlm_scripts/rlm_repl.py status
 ```
-- If not initialized, suggest `/rlm-mem:discover:init`
+- If not initialized, suggest `/dev:init`
 
 ### 2. Load and Understand Current Task
 
@@ -98,6 +168,8 @@ python3 ~/.claude/rlm_scripts/rlm_repl.py status
 - Extract requirements and acceptance criteria
 
 ### 3. RLM-Powered Context Discovery
+
+**Skip this entire step if profile `tools.rlm` is `false`.**
 
 **3a. Find relevant existing code:**
 ```bash
@@ -163,18 +235,10 @@ Based on RLM analysis and claude-mem history, create a plan:
 - Use same naming conventions and code structure
 - Follow dependency injection patterns found in codebase
 
-### 6. Verify and Save to Claude-Mem
+### 6. Verify and Index in Claude-Mem
 
-**Save completion to claude-mem:**
-```
-mcp__plugin_claude-mem_mcp-search__save_memory(
-  text="[JIRA: {jira_id}]\n[TYPE: IMPLEMENTATION]\n\n
-Task '{task_name}' complete.\n\nPatterns used:\n{patterns}
-\n\nFiles:\n{files}",
-  title="{jira_id} - {task_name} Implementation",
-  project="{project_name}"
-)
-```
+Read the updated tasks file — the PostToolUse hook captures it as a
+claude-mem observation automatically. No explicit save call needed.
 
 ### 7. Update Task List and Documentation
 
@@ -183,29 +247,57 @@ Task '{task_name}' complete.\n\nPatterns used:\n{patterns}
 - If parent task completed, save to claude-mem and update
   ai-docs/ if present
 
+### 8. Session Wrap-Up Check
+
+Before ending the session, check for captured corrections:
+
+```
+mcp__plugin_claude-mem_mcp-search__search(
+  query="[TYPE: CORRECTION] [STATUS: pending]",
+  limit=1
+)
+```
+
+- If results exist: suggest `"{N} workflow corrections captured —
+  run /dev:improve to review and package feedback"`
+- If no results: say nothing about corrections
+
 ## Context7
 
 When referencing any library, framework, or external API — use the Context7 MCP to look up current documentation rather than guessing. Call `mcp__context7__resolve-library-id` then `mcp__context7__get-library-docs`. Never invent API signatures or assume version-specific behaviour.
 
 ## Code Style
 
+**Per profile `rules.code_style`** (defaults shown):
+
 - Focus on readability
-- Try and keep to 120 character row length
+- Line length: per profile `line_length` (default: 120)
 - Trim empty characters in line ends
 - IMPORTANT: Always end files with an empty line
-- **Avoid comments:** Write self-documenting code with clear
-  variable/function names. Only add comments for complex business
-  logic or non-obvious design decisions.
-- **Architecture Terminology:** Use "handler" instead of
-  "usecase" for application layer components
+- **Comments policy** per profile `comments`:
+  - `minimal` (default): Avoid comments. Write self-documenting code.
+    Only add comments for complex business logic.
+  - `allowed`: Add comments where helpful for clarity.
+  - `none`: No comment policy enforced.
+- **Naming convention** per profile `naming_convention`:
+  - `handler` (default): Use "handler" for application layer components
+  - `none`: No naming convention enforced
 
-## Testing Guidelines (TDD)
+## Testing Guidelines
 
+**Per profile `rules.testing`** (defaults shown):
+
+- **Approach** per profile `approach`:
+  - `tdd` (default): Write tests first, then implement
+  - `test-after`: Implement first, write tests after
+  - `none`: No testing requirements
 - **Test External Interface Only:** Public APIs, exported
   functions, external interfaces — never internal implementation
 - **Test Functionality, Not Implementation:** What the code does,
   not how
 - **Focus on Module Contracts:** Inputs, outputs, side effects,
   error conditions
-- **Test First:** Write test before implementing functionality
+- **Subagents**: invoke agents listed in profile `subagents`
+  (default: [test-backend, test-review]). Empty list = no subagents.
 - Follow testing patterns discovered via RLM analysis
+  (skip if RLM disabled)

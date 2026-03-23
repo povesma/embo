@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 RLM-Mem is an **installation package** for Claude Code that combines:
 - **RLM**: Analyzes large codebases via persistent Python REPL
 - **Claude-Mem** (MANDATORY): Semantic memory of past decisions
-- **9 Commands**: Complete development workflow
+- **10 Commands**: Complete development workflow
 - **5 Test Subagents**: Isolated testing agents invoked via Task tool
 
 Users install to `~/.claude/` to use across all their projects.
@@ -42,8 +42,8 @@ Users install to `~/.claude/` to use across all their projects.
    - All agents use YAML input/output contracts and degrade gracefully without
      claude-mem or RLM
 
-4. **Commands** (`.claude/commands/rlm-mem/`)
-   - 9 commands: discover (3), plan (4), develop (2)
+4. **Commands** (`.claude/commands/dev/`)
+   - 10 commands in flat structure
    - Each integrates RLM + claude-mem via Bash and MCP tools
 
 ### Installation Flow
@@ -53,7 +53,7 @@ Users install to `~/.claude/` to use across all their projects.
 cp .claude/rlm_scripts/rlm_repl.py ~/.claude/rlm_scripts/
 cp .claude/agents/rlm-subcall.md ~/.claude/agents/
 cp .claude/agents/test-*.md ~/.claude/agents/     # test subagents
-cp -r .claude/commands/rlm-mem ~/.claude/commands/
+cp -r .claude/commands/dev ~/.claude/commands/
 ```
 
 ## Claude-Mem Integration (MANDATORY)
@@ -74,7 +74,7 @@ python3 ~/.claude/rlm_scripts/rlm_repl.py status
 ```
 
 ### Modify Commands
-Edit `.claude/commands/rlm-mem/<phase>/<name>.md` directly - changes apply immediately.
+Edit `.claude/commands/dev/<name>.md` directly - changes apply immediately.
 
 ### Add Language Support
 Edit `rlm_repl.py` → `LANGUAGE_MAP` dict.
@@ -90,8 +90,14 @@ Edit `rlm_repl.py` → `LANGUAGE_MAP` dict.
 │   ├── test-e2e-planner.md     # E2E planner, Playwright fork (Sonnet)
 │   ├── test-e2e-generator.md   # E2E generator, Playwright fork (Sonnet)
 │   └── test-e2e-healer.md      # E2E healer, Playwright fork (Sonnet)
-├── commands/rlm-mem/           # 9 command definitions
-└── rlm_scripts/rlm_repl.py     # REPL (833 lines)
+├── commands/dev/               # 11 command definitions (flat)
+├── commands-archive/dev/      # deprecated dev tree (reference only)
+├── profiles/                   # workflow configuration profiles
+│   ├── quality.yaml, fast.yaml, minimal.yaml
+├── hooks/
+│   └── context-guard.sh        # Context window warning hook
+├── rlm_scripts/rlm_repl.py     # REPL (833 lines)
+└── statusline.sh               # Status line script (copy to ~/.claude/)
 
 README.md                       # User guide
 TROUBLESHOOTING.md              # Common errors
@@ -107,6 +113,14 @@ TROUBLESHOOTING.md              # Common errors
 - **Claude-mem required**: Not optional
 - **Local state**: `.claude/rlm_state/` never committed (in `.gitignore`)
 - **Quality over speed**: Commands intentionally thorough
+- **CLAUDE.md is NOT a deliverable**: This file is for developing this
+  repo only. Users have their own CLAUDE.md. All behavioral rules for
+  the workflow must live in the command files we ship
+  (`.claude/commands/dev/`), not here.
+
+## Commit Messages
+
+One line, super short. Subject only — no body, no explanation.
 
 ## Safety Rules
 

@@ -5,7 +5,7 @@ Create a Product Requirements Document informed by both historical context (clau
 ## When to Use
 
 - Planning a new feature
-- After `/rlm-mem:discover:start` has provided session context
+- After `/dev:start` has provided session context
 - When you need a data-driven, context-aware PRD
 
 ## What This Command Does
@@ -16,6 +16,13 @@ Create a Product Requirements Document informed by both historical context (clau
 4. **Saves** PRD to claude-mem for future reference
 
 ## Process
+
+### Step 0: Load Profile
+
+Read `~/.claude/active-profile.yaml` if it exists. If not present,
+use defaults: rlm=true, memory_backend=claude-mem. Skip claude-mem
+steps (Step 2) if `tools.memory_backend` is `none`. Skip RLM
+analysis (Step 3) if `tools.rlm` is `false`.
 
 ### Step 1: Gather Requirements from User
 
@@ -119,7 +126,7 @@ Create PRD combining insights + user's clarifications:
 **Status**: Draft
 **Created**: {date}
 **JIRA**: [{JIRA-ID}](https://jira.example.com/browse/{JIRA-ID})
-**Author**: Claude (via rlm-mem analysis)
+**Author**: Claude (via dev workflow analysis)
 
 ---
 
@@ -215,27 +222,11 @@ As a {user type}, I want to {capability}, so that {benefit}.
 
 **Next Steps**:
 1. Review and refine this PRD
-2. Run `/rlm-mem:plan:tech-design` to create technical design
-3. Run `/rlm-mem:plan:tasks` to break down into tasks
+2. Run `/dev:tech-design` to create technical design
+3. Run `/dev:tasks` to break down into tasks
 ```
 
-### Step 6: Save PRD to Claude-Mem
-
-```
-mcp__plugin_claude-mem_mcp-search__save_memory(
-  text=f"""[JIRA: {jira_id}]
-[TYPE: PRD]
-[PROJECT: {project_name}]
-[STATUS: Draft]
-
-{full_prd_content}
-""",
-  title=f"{jira_id} - {feature_name} PRD",
-  project=project_name
-)
-```
-
-### Step 7: Save PRD to File System
+### Step 6: Save PRD to File System
 
 ```bash
 # Create task directory
@@ -245,7 +236,10 @@ mkdir -p tasks/{jira_id}-{feature_name_slug}
 # tasks/{jira_id}-{feature_name_slug}/{YYYY-MM-DD}-{jira_id}-{feature_name_slug}-prd.md
 ```
 
-### Step 8: Report Completion
+After writing, **Read the file back** — the PostToolUse hook captures it
+as a claude-mem observation automatically. No explicit save call needed.
+
+### Step 7: Report Completion
 
 ```markdown
 # ✅ PRD Created: {JIRA-ID}
@@ -279,7 +273,7 @@ Thanks to hybrid analysis, this PRD:
 
 **Create technical design**:
 ```
-/rlm-mem:plan:tech-design
+/dev:tech-design
 ```
 
 **Or refine PRD first**:
@@ -340,7 +334,7 @@ Thanks to hybrid analysis, this PRD:
 ✅ Realistic constraints from architecture
 
 ## Next Steps
-/rlm-mem:plan:tech-design
+/dev:tech-design
 ```
 
 ## Context7
@@ -356,5 +350,5 @@ When referencing any library, framework, or external API — use the Context7 MC
 5. Synthesize PRD incorporating user's answers + RLM + claude-mem insights
 6. Save to both claude-mem and file system
 7. Report what insights were used and quality improvements
-8. Suggest `/rlm-mem:plan:tech-design` as next step
+8. Suggest `/dev:tech-design` as next step
 9. DO NOT start technical design yet, wait for user approval

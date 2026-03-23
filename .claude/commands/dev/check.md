@@ -66,14 +66,8 @@ PY
   - ai-docs/SCHEMA.md
   - ai-docs/USAGE.md
 
-**Save completion to claude-mem**:
-```
-mcp__plugin_claude-mem_mcp-search__save_memory(
-  text=f"[JIRA: {jira_id}]\n[TYPE: TASK-COMPLETION]\n\nTask '{task_name}' verified complete via code analysis.\n\nFiles modified:\n{file_list}",
-  title=f"{jira_id} - Task Completion",
-  project=project_name
-)
-```
+**Index in claude-mem**: Read the updated tasks file — the PostToolUse
+hook captures it automatically. No explicit save call needed.
 
 ### Step 5: Scope Drift Detection
 

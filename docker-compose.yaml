@@ -1,0 +1,15 @@
+services:
+  dev-test:
+    build: .
+    stdin_open: true
+    tty: true
+    volumes:
+      - claude-auth:/root/.claude
+      - .:/workspace
+    working_dir: /workspace
+    environment:
+      - CLAUDE_MEM_PYTHON_VERSION=3.12
+      - CLAUDE_MEM_HEALTH_TIMEOUT_MS=30000
+
+volumes:
+  claude-auth:

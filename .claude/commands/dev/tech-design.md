@@ -10,13 +10,22 @@ Create a technical design informed by past architectural decisions (claude-mem) 
 
 ## Process
 
+### Step 0: Load Profile
+
+Read `~/.claude/active-profile.yaml` if it exists. If not present,
+use defaults: rlm=true, memory_backend=claude-mem. Skip claude-mem
+searches if `tools.memory_backend` is `none`. Skip RLM discovery
+(Step 2-3) if `tools.rlm` is `false`.
+
 ### Step 1: Load Context
 
 **Read PRD**:
 - From file: `tasks/{jira-id}-{feature}/...-prd.md`
 - Or search claude-mem for recent PRD
+  (skip if profile `tools.memory_backend` is `none`)
 
-**Search past tech designs** (claude-mem):
+**Search past tech designs** (claude-mem)
+(skip if profile `tools.memory_backend` is `none`):
 ```
 mcp__plugin_claude-mem_mcp-search__search(
   query="{feature_keywords} architecture design patterns technical",
@@ -289,24 +298,17 @@ Create design document:
 
 **Next Steps**:
 1. Review and approve design
-2. Run `/rlm-mem:plan:tasks` for task breakdown
+2. Run `/dev:tasks` for task breakdown
 ```
 
-### Step 7: Save to Claude-Mem
-
-```
-mcp__plugin_claude-mem_mcp-search__save_memory(
-  text=f"[JIRA: {jira_id}]\n[TYPE: TECH-DESIGN]\n\n{design_content}",
-  title=f"{jira_id} - Technical Design",
-  project=project_name
-)
-```
-
-### Step 8: Save to File
+### Step 7: Save to File
 
 ```
 tasks/{jira-id}-{feature}/{date}-{jira-id}-{feature}-tech-design.md
 ```
+
+After writing, **Read the file back** — the PostToolUse hook captures it
+as a claude-mem observation automatically. No explicit save call needed.
 
 ## Context7
 
@@ -321,4 +323,4 @@ When referencing any library, framework, or external API — use the Context7 MC
 5. **🚨 MANDATORY: Ask technical clarifying questions using AskUserQuestion tool**
 6. Synthesize design incorporating user's answers + RLM + claude-mem insights
 7. Save to both systems
-8. Suggest `/rlm-mem:plan:tasks` as next step
+8. Suggest `/dev:tasks` as next step

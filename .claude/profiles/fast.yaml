@@ -1,0 +1,24 @@
+name: fast
+description: Speed mode — test-after, relaxed docs, no corrections
+
+rules:
+  code_style:
+    line_length: 120
+    comments: allowed
+    naming_convention: none
+  testing:
+    approach: test-after
+    scope: [unit]
+    subagents: []
+  workflow:
+    docs_first: relaxed
+    correction_capture: false
+    scope_drift: off
+
+tools:
+  rlm: true
+  memory_backend: claude-mem
+
+mcps:
+  required: []
+  optional: [context7]

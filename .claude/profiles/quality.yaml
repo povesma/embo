@@ -1,0 +1,24 @@
+name: quality
+description: Full workflow — docs-first, TDD, RLM + claude-mem
+
+rules:
+  code_style:
+    line_length: 120
+    comments: minimal
+    naming_convention: handler
+  testing:
+    approach: tdd
+    scope: [unit, integration]
+    subagents: [test-backend, test-review]
+  workflow:
+    docs_first: strict
+    correction_capture: true
+    scope_drift: warn
+
+tools:
+  rlm: true
+  memory_backend: claude-mem
+
+mcps:
+  required: [context7]
+  optional: [playwright]

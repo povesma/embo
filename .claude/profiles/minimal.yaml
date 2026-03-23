@@ -1,0 +1,24 @@
+name: minimal
+description: Bare bones — no RLM, no memory, no ceremony
+
+rules:
+  code_style:
+    line_length: 120
+    comments: allowed
+    naming_convention: none
+  testing:
+    approach: none
+    scope: []
+    subagents: []
+  workflow:
+    docs_first: off
+    correction_capture: false
+    scope_drift: off
+
+tools:
+  rlm: false
+  memory_backend: none
+
+mcps:
+  required: []
+  optional: []
