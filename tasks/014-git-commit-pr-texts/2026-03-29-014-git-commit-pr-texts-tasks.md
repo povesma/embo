@@ -38,10 +38,10 @@
 
 ## Tasks
 
-- [ ] 1.0 **User Story:** As a developer with staged changes, I want
+- [X] 1.0 **User Story:** As a developer with staged changes, I want
   `/dev:git commit` to generate a quality commit message following
   the active style, so I get consistent commits without writing
-  from scratch [6/0]
+  from scratch [6/6]
   - [X] 1.1 Create `.claude/commands/dev/git.md` with header, "When
     to Use", subcommand table, and no-subcommand interactive menu
     (commit / pr / style) [verify: code-only]
@@ -55,24 +55,29 @@
   - [X] 1.4 Add review-before-commit gate: present message, ask
     accept / edit / reject; only run `git commit` on accept
     [verify: code-only]
-  - [ ] 1.5 Verify: run `/dev:git commit` on a real repo with
+  - [X] 1.5 Verify: run `/dev:git commit` on a real repo with
     staged changes; confirm diff is read and message matches
     conventional format [verify: manual-run-claude]
-  - [ ] 1.6 Verify: confirm Claude does not auto-commit without
+    → ran on this repo; empty staged detected, files grouped by
+      intent, two conventional messages generated and committed
+      [live] (2026-03-29)
+  - [X] 1.6 Verify: confirm Claude does not auto-commit without
     explicit user approval [verify: manual-run-user]
+    → user confirmed: commit only ran after explicit 'a' [live]
+      (2026-03-29)
 
 - [ ] 2.0 **User Story:** As a developer opening a PR, I want
   `/dev:git pr` to generate a description from commits + diff,
   so reviewers understand the motivation immediately [7/0]
-  - [ ] 2.1 Add PR mode: always ask base branch → read
+  - [X] 2.1 Add PR mode: always ask base branch → read
     `git log <base>..HEAD` + `git diff <base>...HEAD --stat`
     → read full diff only if <500 lines [verify: code-only]
-  - [ ] 2.2 Add PR output template: `## Summary` (prose) +
+  - [X] 2.2 Add PR output template: `## Summary` (prose) +
     `## Test plan` (specific checklist bullets) [verify: code-only]
-  - [ ] 2.3 Add review-before-create gate: present description,
+  - [X] 2.3 Add review-before-create gate: present description,
     ask accept / edit / reject; on accept check for `gh` CLI
     [verify: code-only]
-  - [ ] 2.4 Add `gh` degradation: if `gh` not available, print
+  - [X] 2.4 Add `gh` degradation: if `gh` not available, print
     description with paste instruction [verify: code-only]
   - [ ] 2.5 Verify: run `/dev:git pr` on a branch with commits;
     confirm base branch prompt appears and description has both
