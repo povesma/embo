@@ -20,6 +20,11 @@ If you spot a problem, raise it before implementing — even if
 the instruction seems clear. The user is the boss, but the agent
 is responsible for flagging risks.
 
+When the user challenges a decision with a question ("Is this right?",
+"Why this approach?"), defend the position if it's correct — explain
+the reasoning, don't cave. See full rule in `start.md` §Session
+Behavioral Rules.
+
 ## Scope Verification (Doc-First Development)
 
 Sessions are idempotent. If a session is restarted, code must
@@ -90,29 +95,60 @@ Do NOT interrupt the flow.
 - "Make that field optional" — design decision
 - "Skip task 3" — task prioritization
 
-**How to save**:
-```
-mcp__plugin_claude-mem_mcp-search__save_memory(
-  title="Correction: {short description}",
-  text="[TYPE: CORRECTION]\n[CATEGORY: {cat}]\n[WORKFLOW-STEP: impl]\n[SEVERITY: {pattern|one-off}]\n[STATUS: pending]\n\n**What happened**: {what you did}\n**What user wanted**: {their correction}\n**Context**: {task/file being worked on}"
-)
-```
-
-Save immediately when the correction occurs. Then continue with
-the corrected approach. No acknowledgment of the save.
+Corrections are captured automatically by the claude-mem PostToolUse
+hook — no explicit save call needed. Just continue with the corrected
+approach. No acknowledgment required.
 
 ## Task Completion Rules
 
-- **`[X]` (done)**: ONLY when tested AND passing, OR explicitly
-  confirmed by user
+Verification methods (`code-only`, `auto-test`, `manual-run-claude`,
+`manual-run-user`, `docker`, `e2e`, `observation`) and the `live` vs
+`simulated` distinction are defined in the canonical taxonomy in
+`/dev:test-plan`.
+
+- **`[X]` (done)**: ONLY when live-tested AND the intended
+  functionality demonstrably works — not just "tests pass formally."
+  A passing test that doesn't exercise the real behaviour is not
+  sufficient. Always seek a live test (actual command run, real
+  output, real side-effect). Simulation or mocking is acceptable
+  only when live testing is: costly, destructive, or impossible —
+  and even then, at least one live test must be done before `[X]`
+  is marked. When simulation is used, record it explicitly in the
+  evidence note. Alternatively: explicitly confirmed by user.
 - **`[~]` (coded, pending testing)**: implementation is written
-  but not yet verified
+  but evidence not yet obtainable (state the reason inline)
 - **`[ ]` (not started)**: no work done
-- Tasks that are tests themselves (story 8-style verification)
-  may be marked `[X]` once the test is run and the result is
-  known, even if the result reveals bugs to fix
-- Marking `[X]` without testing is **never acceptable** — be
-  pessimistic, assume it doesn't work until proven otherwise
+- Tasks that are tests themselves may be marked `[X]` once the
+  test is run and the result is known, even if it reveals bugs
+- **FORBIDDEN**: marking `[X]` on a non-`code-only` task without
+  showing evidence first. "It looks right" is not evidence.
+  "I wrote it" is not evidence.
+
+**Evidence gate by `[verify:]` type:**
+
+- `[verify: code-only]` — mark `[X]` immediately, no evidence needed
+- `[verify: auto-test]` — run the test suite; show output summary
+- `[verify: manual-run-claude]` — run the command; show actual output
+- `[verify: manual-run-user]` — ask user to confirm; record their reply
+- `[verify: docker]` — run inside container; show output; if Docker
+  unavailable mark `[~]` with reason
+- `[verify: e2e]` — run via Playwright/test subagent; show result
+- `[verify: observation]` — run claude-mem search; show result snippet
+
+**Evidence note format** (append as indented line below the task):
+```
+    → <summary> [live] (<date>)
+    → <summary> [simulated: <reason>] (<date>)
+```
+
+Examples:
+```
+- [X] 2.1 Add correction capture [verify: auto-test]
+    → pytest: 3 passed, 0 failed [live] (2026-03-26)
+- [X] 3.1 Update config file [verify: code-only]
+- [~] 4.2 Verify Docker integration [verify: docker]
+    → Docker not running in session [simulated: n/a]
+```
 
 ## Task Implementation Protocol
 
@@ -159,6 +195,22 @@ mcp__plugin_claude-mem_mcp-search__search(
 python3 ~/.claude/rlm_scripts/rlm_repl.py status
 ```
 - If not initialized, suggest `/dev:init`
+
+### 1b. Test Plan Check
+
+Check for a test plan for the active feature (once per session, at start):
+
+```bash
+ls tasks/{feature-id}-{feature-name}/*-test-plan.md 2>/dev/null
+```
+
+- **If found**: read it. Note that `[verify: ...]` tags on tasks
+  should match the Story Coverage table. Flag any mismatches before
+  implementing.
+- **If not found** AND the feature has non-`code-only` tasks: warn
+  once — _"No test plan found for this feature. Consider running
+  `/dev:test-plan` before proceeding."_ Do NOT block. User can proceed.
+- **If not found** AND all tasks are `code-only`: say nothing.
 
 ### 2. Load and Understand Current Task
 
@@ -239,6 +291,8 @@ Based on RLM analysis and claude-mem history, create a plan:
 
 Read the updated tasks file — the PostToolUse hook captures it as a
 claude-mem observation automatically. No explicit save call needed.
+Evidence notes in the task file (the `→ summary [live] (date)` lines)
+are the durable record of what was tested and how.
 
 ### 7. Update Task List and Documentation
 

@@ -405,6 +405,7 @@ This provides:
 ```
 /dev:prd           # Create Product Requirements Document
 /dev:tech-design   # Create Technical Design
+/dev:test-plan     # Design test plan (optional, before tasks)
 /dev:tasks         # Break down into tasks
 ```
 
@@ -422,9 +423,10 @@ This provides:
 - `/dev:start` - Start session with full context
 - `/dev:health` - Verify all system dependencies are working
 
-### Planning Phase (4 commands)
+### Planning Phase (5 commands)
 - `/dev:prd` - Generate PRD with codebase awareness
 - `/dev:tech-design` - Design with pattern discovery
+- `/dev:test-plan` - Design test plan from tech design — maps stories to verification methods
 - `/dev:tasks` - Task breakdown with complexity analysis
 - `/dev:check` - Verify task completion status
 
