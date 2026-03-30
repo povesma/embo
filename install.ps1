@@ -13,10 +13,16 @@ Copy-Item "$RepoDir\.claude\agents\*.md" "$Target\agents\" -Force
 $agentCount = (Get-ChildItem "$RepoDir\.claude\agents\*.md").Count
 Write-Host "  agents: $agentCount files"
 
-# commands/rlm-mem
-New-Item -ItemType Directory -Force -Path "$Target\commands\rlm-mem" | Out-Null
-Copy-Item "$RepoDir\.claude\commands\rlm-mem\*" "$Target\commands\rlm-mem\" -Recurse -Force
-Write-Host "  commands/rlm-mem: synced"
+# commands/dev
+New-Item -ItemType Directory -Force -Path "$Target\commands\dev" | Out-Null
+Copy-Item "$RepoDir\.claude\commands\dev\*" "$Target\commands\dev\" -Recurse -Force
+Write-Host "  commands/dev: synced"
+
+# profiles
+New-Item -ItemType Directory -Force -Path "$Target\profiles" | Out-Null
+Copy-Item "$RepoDir\.claude\profiles\*.yaml" "$Target\profiles\" -Force
+$profileCount = (Get-ChildItem "$RepoDir\.claude\profiles\*.yaml").Count
+Write-Host "  profiles: $profileCount files"
 
 # hooks
 $hooksDir = "$RepoDir\.claude\hooks"
@@ -33,5 +39,37 @@ Copy-Item "$RepoDir\.claude\rlm_scripts\*.py" "$Target\rlm_scripts\" -Force
 $scriptCount = (Get-ChildItem "$RepoDir\.claude\rlm_scripts\*.py").Count
 Write-Host "  rlm_scripts: $scriptCount files"
 
+# statusline
+$statuslineSrc = "$RepoDir\.claude\statusline.sh"
+if (Test-Path $statuslineSrc) {
+    Copy-Item $statuslineSrc "$Target\statusline.sh" -Force
+    Write-Host "  statusline: copied to $Target\statusline.sh"
+    Write-Host "  Note: configure statusLine in settings.json manually (jq not available on Windows):"
+    Write-Host '  { "statusLine": { "type": "command", "command": "~/.claude/statusline.sh" } }'
+}
+
+# clean up old files
+$oldRlmMem = "$Target\commands\rlm-mem"
+if (Test-Path $oldRlmMem) {
+    Write-Host ""
+    $yn = Read-Host "  Old /rlm-mem:* commands found. Remove? [Y/n]"
+    if ($yn -notmatch '^[Nn]') {
+        Remove-Item $oldRlmMem -Recurse -Force
+        Write-Host "  removed $oldRlmMem"
+    } else {
+        Write-Host "  skipped — remove manually: Remove-Item -Recurse $oldRlmMem"
+    }
+}
+$oldHook = "$Target\hooks\docs-first-guard.sh"
+if (Test-Path $oldHook) {
+    $yn = Read-Host "  Deprecated docs-first-guard hook found. Remove? [Y/n]"
+    if ($yn -notmatch '^[Nn]') {
+        Remove-Item $oldHook -Force
+        Write-Host "  removed docs-first-guard.sh"
+    } else {
+        Write-Host "  skipped — remove manually: Remove-Item $oldHook"
+    }
+}
+
 Write-Host ""
-Write-Host "Done. Run /rlm-mem:discover:start to begin a session."
+Write-Host "Done. Run /dev:start to begin a session."

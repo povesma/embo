@@ -206,8 +206,47 @@ Accept (a), Edit (e), or Reject (r)?
 ```
 
 - **Accept**: run `git commit -m "$(cat <<'EOF' ... EOF)"`
+  After committing, check branch state and offer next step:
+
+  ```bash
+  git log @{u}..HEAD --oneline 2>/dev/null || echo "NO_UPSTREAM"
+  ```
+
+  Then show inline:
+  ```
+  ✅ Committed: feat(auth): add OAuth2 login support
+
+  Branch is 1 commit ahead of origin. What next?
+    1. push
+    2. push + open PR
+    3. done
+
+  Choice (1/2/3):
+  ```
+
+  If no upstream yet:
+  ```
+  ✅ Committed: feat(auth): add OAuth2 login support
+
+  Branch has no upstream yet. What next?
+    1. push  (git push -u origin <branch>)
+    2. push + open PR
+    3. done
+
+  Choice (1/2/3):
+  ```
+
+  - Choice 1 → run `git push` (or `git push -u origin <branch>`),
+    print confirmation, stop.
+  - Choice 2 → push, then continue directly into PR mode
+    (skip pre-flight checks — state is already known clean).
+  - Choice 3 → stop.
+
+  If there are more groups left to commit (user selected `1+2`
+  earlier), commit the next group first before offering "what next?".
+
 - **Edit**: show message in editable form, apply user changes,
-  then commit
+  then commit (same "what next?" flow after)
 - **Reject**: stop, no commit
 
 ---
@@ -218,7 +257,42 @@ Accept (a), Edit (e), or Reject (r)?
 
 Same as commit — extract `git.commit_style` for style context.
 
-#### Step 2: Ask for base branch
+#### Step 2: Pre-flight checks
+
+Before generating anything, verify the branch is in a clean state:
+
+```bash
+git status --short
+git log @{u}..HEAD --oneline 2>/dev/null || echo "NO_UPSTREAM"
+```
+
+- **Uncommitted changes exist** → offer to run the full sequence:
+  ```
+  ⚠ You have uncommitted changes. To create a PR you need to:
+    1. Commit the changes
+    2. Push to remote
+    3. Create PR
+
+  Run full sequence now? (y/n):
+  ```
+  - `y` → run commit mode (grouping + per-group messages), then
+    push, then continue into PR description — all in this turn.
+  - `n` → stop.
+
+- **Unpushed commits, no uncommitted changes** → offer push + PR:
+  ```
+  ⚠ Branch has unpushed commits. Push first?
+    1. push + open PR
+    2. cancel
+
+  Choice (1/2):
+  ```
+  - Choice 1 → push, then continue into PR description.
+  - Choice 2 → stop.
+
+- Both clean and pushed → proceed.
+
+#### Step 3: Ask for base branch
 
 ```
 Base branch? [main]:
@@ -226,7 +300,7 @@ Base branch? [main]:
 
 Wait for input. Use the entered value (or `main` if Enter pressed).
 
-#### Step 3: Read branch context
+#### Step 4: Read branch context
 
 ```bash
 git log <base>..HEAD --oneline
@@ -238,7 +312,34 @@ If `--stat` output is <500 lines:
 git diff <base>...HEAD
 ```
 
-#### Step 4: Generate PR description
+#### Step 5: Reviewer-friendliness check
+
+Before generating the description, scan the diff for issues that make
+human review harder. Flag any of the following and advise the user —
+do not block, let them decide whether to act:
+
+- **Noise**: commented-out code, debug prints, unrelated whitespace/
+  formatting changes, IDE artefacts
+- **Oversized changeset**: many unrelated files changed together —
+  suggest splitting into smaller PRs
+- **Non-obvious logic without comment**: complex expressions, subtle
+  side-effects, workarounds — suggest adding a brief inline comment
+- **Unnecessary code added**: speculative abstractions, unused helpers,
+  over-engineered solutions — suggest simplifying before review
+
+Present findings concisely:
+
+```
+⚠ Reviewer-friendliness notes:
+  • auth/login.py:42 — complex regex with no explanation; consider a comment
+  • migrations/ — unrelated to the feature; consider a separate PR
+
+Address these before creating the PR? Or continue as-is? (y = address / n = continue):
+```
+
+Track whether any issues were noted (even if user skips them) — used in Step 5.
+
+#### Step 6: Generate PR description
 
 ```markdown
 ## Summary
@@ -253,12 +354,23 @@ the summary — write connected prose.>
 - [ ] <another specific check>
 ```
 
+If issues were noted in Step 5 (whether addressed or not), append:
+
+```markdown
+---
+*Some areas in this PR are marked for follow-up improvement. They are
+functional but may benefit from further cleanup or optimisation in a
+future PR.*
+```
+
 Rules:
-- Summary: prose only, explains motivation, not file inventory
+- Summary: prose only, explains motivation, not file inventory; keep it brief
 - Test plan: bullets must be specific to this PR's actual changes,
   not generic ("run tests", "check it works")
+- Description should help a human reviewer understand motivation and
+  risk — not restate the diff or list files
 
-#### Step 5: Present for review
+#### Step 6: Present for review
 
 Show the PR description and ask:
 
@@ -276,7 +388,7 @@ Generated PR description:
 Accept (a), Edit (e), or Reject (r)?
 ```
 
-#### Step 6: Create PR or print
+#### Step 7: Create PR or print
 
 - **Accept**:
   - Check if `gh` is available: `gh --version`
