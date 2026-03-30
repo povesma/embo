@@ -9,15 +9,19 @@ $Target = "$env:USERPROFILE\.claude"
 # Requirements check
 # -----------------------------------------------------------------------
 Write-Host "Checking requirements..."
+Write-Host ""
 $missingRequired = $false
+$missingOptional = @()
 
-# Python 3
+# --- Required ---
+
+# Python 3.8+
 $python = Get-Command python -ErrorAction SilentlyContinue
 $python3 = Get-Command python3 -ErrorAction SilentlyContinue
 if (-not $python -and -not $python3) {
-    Write-Host "  [MISSING] Python 3 — required for RLM REPL"
-    Write-Host "    Install: https://www.python.org/downloads/"
-    Write-Host "    Or via winget: winget install Python.Python.3"
+    Write-Host "  [MISSING] Python 3.8+ — required for RLM REPL"
+    Write-Host "    winget install Python.Python.3"
+    Write-Host "    or: https://www.python.org/downloads/"
     $missingRequired = $true
 } else {
     $pyCmd = if ($python3) { "python3" } else { "python" }
@@ -27,38 +31,88 @@ if (-not $python -and -not $python3) {
 
 # Git
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    Write-Host "  [MISSING] Git — required to clone and update this repo"
-    Write-Host "    Install: https://git-scm.com/download/win"
-    Write-Host "    Or via winget: winget install Git.Git"
+    Write-Host "  [MISSING] Git — required for version control and RLM file indexing"
+    Write-Host "    winget install Git.Git"
+    Write-Host "    or: https://git-scm.com/download/win"
     $missingRequired = $true
 } else {
-    Write-Host "  [OK] git $(git --version)"
+    Write-Host "  [OK] $(git --version)"
 }
 
-# bash (optional but required for hooks and statusline)
+# Claude Code
+if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
+    Write-Host "  [MISSING] Claude Code — required CLI"
+    Write-Host "    Install: https://claude.ai/download"
+    $missingRequired = $true
+} else {
+    Write-Host "  [OK] Claude Code found"
+}
+
+# --- Optional (with impact notes) ---
+
+# bash (hooks + statusline)
 $bashAvailable = $null -ne (Get-Command bash -ErrorAction SilentlyContinue)
 if (-not $bashAvailable) {
-    Write-Host "  [OPTIONAL] bash — not found; hooks and statusline will be skipped"
-    Write-Host "    Hooks are required for context window warnings."
-    Write-Host "    Without bash, any .sh hook already registered in settings.json"
-    Write-Host "    will cause prompts to be silently dropped in Claude Code."
-    Write-Host "    To install bash, choose one:"
-    Write-Host "      Option A — WSL (recommended):"
-    Write-Host "        wsl --install"
-    Write-Host "        (then reopen PowerShell)"
-    Write-Host "      Option B — Git for Windows (includes Git Bash):"
-    Write-Host "        winget install Git.Git"
-    Write-Host "        (ensure 'Add to PATH' is checked during install)"
-    Write-Host "      Option C — MSYS2:"
-    Write-Host "        winget install MSYS2.MSYS2"
+    Write-Host "  [SKIP] bash — not found; hooks and statusline will NOT be installed"
+    Write-Host "         Without bash, context-guard hook cannot run."
+    Write-Host "         WARNING: if .sh hooks are already in settings.json,"
+    Write-Host "         prompts will be silently dropped in Claude Code."
+    Write-Host "         Install options:"
+    Write-Host "           winget install Git.Git  (Git Bash — simplest)"
+    Write-Host "           wsl --install           (WSL — full Linux)"
+    $missingOptional += "bash"
 } else {
-    Write-Host "  [OK] bash available — hooks will be installed"
+    Write-Host "  [OK] bash — hooks and statusline will be installed"
 }
 
+# jq (statusline JSON parsing, install.sh settings.json patching)
+$jqAvailable = $null -ne (Get-Command jq -ErrorAction SilentlyContinue)
+if (-not $jqAvailable) {
+    Write-Host "  [SKIP] jq — not found; statusline auto-config unavailable"
+    Write-Host "         statusline.sh requires jq at runtime to display context info."
+    Write-Host "         Install: winget install jqlang.jq"
+    Write-Host "         or: https://jqlang.github.io/jq/download/"
+    $missingOptional += "jq"
+} else {
+    Write-Host "  [OK] jq $(jq --version 2>&1)"
+}
+
+# gh (GitHub CLI — PR creation)
+$ghAvailable = $null -ne (Get-Command gh -ErrorAction SilentlyContinue)
+if (-not $ghAvailable) {
+    Write-Host "  [SKIP] gh — not found; /dev:git pr will print descriptions for manual paste"
+    Write-Host "         Install: winget install GitHub.cli"
+    $missingOptional += "gh"
+} else {
+    Write-Host "  [OK] $(gh --version 2>&1 | Select-Object -First 1)"
+}
+
+# Node.js (claude-mem plugin)
+$nodeAvailable = $null -ne (Get-Command node -ErrorAction SilentlyContinue)
+if (-not $nodeAvailable) {
+    Write-Host "  [SKIP] Node.js — not found; claude-mem plugin may not install"
+    Write-Host "         Claude-mem requires Node.js for its worker service."
+    Write-Host "         Install: winget install OpenJS.NodeJS.LTS"
+    $missingOptional += "node"
+} else {
+    Write-Host "  [OK] node $(node --version 2>&1)"
+}
+
+# --- Summary ---
+Write-Host ""
 if ($missingRequired) {
-    Write-Host ""
     Write-Host "ERROR: Required dependencies are missing. Install them and re-run install.ps1."
     exit 1
+}
+if ($missingOptional.Count -gt 0) {
+    Write-Host "Optional dependencies missing: $($missingOptional -join ', ')"
+    Write-Host "Installation will proceed, but some features will be unavailable."
+    Write-Host ""
+    $yn = Read-Host "Continue anyway? [Y/n]"
+    if ($yn -match '^[Nn]') {
+        Write-Host "Aborted. Install missing dependencies and re-run."
+        exit 0
+    }
 }
 
 Write-Host ""

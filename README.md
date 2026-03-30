@@ -148,54 +148,73 @@ usage: rlm_repl [-h] [--state STATE]
 
 ### Windows Installation
 
+#### Windows Prerequisites
+
+| Dependency | Required | Purpose | Install |
+|------------|----------|---------|---------|
+| **Python 3.8+** | Yes | RLM REPL | `winget install Python.Python.3` |
+| **Git** | Yes | Version control, RLM file indexing | `winget install Git.Git` |
+| **Claude Code** | Yes | CLI tool | https://claude.ai/download |
+| **bash** | Recommended | Hooks, statusline | Included with Git for Windows |
+| **jq** | Recommended | Statusline JSON parsing | `winget install jqlang.jq` |
+| **Node.js** | Recommended | claude-mem plugin | `winget install OpenJS.NodeJS.LTS` |
+| **gh** | Optional | GitHub PR creation | `winget install GitHub.cli` |
+
+> **Important**: Hooks and statusline require **bash**. If you install
+> Git for Windows with "Add to PATH" enabled, bash is included. Without
+> bash, any `.sh` hook already registered in `settings.json` will cause
+> **prompts to be silently dropped** — Claude Code shows the command
+> list but typed text disappears. The install script detects this and
+> offers to clean up stale hook entries.
+
 ```powershell
-# 1. Clone this repository
-cd %USERPROFILE%
+# 1. Install required dependencies
+winget install Python.Python.3
+winget install Git.Git             # includes bash
+winget install jqlang.jq           # for statusline
+winget install OpenJS.NodeJS.LTS   # for claude-mem
+
+# 2. Clone this repository
+cd $env:USERPROFILE
 git clone https://github.com/povesma/rlm-mem
 cd rlm-mem
 
-# 2. Run the install script (or follow manual steps below)
+# 3. Run the install script
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
+
+The script checks all dependencies and reports what's missing before
+proceeding. Optional dependencies can be skipped — features that need
+them will be unavailable.
 
 **Or install manually:**
 
 ```powershell
 cd rlm-mem
 
-# 2. Create Claude config directories
-mkdir %USERPROFILE%\.claude\rlm_scripts
-mkdir %USERPROFILE%\.claude\agents
-mkdir %USERPROFILE%\.claude\commands
+# Create directories
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.claude\rlm_scripts"
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.claude\agents"
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.claude\commands\dev"
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.claude\profiles"
 
-# 3. Copy RLM scripts
-copy .claude\rlm_scripts\rlm_repl.py %USERPROFILE%\.claude\rlm_scripts\
-copy .claude\agents\rlm-subcall.md %USERPROFILE%\.claude\agents\
+# Copy RLM scripts and agents
+Copy-Item .claude\rlm_scripts\rlm_repl.py "$env:USERPROFILE\.claude\rlm_scripts\"
+Copy-Item .claude\agents\*.md "$env:USERPROFILE\.claude\agents\"
 
-# 4. Copy test subagents (optional but recommended)
-for %f in (.claude\agents\test-*.md) do copy "%f" %USERPROFILE%\.claude\agents\
+# Copy commands and profiles
+Copy-Item .claude\commands\dev\* "$env:USERPROFILE\.claude\commands\dev\" -Recurse
+Copy-Item .claude\profiles\*.yaml "$env:USERPROFILE\.claude\profiles\"
 
-# 5. Copy command definitions
-xcopy .claude\commands\dev %USERPROFILE%\.claude\commands\dev\ /E /I
+# Copy hooks (only if bash is available)
+if (Get-Command bash -ErrorAction SilentlyContinue) {
+    New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.claude\hooks"
+    Copy-Item .claude\hooks\*.sh "$env:USERPROFILE\.claude\hooks\"
+}
 
-# 6. Copy hooks (optional but recommended)
-mkdir %USERPROFILE%\.claude\hooks
-copy .claude\hooks\context-guard.sh %USERPROFILE%\.claude\hooks\
-
-# 7. Set up status line (optional but recommended)
-copy .claude\statusline.sh %USERPROFILE%\.claude\statusline.sh
-# Then add to %USERPROFILE%\.claude\settings.json:
-# { "statusLine": { "type": "command", "command": "~/.claude/statusline.sh" } }
-# Or ask Claude: "use the existing script at ~/.claude/statusline.sh"
-# (see §Statusline below for details)
-
-# 8. Verify Python 3 is available
-python --version  # Should show 3.8 or higher
-# Or: py -3 --version
-
-# 9. Test installation
-python %USERPROFILE%\.claude\rlm_scripts\rlm_repl.py --help
-# Or: py -3 %USERPROFILE%\.claude\rlm_scripts\rlm_repl.py --help
+# Verify
+python --version       # Should show 3.8+
+python "$env:USERPROFILE\.claude\rlm_scripts\rlm_repl.py" --help
 ```
 
 **Note for Windows users:**
