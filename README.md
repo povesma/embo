@@ -58,9 +58,10 @@ graph TD
    - Install from: https://claude.ai/download
    - Version: Latest stable
 
-2. **Python 3.8+** - For RLM REPL
-   - macOS: Pre-installed or via Homebrew
-   - Windows: Download from python.org
+2. **Python 3.8-3.12** - For RLM REPL
+   - macOS: Pre-installed or via Homebrew (`brew install python@3.12`)
+   - Windows: `winget install Python.Python.3.12`
+   - Note: Python 3.13+ is not compatible with ChromaDB (used by claude-mem)
 
 3. **Claude-Mem plugin** - For semantic memory
    - Install in Claude Code: `/plugin marketplace add thedotmack/claude-mem` then `/plugin install claude-mem`
@@ -152,7 +153,7 @@ usage: rlm_repl [-h] [--state STATE]
 
 | Dependency | Required | Purpose | Install |
 |------------|----------|---------|---------|
-| **Python 3.8+** | Yes | RLM REPL | `winget install Python.Python.3` |
+| **Python 3.8-3.12** | Yes | RLM REPL | `winget install Python.Python.3.12` |
 | **Git** | Yes | Version control, RLM file indexing | `winget install Git.Git` |
 | **Claude Code** | Yes | CLI tool | https://claude.ai/download |
 | **bash** | Recommended | Hooks, statusline | Included with Git for Windows |
@@ -169,7 +170,7 @@ usage: rlm_repl [-h] [--state STATE]
 
 ```powershell
 # 1. Install required dependencies
-winget install Python.Python.3
+winget install Python.Python.3.12  # 3.13+ breaks ChromaDB (used by claude-mem)
 winget install Git.Git             # includes bash
 winget install jqlang.jq           # for statusline
 winget install OpenJS.NodeJS.LTS   # for claude-mem

@@ -32,7 +32,8 @@ foreach ($candidate in @("python3", "py", "python")) {
 }
 if (-not $pyCmd) {
     Write-Host "  [MISSING] Python 3.8+ - required for RLM REPL"
-    Write-Host "    winget install Python.Python.3"
+    Write-Host "    winget install Python.Python.3.12"
+    Write-Host "    NOTE: Python 3.12 recommended. 3.13+ breaks ChromaDB (used by claude-mem)."
     Write-Host "    or: https://www.python.org/downloads/"
     $missingRequired = $true
 } else {
