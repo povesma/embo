@@ -8,106 +8,95 @@ $Target = "$env:USERPROFILE\.claude"
 # -----------------------------------------------------------------------
 # Requirements check
 # -----------------------------------------------------------------------
+# All checks use Get-Command only (no binary execution) to avoid hangs
+# from stubs, interactive prompts, or slow CLIs.
+# -----------------------------------------------------------------------
 Write-Host "Checking requirements..."
 Write-Host ""
 $missingRequired = $false
 $missingOptional = @()
 
+# Helper: check if a command exists and is not a WindowsApps stub
+function Test-Cmd($name) {
+    $cmd = Get-Command $name -ErrorAction SilentlyContinue
+    if (-not $cmd) { return $false }
+    if ($cmd.Source -match 'WindowsApps') { return $false }
+    return $true
+}
+
 # --- Required ---
 
-# Python 3.8+
-# Check py -3 (Windows launcher), then python3, then python.
-# Skip the WindowsApps stub that opens the Microsoft Store and hangs.
-$pyCmd = $null
-foreach ($candidate in @("py", "python3", "python")) {
-    $cmd = Get-Command $candidate -ErrorAction SilentlyContinue
-    if (-not $cmd) { continue }
-    # Skip Microsoft Store stubs (WindowsApps directory)
-    if ($cmd.Source -match 'WindowsApps') { continue }
-    $pyArgs = if ($candidate -eq "py") { @("-3", "--version") } else { @("--version") }
-    $pyVer = & $cmd @pyArgs 2>&1
-    if ($pyVer -match "Python \d") {
-        $pyCmd = if ($candidate -eq "py") { "py -3" } else { $candidate }
-        break
-    }
-}
-if (-not $pyCmd) {
-    Write-Host "  [MISSING] Python 3.8+ - required for RLM REPL"
+# Python 3 (py launcher, python3, or python - skip MS Store stub)
+$pyFound = (Test-Cmd "py") -or (Test-Cmd "python3") -or (Test-Cmd "python")
+if (-not $pyFound) {
+    Write-Host "  [MISSING] Python 3 - required for RLM REPL"
     Write-Host "    winget install Python.Python.3.12"
     Write-Host "    NOTE: Python 3.12 recommended. 3.13+ breaks ChromaDB (used by claude-mem)."
     Write-Host "    or: https://www.python.org/downloads/"
     $missingRequired = $true
 } else {
-    Write-Host "  [OK] $pyVer"
+    Write-Host "  [OK] Python 3"
 }
 
 # Git
-if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+if (-not (Test-Cmd "git")) {
     Write-Host "  [MISSING] Git - required for version control and RLM file indexing"
     Write-Host "    winget install Git.Git"
     Write-Host "    or: https://git-scm.com/download/win"
     $missingRequired = $true
 } else {
-    Write-Host "  [OK] $(git --version)"
+    Write-Host "  [OK] Git"
 }
 
 # Claude Code
-if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
+if (-not (Test-Cmd "claude")) {
     Write-Host "  [MISSING] Claude Code - required CLI"
     Write-Host "    Install: https://claude.ai/download"
     $missingRequired = $true
 } else {
-    Write-Host "  [OK] Claude Code found"
+    Write-Host "  [OK] Claude Code"
 }
 
 # --- Optional (with impact notes) ---
 
 # bash (hooks + statusline)
-$bashAvailable = $null -ne (Get-Command bash -ErrorAction SilentlyContinue)
+$bashAvailable = Test-Cmd "bash"
 if (-not $bashAvailable) {
-    Write-Host "  [SKIP] bash - not found; hooks and statusline will NOT be installed"
-    Write-Host "         Without bash, context-guard hook cannot run."
+    Write-Host "  [SKIP] bash - hooks and statusline will NOT be installed"
     Write-Host "         WARNING: if .sh hooks are already in settings.json,"
     Write-Host "         prompts will be silently dropped in Claude Code."
-    Write-Host "         Install options:"
-    Write-Host "           winget install Git.Git  (Git Bash - simplest)"
-    Write-Host "           wsl --install           (WSL - full Linux)"
+    Write-Host "         Install: winget install Git.Git (includes Git Bash)"
+    Write-Host "         or: wsl --install (WSL)"
     $missingOptional += "bash"
 } else {
-    Write-Host "  [OK] bash - hooks and statusline will be installed"
+    Write-Host "  [OK] bash"
 }
 
-# jq (statusline JSON parsing, install.sh settings.json patching)
-$jqAvailable = $null -ne (Get-Command jq -ErrorAction SilentlyContinue)
-if (-not $jqAvailable) {
-    Write-Host "  [SKIP] jq - not found; statusline auto-config unavailable"
-    Write-Host "         statusline.sh requires jq at runtime to display context info."
+# jq (statusline JSON parsing)
+if (-not (Test-Cmd "jq")) {
+    Write-Host "  [SKIP] jq - statusline will not display context info"
     Write-Host "         Install: winget install jqlang.jq"
-    Write-Host "         or: https://jqlang.github.io/jq/download/"
     $missingOptional += "jq"
 } else {
-    Write-Host "  [OK] jq $(jq --version 2>&1)"
+    Write-Host "  [OK] jq"
 }
 
 # gh (GitHub CLI - PR creation)
-$ghAvailable = $null -ne (Get-Command gh -ErrorAction SilentlyContinue)
-if (-not $ghAvailable) {
-    Write-Host "  [SKIP] gh - not found; /dev:git pr will print descriptions for manual paste"
+if (-not (Test-Cmd "gh")) {
+    Write-Host "  [SKIP] gh - /dev:git pr will print descriptions for manual paste"
     Write-Host "         Install: winget install GitHub.cli"
     $missingOptional += "gh"
 } else {
-    Write-Host "  [OK] $(gh --version 2>&1 | Select-Object -First 1)"
+    Write-Host "  [OK] gh"
 }
 
 # Node.js (claude-mem plugin)
-$nodeAvailable = $null -ne (Get-Command node -ErrorAction SilentlyContinue)
-if (-not $nodeAvailable) {
-    Write-Host "  [SKIP] Node.js - not found; claude-mem plugin may not install"
-    Write-Host "         Claude-mem requires Node.js for its worker service."
+if (-not (Test-Cmd "node")) {
+    Write-Host "  [SKIP] Node.js - claude-mem plugin may not install"
     Write-Host "         Install: winget install OpenJS.NodeJS.LTS"
     $missingOptional += "node"
 } else {
-    Write-Host "  [OK] node $(node --version 2>&1)"
+    Write-Host "  [OK] Node.js"
 }
 
 # --- Summary ---
