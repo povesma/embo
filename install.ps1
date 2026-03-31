@@ -1,4 +1,4 @@
-# install.ps1 — sync this repo's .claude/ files to ~/.claude/
+# install.ps1 - sync this repo's .claude/ files to ~/.claude/
 # Run after cloning or after making changes in .claude/ to update your installation.
 # Usage: powershell -ExecutionPolicy Bypass -File install.ps1
 
@@ -19,7 +19,7 @@ $missingOptional = @()
 $python = Get-Command python -ErrorAction SilentlyContinue
 $python3 = Get-Command python3 -ErrorAction SilentlyContinue
 if (-not $python -and -not $python3) {
-    Write-Host "  [MISSING] Python 3.8+ — required for RLM REPL"
+    Write-Host "  [MISSING] Python 3.8+ - required for RLM REPL"
     Write-Host "    winget install Python.Python.3"
     Write-Host "    or: https://www.python.org/downloads/"
     $missingRequired = $true
@@ -31,7 +31,7 @@ if (-not $python -and -not $python3) {
 
 # Git
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    Write-Host "  [MISSING] Git — required for version control and RLM file indexing"
+    Write-Host "  [MISSING] Git - required for version control and RLM file indexing"
     Write-Host "    winget install Git.Git"
     Write-Host "    or: https://git-scm.com/download/win"
     $missingRequired = $true
@@ -41,7 +41,7 @@ if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
 
 # Claude Code
 if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
-    Write-Host "  [MISSING] Claude Code — required CLI"
+    Write-Host "  [MISSING] Claude Code - required CLI"
     Write-Host "    Install: https://claude.ai/download"
     $missingRequired = $true
 } else {
@@ -53,22 +53,22 @@ if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
 # bash (hooks + statusline)
 $bashAvailable = $null -ne (Get-Command bash -ErrorAction SilentlyContinue)
 if (-not $bashAvailable) {
-    Write-Host "  [SKIP] bash — not found; hooks and statusline will NOT be installed"
+    Write-Host "  [SKIP] bash - not found; hooks and statusline will NOT be installed"
     Write-Host "         Without bash, context-guard hook cannot run."
     Write-Host "         WARNING: if .sh hooks are already in settings.json,"
     Write-Host "         prompts will be silently dropped in Claude Code."
     Write-Host "         Install options:"
-    Write-Host "           winget install Git.Git  (Git Bash — simplest)"
-    Write-Host "           wsl --install           (WSL — full Linux)"
+    Write-Host "           winget install Git.Git  (Git Bash - simplest)"
+    Write-Host "           wsl --install           (WSL - full Linux)"
     $missingOptional += "bash"
 } else {
-    Write-Host "  [OK] bash — hooks and statusline will be installed"
+    Write-Host "  [OK] bash - hooks and statusline will be installed"
 }
 
 # jq (statusline JSON parsing, install.sh settings.json patching)
 $jqAvailable = $null -ne (Get-Command jq -ErrorAction SilentlyContinue)
 if (-not $jqAvailable) {
-    Write-Host "  [SKIP] jq — not found; statusline auto-config unavailable"
+    Write-Host "  [SKIP] jq - not found; statusline auto-config unavailable"
     Write-Host "         statusline.sh requires jq at runtime to display context info."
     Write-Host "         Install: winget install jqlang.jq"
     Write-Host "         or: https://jqlang.github.io/jq/download/"
@@ -77,10 +77,10 @@ if (-not $jqAvailable) {
     Write-Host "  [OK] jq $(jq --version 2>&1)"
 }
 
-# gh (GitHub CLI — PR creation)
+# gh (GitHub CLI - PR creation)
 $ghAvailable = $null -ne (Get-Command gh -ErrorAction SilentlyContinue)
 if (-not $ghAvailable) {
-    Write-Host "  [SKIP] gh — not found; /dev:git pr will print descriptions for manual paste"
+    Write-Host "  [SKIP] gh - not found; /dev:git pr will print descriptions for manual paste"
     Write-Host "         Install: winget install GitHub.cli"
     $missingOptional += "gh"
 } else {
@@ -90,7 +90,7 @@ if (-not $ghAvailable) {
 # Node.js (claude-mem plugin)
 $nodeAvailable = $null -ne (Get-Command node -ErrorAction SilentlyContinue)
 if (-not $nodeAvailable) {
-    Write-Host "  [SKIP] Node.js — not found; claude-mem plugin may not install"
+    Write-Host "  [SKIP] Node.js - not found; claude-mem plugin may not install"
     Write-Host "         Claude-mem requires Node.js for its worker service."
     Write-Host "         Install: winget install OpenJS.NodeJS.LTS"
     $missingOptional += "node"
@@ -137,7 +137,7 @@ Write-Host "  profiles: $profileCount files"
 
 # hooks
 # .sh hooks require bash (WSL or Git Bash). Without it, hooks registered in
-# settings.json will fail silently on UserPromptSubmit — causing prompts to
+# settings.json will fail silently on UserPromptSubmit - causing prompts to
 # be dropped. Only install if bash is available.
 $hooksDir = "$RepoDir\.claude\hooks"
 if (Test-Path "$hooksDir\*.sh") {
@@ -146,9 +146,9 @@ if (Test-Path "$hooksDir\*.sh") {
         New-Item -ItemType Directory -Force -Path "$Target\hooks" | Out-Null
         Copy-Item "$hooksDir\*.sh" "$Target\hooks\" -Force
         $hookCount = (Get-ChildItem "$hooksDir\*.sh").Count
-        Write-Host "  hooks: $hookCount files (bash found — hooks installed)"
+        Write-Host "  hooks: $hookCount files (bash found - hooks installed)"
     } else {
-        Write-Host "  hooks: SKIPPED — bash not found (install WSL or Git Bash to enable hooks)"
+        Write-Host "  hooks: SKIPPED - bash not found (install WSL or Git Bash to enable hooks)"
         Write-Host "  WARNING: if settings.json already references these hooks, prompts will be"
         Write-Host "  dropped silently. Remove hook entries from ~/.claude/settings.json if so."
     }
@@ -170,7 +170,7 @@ if (Test-Path $statuslineSrc) {
         Write-Host "  Note: add to ~/.claude/settings.json manually:"
         Write-Host '  { "statusLine": { "type": "command", "command": "~/.claude/statusline.sh" } }'
     } else {
-        Write-Host "  statusline: SKIPPED — bash not found (statusline.sh requires bash)"
+        Write-Host "  statusline: SKIPPED - bash not found (statusline.sh requires bash)"
     }
 }
 
@@ -183,7 +183,7 @@ if (Test-Path $oldRlmMem) {
         Remove-Item $oldRlmMem -Recurse -Force
         Write-Host "  removed $oldRlmMem"
     } else {
-        Write-Host "  skipped — remove manually: Remove-Item -Recurse $oldRlmMem"
+        Write-Host "  skipped - remove manually: Remove-Item -Recurse $oldRlmMem"
     }
 }
 $oldHook = "$Target\hooks\docs-first-guard.sh"
@@ -193,7 +193,7 @@ if (Test-Path $oldHook) {
         Remove-Item $oldHook -Force
         Write-Host "  removed docs-first-guard.sh"
     } else {
-        Write-Host "  skipped — remove manually: Remove-Item $oldHook"
+        Write-Host "  skipped - remove manually: Remove-Item $oldHook"
     }
 }
 
@@ -242,7 +242,7 @@ if (-not $bashAvailable) {
                 Write-Host "  settings.json: .sh hook entries removed"
                 Write-Host "  Restart Claude Code for the change to take effect."
             } else {
-                Write-Host "  skipped — edit $settingsFile manually to remove .sh hook entries"
+                Write-Host "  skipped - edit $settingsFile manually to remove .sh hook entries"
             }
         }
     }
