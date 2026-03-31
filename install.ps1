@@ -16,18 +16,19 @@ $missingOptional = @()
 # --- Required ---
 
 # Python 3.8+
-# Check python3, then py -3 (Windows launcher), then python.
-# Skip the bare "python" stub that redirects to Microsoft Store.
+# Check py -3 (Windows launcher), then python3, then python.
+# Skip the WindowsApps stub that opens the Microsoft Store and hangs.
 $pyCmd = $null
-foreach ($candidate in @("python3", "py", "python")) {
+foreach ($candidate in @("py", "python3", "python")) {
     $cmd = Get-Command $candidate -ErrorAction SilentlyContinue
-    if ($cmd) {
-        $args = if ($candidate -eq "py") { @("-3", "--version") } else { @("--version") }
-        $pyVer = & $cmd @args 2>&1
-        if ($pyVer -match "Python \d") {
-            $pyCmd = if ($candidate -eq "py") { "py -3" } else { $candidate }
-            break
-        }
+    if (-not $cmd) { continue }
+    # Skip Microsoft Store stubs (WindowsApps directory)
+    if ($cmd.Source -match 'WindowsApps') { continue }
+    $pyArgs = if ($candidate -eq "py") { @("-3", "--version") } else { @("--version") }
+    $pyVer = & $cmd @pyArgs 2>&1
+    if ($pyVer -match "Python \d") {
+        $pyCmd = if ($candidate -eq "py") { "py -3" } else { $candidate }
+        break
     }
 }
 if (-not $pyCmd) {
