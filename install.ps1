@@ -16,16 +16,26 @@ $missingOptional = @()
 # --- Required ---
 
 # Python 3.8+
-$python = Get-Command python -ErrorAction SilentlyContinue
-$python3 = Get-Command python3 -ErrorAction SilentlyContinue
-if (-not $python -and -not $python3) {
+# Check python3, then py -3 (Windows launcher), then python.
+# Skip the bare "python" stub that redirects to Microsoft Store.
+$pyCmd = $null
+foreach ($candidate in @("python3", "py", "python")) {
+    $cmd = Get-Command $candidate -ErrorAction SilentlyContinue
+    if ($cmd) {
+        $args = if ($candidate -eq "py") { @("-3", "--version") } else { @("--version") }
+        $pyVer = & $cmd @args 2>&1
+        if ($pyVer -match "Python \d") {
+            $pyCmd = if ($candidate -eq "py") { "py -3" } else { $candidate }
+            break
+        }
+    }
+}
+if (-not $pyCmd) {
     Write-Host "  [MISSING] Python 3.8+ - required for RLM REPL"
     Write-Host "    winget install Python.Python.3"
     Write-Host "    or: https://www.python.org/downloads/"
     $missingRequired = $true
 } else {
-    $pyCmd = if ($python3) { "python3" } else { "python" }
-    $pyVer = & $pyCmd --version 2>&1
     Write-Host "  [OK] $pyVer"
 }
 
