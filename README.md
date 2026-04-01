@@ -247,13 +247,27 @@ After installation, your `~/.claude/` directory will contain:
 │   ├── fast.yaml               # Speed mode profile
 │   └── minimal.yaml            # Bare bones profile
 ├── hooks/
-│   └── context-guard.sh        # Context window warning hook (optional)
+│   ├── context-guard.sh        # Context window warning hook (optional)
+│   └── behavioral-reminder.sh  # Behavioral rule reminder hook (optional)
 ├── rlm_scripts/
 │   └── rlm_repl.py             # Persistent REPL for RLM
 └── statusline.sh               # Status line script (optional)
 ```
 
-## 📟 Statusline
+## Hooks
+
+Two optional hooks are included. Both are installed by `install.sh` and
+registered in `~/.claude/settings.json` automatically.
+
+| Hook | Event | Purpose | Disable |
+|------|-------|---------|---------|
+| `context-guard.sh` | `UserPromptSubmit` | Warns when context window is ≥ threshold before new dev work | Set `CONTEXT_GUARD_THRESHOLD=101` in `settings.json` env |
+| `behavioral-reminder.sh` | `UserPromptSubmit` | Injects rule tag reminders before each prompt; targeted on criticism, implementation, and git requests | Set `BEHAVIORAL_REMINDER_DISABLED=1` in `settings.json` env |
+
+Both hooks fail open — any error exits silently with code 0 and never
+blocks Claude from responding.
+
+## Statusline
 
 The included `statusline.sh` displays live session info in your IDE status bar:
 

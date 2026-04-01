@@ -1,8 +1,18 @@
+---
+description: >
+  Generate git commit messages and PR descriptions, or manage commit style.
+  Use when the user wants to commit changes, push a branch, open a pull
+  request, or change their commit convention. Examples: "commit my changes",
+  "create a PR", "push and open a PR", "what commit style am I using".
+argument-hint: "[commit|pr|style]"
+---
+
 # Git Commit & PR Description Generator
 
 Generate high-quality commit messages and PR descriptions from staged
 changes and branch history. Manage commit style via the active profile.
 
+<!-- RULE:GIT-SKILL -->
 ## When to Use
 
 - Before every `git commit` — to get a well-structured message
@@ -93,6 +103,17 @@ back to `conventional`.
 
 ## Process
 
+### Step 0: Load profile (always, before any mode)
+
+```bash
+cat ~/.claude/active-profile.yaml 2>/dev/null
+```
+
+Extract `git.commit_style`. Default: `conventional` if absent or file missing.
+Store as `<active_style>` — use throughout without re-reading the file.
+
+---
+
 ### Mode: Interactive Menu (no argument)
 
 Show the menu and wait for user input:
@@ -101,7 +122,7 @@ Show the menu and wait for user input:
 What do you want to do?
   1. commit  — generate commit message for staged changes
   2. pr      — generate PR description for this branch
-  3. style   — view or change commit style
+  3. style   — view or change commit style  [active: <active_style>]
 
 Enter choice (1/2/3) or subcommand name:
 ```
@@ -111,14 +132,6 @@ Then proceed with the selected mode.
 ---
 
 ### Mode: `commit`
-
-#### Step 1: Load profile
-
-```bash
-cat ~/.claude/active-profile.yaml 2>/dev/null
-```
-
-Extract `git.commit_style`. Default: `conventional`.
 
 #### Step 2: Check staged changes
 

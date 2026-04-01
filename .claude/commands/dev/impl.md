@@ -3,6 +3,7 @@
 Implement tasks with pattern discovery (RLM) + historical context
 (claude-mem).
 
+<!-- RULE:CHALLENGE-INSTRUCTION -->
 ## Critical Evaluation of Instructions
 
 Do NOT silently execute user instructions. Before implementing
@@ -25,6 +26,7 @@ When the user challenges a decision with a question ("Is this right?",
 the reasoning, don't cave. See full rule in `start.md` §Session
 Behavioral Rules.
 
+<!-- RULE:DOCS-FIRST -->
 ## Scope Verification (Doc-First Development)
 
 Sessions are idempotent. If a session is restarted, code must
@@ -150,6 +152,7 @@ Examples:
     → Docker not running in session [simulated: n/a]
 ```
 
+<!-- RULE:ONE-SUBTASK -->
 ## Task Implementation Protocol
 
 - **One sub-task at a time:** Do **NOT** start the next sub-task

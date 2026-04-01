@@ -77,6 +77,41 @@ if [ -f "$REPO_DIR/.claude/statusline.sh" ]; then
     fi
 fi
 
+# behavioral-reminder hook — register in settings.json
+if [ -f "$TARGET/hooks/behavioral-reminder.sh" ]; then
+    SETTINGS="$TARGET/settings.json"
+    if ! command -v jq >/dev/null 2>&1; then
+        echo ""
+        echo "  behavioral-reminder: jq not found — manual step required"
+        echo "    Add to $SETTINGS under hooks.UserPromptSubmit:"
+        echo '    {"hooks":[{"type":"command","command":"bash ~/.claude/hooks/behavioral-reminder.sh"}]}'
+    else
+        if [ ! -f "$SETTINGS" ]; then
+            echo '{}' > "$SETTINGS"
+        fi
+        if jq -e '[.hooks.UserPromptSubmit[]?.hooks[]?.command] | any(. != null and contains("behavioral-reminder"))' \
+            "$SETTINGS" > /dev/null 2>&1; then
+            echo "  settings.json: behavioral-reminder already registered — skipping"
+        else
+            echo ""
+            read -r -p "  Register behavioral-reminder hook in $SETTINGS? [y/N] " yn
+            case "$yn" in
+                [Yy]*)
+                    jq '.hooks.UserPromptSubmit += [{"hooks": [{"type": "command",
+                        "command": "bash ~/.claude/hooks/behavioral-reminder.sh"}]}]' \
+                        "$SETTINGS" > /tmp/_rlm_settings.tmp \
+                        && mv /tmp/_rlm_settings.tmp "$SETTINGS"
+                    echo "  settings.json: behavioral-reminder hook registered"
+                    echo "  Restart Claude Code for the change to take effect."
+                    ;;
+                *)
+                    echo "  settings.json: skipped — add manually to hooks.UserPromptSubmit"
+                    ;;
+            esac
+        fi
+    fi
+fi
+
 # clean up old files
 if [ -d "$TARGET/commands/rlm-mem" ]; then
     echo ""

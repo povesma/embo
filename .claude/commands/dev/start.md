@@ -29,6 +29,7 @@ Note the active profile name in the session summary output.
 These rules apply for the entire session, across all commands and
 conversation turns. Load them once here; do not repeat in other commands.
 
+<!-- RULE:WITHSTAND-CRITICISM -->
 ### Defend positions under questioning
 
 When the user asks a challenging question — "Is it really like this?",
