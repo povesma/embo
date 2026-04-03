@@ -396,6 +396,7 @@ prompt adds <5 seconds and prevents wrong-base PR descriptions.
 | FR-6: custom style via profile block | `code-only` | — | — (v1 deferred) |
 | Profile `git` block added to all four profiles | `code-only` | — | — |
 | `profile.md` shows git style in activation output | `manual-run-claude` | integration | `/dev:profile use quality` output includes git line |
+| FR-7: natural language triggers `/dev:git` via skill | `manual-run-user` | integration | "commit my changes" auto-invokes the command |
 
 ---
 

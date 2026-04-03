@@ -12,7 +12,11 @@
   2026-03-29-014-git-commit-pr-texts-test-plan.md)
   :: Test Plan
 - [.claude/commands/dev/git.md](../../.claude/commands/dev/git.md)
-  :: New command — does not yet exist
+  :: Command file
+- [.claude/skills/dev-git/SKILL.md](../../.claude/skills/dev-git/SKILL.md)
+  :: Natural language trigger skill
+- [.claude/skills/dev-git/commit-styles.md](../../.claude/skills/dev-git/commit-styles.md)
+  :: Supporting file — commit style definitions
 - [.claude/commands/dev/profile.md](
   ../../.claude/commands/dev/profile.md)
   :: Add git style line to activation output
@@ -79,13 +83,22 @@
     [verify: code-only]
   - [X] 2.4 Add `gh` degradation: if `gh` not available, print
     description with paste instruction [verify: code-only]
-  - [ ] 2.5 Verify: run `/dev:git pr` on a branch with commits;
+  - [X] 2.5 Verify: run `/dev:git pr` on a branch with commits;
     confirm base branch prompt appears and description has both
     sections [verify: manual-run-claude]
+    → ran on feature/014 branch; base branch prompted, Summary +
+      Test plan sections generated, PR created at
+      povesma/rlm-mem#8 [live] (2026-03-29)
   - [ ] 2.6 Verify: confirm no PR created without explicit approval
     [verify: manual-run-user]
   - [ ] 2.7 Verify: confirm graceful degradation when `gh` is
     absent [verify: manual-run-claude]
+  - [~] 2.8 Add reviewer-friendliness check in `pr` mode: after
+    reading diff, flag noise / oversized changeset / uncommented
+    non-obvious logic / over-engineering; advise and proceed (never
+    block); if issues flagged, append follow-up note to PR description
+    [verify: manual-run-claude]
+    → implemented in git.md Step 5 and SKILL.md Step 5 (2026-03-30)
 
 - [ ] 3.0 **User Story:** As a developer with nothing staged, I want
   `/dev:git` to show unstaged files and offer to stage them, so I
@@ -142,4 +155,26 @@
   - [ ] 7.2 Add `/dev:git` row to the Available Commands table in
     `README.md` with description "Generate commit messages and PR
     descriptions; manage commit style" [verify: code-only]
+
+- [ ] 8.0 **User Story:** As a developer, I want to say "commit my
+  changes" or "create a PR" in natural language and have Claude
+  auto-invoke `/dev:git`, so I don't need to remember the slash
+  command for routine git operations [4/0]
+  - [X] 8.1 Add frontmatter `description` to `git.md` so it
+    auto-triggers on natural language — no separate SKILL.md needed
+    since commands and skills are the same thing in Claude Code
+    [verify: code-only]
+    → added frontmatter with description + argument-hint to
+      git.md; single /dev:git entry, auto-trigger via description,
+      no duplicate entries [live] (2026-03-30)
+  - [X] 8.2 Confirm `install.sh` wildcard covers `git.md` —
+    no change needed [verify: code-only]
+    → install.sh `cp -r commands/dev/*` already covers git.md;
+      verified no skills directory needed [live] (2026-03-30)
+  - [ ] 8.3 Verify: type "commit my changes" without a slash
+    command; confirm Claude auto-invokes `/dev:git` [verify:
+    manual-run-user]
+  - [ ] 8.4 Verify: type "create a PR from current changes";
+    confirm Claude auto-invokes `/dev:git pr` flow [verify:
+    manual-run-user]
 

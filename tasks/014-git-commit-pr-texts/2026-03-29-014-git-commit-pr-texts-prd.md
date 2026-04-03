@@ -139,6 +139,19 @@ and body guidance,
 - [ ] If `custom_style` is missing when `commit_style: custom`, Claude warns
   and falls back to `conventional`
 
+### Story 5 — Natural language invocation
+
+**As a** developer doing routine git work,
+**I want** to say "commit my changes" or "create a PR" in natural language
+and have Claude auto-invoke `/dev:git`,
+**So that** I don't need to remember the slash command for common operations.
+
+**Acceptance Criteria**:
+- [ ] Claude auto-invokes `/dev:git` when user says "commit", "push",
+  "create a PR", "write a commit message", or similar phrases
+- [ ] Implemented as a skill with YAML frontmatter trigger description
+- [ ] Installed alongside the command file by `install.sh`
+
 ---
 
 ## Functional Requirements
