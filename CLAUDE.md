@@ -118,6 +118,14 @@ TROUBLESHOOTING.md              # Common errors
   the workflow must live in the command files we ship
   (`.claude/commands/dev/`), not here.
 
+## Emoji Usage
+
+Minimize emoji in all files. Only use them when they meaningfully aid
+comprehension (e.g., status indicators in output, warning symbols).
+Never add emoji to section headings, commit messages, or prose unless
+the surrounding context already uses them extensively and consistency
+requires it.
+
 ## Commit Messages
 
 One line, super short. Subject only — no body, no explanation.

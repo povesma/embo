@@ -234,6 +234,21 @@ Create design document:
 
 {Based on existing test patterns}
 
+### Verification Approach
+
+Maps each functional requirement to its verification method and
+expected evidence. This section is the primary input to `/dev:test-plan`.
+
+| Requirement | Method | Scope | Expected Evidence |
+|-------------|--------|-------|-------------------|
+| FR-1: {description} | `auto-test` | unit | pytest: N passed |
+| FR-2: {description} | `manual-run-claude` | integration | output shows X |
+| FR-3: {description} | `code-only` | — | — |
+
+Methods: `code-only` \| `auto-test` \| `manual-run-claude` \|
+`manual-run-user` \| `docker` \| `e2e` \| `observation`
+(canonical definitions in `/dev:test-plan`)
+
 ## Trade-offs
 
 **Considered Approaches**:

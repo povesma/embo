@@ -113,6 +113,25 @@ Once the user confirms, break down each parent task into smaller, actionable
 sub-tasks. Each sub-task should represent a deliverable outcome that can be
 independently verified and tested.
 
+**Assign `[verify: <method>]` tag to every leaf task** (not parent stories):
+
+1. Check for a test plan: `Glob tasks/{id}-{name}/*-test-plan.md`
+   - If found: read the Story Coverage table. Match subtasks by
+     description and assign the method from the table.
+   - If not found: infer from the task's nature using the assignment
+     rules in `/dev:test-plan` (e.g. `.md`/config changes →
+     `code-only`, logic changes → `auto-test`, CLI output checks →
+     `manual-run-claude`, user confirms → `manual-run-user`).
+
+Tag placement: **end of line**, after the description.
+Format: `[verify: <method>]`
+Parent story lines (1.0, 2.0, …) do NOT get tags.
+
+Verification methods (`code-only`, `auto-test`, `manual-run-claude`,
+`manual-run-user`, `docker`, `e2e`, `observation`) and the `live` vs
+`simulated` distinction are defined in the canonical taxonomy in
+`/dev:test-plan`.
+
 ### Step 8: Identify Relevant Files
 
 Based on the tasks and tech design, identify potential files that will need to
@@ -177,19 +196,28 @@ feasible:
 - [ ] 1.0 **User Story:** As a [user type], I want [functionality] so that
   [benefit/outcome] [4/0]
   - [ ] 1.1 Write tests for [specific functionality A] external interface
+    [verify: auto-test]
   - [ ] 1.2 Implement [specific functionality A] to pass tests
+    [verify: auto-test]
   - [ ] 1.3 Write tests for [specific functionality B] external interface
+    [verify: auto-test]
   - [ ] 1.4 Implement [specific functionality B] to pass tests
+    [verify: auto-test]
 - [ ] 2.0 **User Story:** As a [user type], I want [functionality] so that
   [benefit/outcome] [4/0]
-  - [ ] 2.1 Write tests for [module method X] behavior
-  - [ ] 2.2 Implement [module method X]
-  - [ ] 2.3 Write tests for [module method Y] behavior
-  - [ ] 2.4 Implement [module method Y]
+  - [ ] 2.1 Write tests for [module method X] behavior [verify: auto-test]
+  - [ ] 2.2 Implement [module method X] [verify: auto-test]
+  - [ ] 2.3 Write tests for [module method Y] behavior [verify: auto-test]
+  - [ ] 2.4 Implement [module method Y] [verify: auto-test]
 - [ ] 3.0 **User Story:** As a [user type], I want [functionality] so that
   [benefit/outcome] (may not require sub-tasks if purely structural or
   configuration)
+  - [ ] 3.1 Update configuration file [verify: code-only]
+  - [ ] 3.2 Verify command output after change [verify: manual-run-claude]
 ```
+
+Tasks without `[verify: ...]` tags (from older task files) are treated
+as `code-only` implicitly — no evidence required at completion.
 
 ## Interaction Model
 The process explicitly requires a pause after generating parent tasks to get
