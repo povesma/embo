@@ -144,34 +144,43 @@ it with the `[REMINDER:CHALLENGE-INSTRUCTION]` injected by the hook.
 
 ---
 
-### Component 3: `install.sh` hook registration
+### Component 3: `install.sh` changes
 
-Added after the existing statusLine block, using the same pattern:
+**Behavioral-reminder registration** — unconditional (no prompt).
+It is a core workflow component, not optional. Idempotency check
+only: if already registered, skip; otherwise register automatically.
+
+**statusLine registration** — interactive, default Yes (`[Y/n]`).
+
+**`--force` and `--yes` flags** added to all interactive prompts
+via a `confirm()` function (same pattern as Homebrew/rustup):
 
 ```bash
-# behavioral-reminder hook
-if [ -f "$TARGET/hooks/behavioral-reminder.sh" ]; then
-    if ! command -v jq >/dev/null 2>&1; then
-        echo "  behavioral-reminder: jq not found — manual step required"
-        echo '  Add to ~/.claude/settings.json hooks.UserPromptSubmit:'
-        echo '  {"hooks":[{"type":"command","command":"bash ~/.claude/hooks/behavioral-reminder.sh"}]}'
-    else
-        SETTINGS="$TARGET/settings.json"
-        [ ! -f "$SETTINGS" ] && echo '{}' > "$SETTINGS"
-        if jq -e '.hooks.UserPromptSubmit[]?.hooks[]?.command |
-            select(contains("behavioral-reminder"))' \
-            "$SETTINGS" > /dev/null 2>&1; then
-            echo "  settings.json: behavioral-reminder already registered — skipping"
-        else
-            jq '.hooks.UserPromptSubmit += [{"hooks": [{"type": "command",
-              "command": "bash ~/.claude/hooks/behavioral-reminder.sh"}]}]' \
-              "$SETTINGS" > /tmp/_rlm_settings.tmp \
-              && mv /tmp/_rlm_settings.tmp "$SETTINGS"
-            echo "  settings.json: behavioral-reminder hook registered"
-        fi
+confirm() {
+    if [ "$FORCE" = "1" ]; then
+        if [ "$YES" = "1" ]; then return 0; fi
+        SKIPPED=$((SKIPPED + 1))
+        return 1
     fi
-fi
+    local yn=""
+    read -r -p "$1" yn || true
+    case "${yn:-${2:-n}}" in [Yy]*) return 0 ;; *) return 1 ;; esac
+}
 ```
+
+Behavior matrix:
+
+| Mode | statusLine `[Y/n]` | Remove old `[Y/n]` |
+|------|--------------------|--------------------|
+| Interactive, Enter | yes | yes |
+| `--force` | no (safe) | no (safe) |
+| `--force --yes` | yes | yes |
+
+Behavioral-reminder: always registered regardless of flags.
+
+A `SKIPPED` counter tracks how many prompts were auto-declined by
+`--force`, and prints a summary at the end suggesting `--force --yes`
+or interactive mode.
 
 The `hooks.UserPromptSubmit` array may not exist yet; `+= [...]`
 creates it if absent (jq behaviour).

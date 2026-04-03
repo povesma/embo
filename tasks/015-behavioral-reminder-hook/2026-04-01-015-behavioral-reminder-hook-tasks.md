@@ -124,7 +124,7 @@
 - [X] 6.0 **User Story:** As an installer running `install.sh`, I want
   `behavioral-reminder.sh` copied and registered in `settings.json`
   automatically so the hook is active without manual configuration
-  [3/3]
+  [7/7]
   - [X] 6.1 Add hook registration block to `install.sh` after the
     statusLine block: copy `behavioral-reminder.sh`, `chmod +x`,
     then use `jq` to add to `hooks.UserPromptSubmit` in
@@ -136,6 +136,22 @@
   - [X] 6.3 Verify: run `install.sh` a second time; confirm no
     duplicate entry is added [verify: manual-run-claude]
     → idempotency check returns true, skips on second run [live] (2026-04-01)
+  - [X] 6.4 Make behavioral-reminder registration unconditional (no
+    prompt — it is a core workflow component); change statusLine
+    prompt default from `[y/N]` to `[Y/n]` [verify: code-only]
+  - [X] 6.5 Add `--force` and `--yes` flags to `install.sh`:
+    `--force` = non-interactive, all prompts default to no (safe);
+    `--force --yes` = non-interactive, all prompts default to yes;
+    print summary when prompts were skipped [verify: code-only]
+  - [X] 6.6 Verify: run `install.sh --force`; confirm
+    behavioral-reminder is registered, optional prompts skipped
+    with summary printed [verify: manual-run-claude]
+    → behavioral-reminder registered, 1 prompt skipped, summary
+      printed [live] (2026-04-01)
+  - [X] 6.7 Verify: run `install.sh --force --yes`; confirm all
+    optional registrations applied [verify: manual-run-claude]
+    → all applied, deprecated hook removed, no summary [live]
+      (2026-04-01)
 
 - [X] 7.0 **User Story:** As a new RLM-Mem user reading the README,
   I want the behavioral-reminder hook documented so I understand
