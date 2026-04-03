@@ -12,7 +12,7 @@ argument-hint: "[commit|pr|style]"
 Generate high-quality commit messages and PR descriptions from staged
 changes and branch history. Manage commit style via the active profile.
 
-<!-- RULE:GIT-SKILL -->
+<!-- RULE:DEV-GIT -->
 ## When to Use
 
 - Before every `git commit` — to get a well-structured message

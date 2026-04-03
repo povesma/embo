@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # behavioral-reminder.sh — UserPromptSubmit hook
-# Classifies the incoming user prompt and injects rule tag reminders
-# into Claude's context before each response.
+# Classifies the incoming user prompt via awk weighted keyword scoring (AWSK)
+# and injects rule tag reminders into Claude's context before each response.
 # Fails open: any error path exits 0 silently.
+# See: tasks/015-behavioral-reminder-hook/awsk-research.md
 
 trap 'exit 0' ERR
 
@@ -11,42 +12,89 @@ trap 'exit 0' ERR
 
 # --- Parse stdin ---
 PROMPT_RAW=$(jq -r '.prompt // ""' 2>/dev/null) || exit 0
-PROMPT_LOWER=$(printf '%s' "$PROMPT_RAW" | tr '[:upper:]' '[:lower:]')
 
-# --- Classification flags ---
-CRITICISM=0
-IMPL_REQUEST=0
-GIT_REQUEST=0
+# --- AWSK classification (awk weighted keyword scoring, ~7ms) ---
+# Each category has weighted keywords and a threshold.
+# Negative patterns subtract score to reduce false positives.
+# Word boundaries are simulated by padding input with spaces.
+read -r CRITICISM IMPL_REQUEST GIT_REQUEST <<< "$(
+  printf ' %s ' "$PROMPT_RAW" | tr '[:upper:]' '[:lower:]' | awk '
+  {
+    line = $0
 
-# CRITICISM patterns — triggers WITHSTAND-CRITICISM + CHALLENGE-INSTRUCTION
-case "$PROMPT_LOWER" in
-    *"you're wrong"*|*"youre wrong"*|*"that's not right"*|\
-    *"thats not right"*|*"why did you"*|*"you missed"*|\
-    *"i disagree"*|*"incorrect"*|*"you ignored"*|\
-    *"you should have"*|*"that's incorrect"*|*"thats incorrect"*)
-        CRITICISM=1 ;;
-esac
+    # --- CRITICISM (threshold: 2) ---
+    c = 0
+    if (index(line, "you'\''re wrong"))   c += 3
+    if (index(line, "youre wrong"))        c += 3
+    if (index(line, "that'\''s not right")) c += 3
+    if (index(line, "thats not right"))    c += 3
+    if (index(line, "that'\''s incorrect")) c += 3
+    if (index(line, "thats incorrect"))    c += 3
+    if (index(line, "you missed"))         c += 3
+    if (index(line, "you ignored"))        c += 3
+    if (index(line, "you should have"))    c += 3
+    if (index(line, "i disagree"))         c += 2
+    if (index(line, " incorrect"))         c += 2
+    if (index(line, "why did you"))        c += 2
+    if (index(line, " wrong "))            c += 1
+    if (index(line, "not what i"))         c += 2
+    if (index(line, "that'\''s wrong"))    c += 3
+    if (index(line, "thats wrong"))        c += 3
+    if (index(line, "no, "))               c += 1
+    if (index(line, "nope"))               c += 1
+    if (index(line, "bad approach"))       c += 2
+    if (index(line, "not correct"))        c += 2
 
-# IMPL_REQUEST patterns — triggers DOCS-FIRST + ONE-SUBTASK
-case "$PROMPT_LOWER" in
-    *"implement"*|*"write the code"*|*"create the file"*|\
-    *"add feature"*|*"start task"*|*"start story"*|\
-    *"next subtask"*|*"next task"*)
-        IMPL_REQUEST=1 ;;
-esac
+    # --- IMPL_REQUEST (threshold: 2) ---
+    i = 0
+    if (index(line, " implement"))         i += 3
+    if (index(line, "write the code"))     i += 3
+    if (index(line, "create the file"))    i += 3
+    if (index(line, "add feature"))        i += 3
+    if (index(line, "start task"))         i += 3
+    if (index(line, "start story"))        i += 3
+    if (index(line, "next subtask"))       i += 3
+    if (index(line, "next task"))          i += 3
+    if (index(line, "build the"))          i += 2
+    if (index(line, "code this"))          i += 2
+    if (index(line, "write code"))         i += 2
+    if (index(line, "add the "))           i += 1
+    if (index(line, "create a "))          i += 1
+    if (index(line, " feature"))           i += 1
+    # negative: "do not implement" / "don'\''t implement"
+    if (index(line, "do not implement"))   i -= 4
+    if (index(line, "don'\''t implement")) i -= 4
 
-# GIT_REQUEST patterns — triggers GIT-SKILL
-case "$PROMPT_LOWER" in
-    *"git commit"*|*"git push"*|*"git add"*|*"git merge"*|\
-    *"open a pr"*|*"create a pr"*|*"make a pr"*|*"submit a pr"*|\
-    *"open a pull request"*|*"create a pull request"*|\
-    *"commit my changes"*|*"commit these changes"*|\
-    *"push the branch"*|*"push my branch"*)
-        GIT_REQUEST=1 ;;
-esac
+    # --- GIT_REQUEST (threshold: 2) ---
+    g = 0
+    if (index(line, "git commit"))         g += 3
+    if (index(line, "git push"))           g += 3
+    if (index(line, "git add"))            g += 3
+    if (index(line, "git merge"))          g += 3
+    if (index(line, " commit"))            g += 2
+    if (index(line, " push"))              g += 1
+    if (index(line, "pull request"))       g += 3
+    if (index(line, " pr "))               g += 2
+    if (index(line, "open a pr"))          g += 3
+    if (index(line, "create a pr"))        g += 3
+    if (index(line, "make a pr"))          g += 3
+    if (index(line, "submit a pr"))        g += 3
+    if (index(line, "merge request"))      g += 3
+    if (index(line, " branch"))            g += 1
+    if (index(line, " staged"))            g += 2
+    if (index(line, " stash"))             g += 2
+    # negative: "committed to" = dedication, not git
+    if (index(line, "committed to"))       g -= 3
+    if (index(line, "push back"))          g -= 2
+    if (index(line, "push for"))           g -= 2
+
+    # --- Apply thresholds ---
+    printf "%d %d %d", (c >= 2 ? 1 : 0), (i >= 2 ? 1 : 0), (g >= 2 ? 1 : 0)
+  }'
+)"
 
 # --- Build additionalContext ---
-BASELINE="[RULES ACTIVE: CHALLENGE-INSTRUCTION · WITHSTAND-CRITICISM · DOCS-FIRST · ONE-SUBTASK · GIT-SKILL]"
+BASELINE="[RULES ACTIVE: CHALLENGE-INSTRUCTION · WITHSTAND-CRITICISM · DOCS-FIRST · ONE-SUBTASK · DEV-GIT]"
 
 REMINDER="$BASELINE"
 
@@ -62,7 +110,7 @@ fi
 
 if [ "$GIT_REQUEST" = "1" ]; then
     REMINDER="$REMINDER
-[REMINDER:GIT-SKILL] Git or PR operation detected — use the /dev:git skill, do not run git/gh commands directly. See <!-- RULE:GIT-SKILL --> in dev:git."
+[REMINDER:DEV-GIT] Git or PR operation detected — use the /dev:git skill, do not run git/gh commands directly. See <!-- RULE:DEV-GIT --> in dev:git."
 fi
 
 # --- Output JSON ---
