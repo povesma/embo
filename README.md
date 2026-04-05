@@ -464,8 +464,9 @@ This provides:
 - `/dev:tasks` - Task breakdown with complexity analysis
 - `/dev:check` - Verify task completion status
 
-### Development Phase (2 commands)
+### Development Phase (3 commands)
 - `/dev:impl` - Implement following patterns
+- `/dev:git` - Generate commit messages and PR descriptions; manage commit style
 - `/dev:save` - Wrap up session, save to claude-mem
 
 ### Support Phase (1 command)
