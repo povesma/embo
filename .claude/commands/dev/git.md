@@ -116,15 +116,18 @@ Store as `<active_style>` — use throughout without re-reading the file.
 
 ### Mode: Interactive Menu (no argument)
 
-Show the menu and wait for user input:
+Use `AskUserQuestion` to offer the three modes:
 
 ```
-What do you want to do?
-  1. commit  — generate commit message for staged changes
-  2. pr      — generate PR description for this branch
-  3. style   — view or change commit style  [active: <active_style>]
-
-Enter choice (1/2/3) or subcommand name:
+question: "What do you want to do?"
+header: "Git action"
+options:
+  - label: "commit"
+    description: "Generate commit message for staged changes"
+  - label: "pr"
+    description: "Generate PR description for this branch"
+  - label: "style"
+    description: "View or change commit style  [active: <active_style>]"
 ```
 
 Then proceed with the selected mode.
@@ -202,64 +205,51 @@ Using the active style definition above, generate a commit message:
 
 #### Step 5: Present for review
 
-Show the generated message and ask:
+Print the generated message in a fenced block, then use
+`AskUserQuestion`:
 
 ```
-Generated commit message:
-
-────────────────────────────────────────
-feat(auth): add OAuth2 login support
-
-Users currently can only log in with username/password.
-OAuth2 gives a password-free alternative and reduces
-onboarding friction.
-────────────────────────────────────────
-
-Accept (a), Edit (e), or Reject (r)?
+question: "Commit with this message?"
+header: "Commit review"
+options:
+  - label: "Accept"
+    description: "Run git commit with this message"
+  - label: "Edit"
+    description: "Modify the message before committing"
+  - label: "Reject"
+    description: "Discard — do not commit"
 ```
 
 - **Accept**: run `git commit -m "$(cat <<'EOF' ... EOF)"`
-  After committing, check branch state and offer next step:
+  After committing, check branch state:
 
   ```bash
   git log @{u}..HEAD --oneline 2>/dev/null || echo "NO_UPSTREAM"
   ```
 
-  Then show inline:
+  Use `AskUserQuestion`:
   ```
-  ✅ Committed: feat(auth): add OAuth2 login support
-
-  Branch is 1 commit ahead of origin. What next?
-    1. push
-    2. push + open PR
-    3. done
-
-  Choice (1/2/3):
-  ```
-
-  If no upstream yet:
-  ```
-  ✅ Committed: feat(auth): add OAuth2 login support
-
-  Branch has no upstream yet. What next?
-    1. push  (git push -u origin <branch>)
-    2. push + open PR
-    3. done
-
-  Choice (1/2/3):
+  question: "Committed. What next?"
+  header: "Next step"
+  options:
+    - label: "push"
+      description: "git push (or git push -u origin <branch> if no upstream)"
+    - label: "push + open PR"
+      description: "Push, then generate PR description"
+    - label: "done"
+      description: "Stop here"
   ```
 
-  - Choice 1 → run `git push` (or `git push -u origin <branch>`),
+  - "push" → run `git push` (or `git push -u origin <branch>`),
     print confirmation, stop.
-  - Choice 2 → push, then continue directly into PR mode
+  - "push + open PR" → push, then continue directly into PR mode
     (skip pre-flight checks — state is already known clean).
-  - Choice 3 → stop.
+  - "done" → stop.
 
   If there are more groups left to commit (user selected `1+2`
   earlier), commit the next group first before offering "what next?".
 
-- **Edit**: show message in editable form, apply user changes,
-  then commit (same "what next?" flow after)
+- **Edit**: apply user changes, then commit (same "what next?" flow)
 - **Reject**: stop, no commit
 
 ---
@@ -279,39 +269,54 @@ git status --short
 git log @{u}..HEAD --oneline 2>/dev/null || echo "NO_UPSTREAM"
 ```
 
-- **Uncommitted changes exist** → offer to run the full sequence:
+- **Uncommitted changes exist** → use `AskUserQuestion`:
   ```
-  ⚠ You have uncommitted changes. To create a PR you need to:
-    1. Commit the changes
-    2. Push to remote
-    3. Create PR
-
-  Run full sequence now? (y/n):
+  question: "You have uncommitted changes. Run the full sequence
+             (commit → push → PR)?"
+  header: "Pre-flight"
+  options:
+    - label: "Yes, run full sequence"
+      description: "Commit changes, push, then generate PR description"
+    - label: "Cancel"
+      description: "Stop here"
   ```
-  - `y` → run commit mode (grouping + per-group messages), then
+  - "Yes" → run commit mode (grouping + per-group messages), then
     push, then continue into PR description — all in this turn.
-  - `n` → stop.
+  - "Cancel" → stop.
 
-- **Unpushed commits, no uncommitted changes** → offer push + PR:
+- **Unpushed commits, no uncommitted changes** → use `AskUserQuestion`:
   ```
-  ⚠ Branch has unpushed commits. Push first?
-    1. push + open PR
-    2. cancel
-
-  Choice (1/2):
+  question: "Branch has unpushed commits. Push first?"
+  header: "Pre-flight"
+  options:
+    - label: "Push + open PR"
+      description: "Push to remote, then generate PR description"
+    - label: "Cancel"
+      description: "Stop here"
   ```
-  - Choice 1 → push, then continue into PR description.
-  - Choice 2 → stop.
+  - "Push + open PR" → push, then continue into PR description.
+  - "Cancel" → stop.
 
 - Both clean and pushed → proceed.
 
 #### Step 3: Ask for base branch
 
+Use `AskUserQuestion`:
+
 ```
-Base branch? [main]:
+question: "Which base branch should this PR target?"
+header: "Base branch"
+options:
+  - label: "main"
+    description: "Merge into main (Recommended)"
+  - label: "master"
+    description: "Merge into master"
+  - label: "develop"
+    description: "Merge into develop"
 ```
 
-Wait for input. Use the entered value (or `main` if Enter pressed).
+User can also select "Other" to type a custom branch name.
+Use the selected value as `<base>`.
 
 #### Step 4: Read branch context
 
@@ -340,17 +345,19 @@ do not block, let them decide whether to act:
 - **Unnecessary code added**: speculative abstractions, unused helpers,
   over-engineered solutions — suggest simplifying before review
 
-Present findings concisely:
+Present findings concisely in text, then use `AskUserQuestion`:
 
 ```
-⚠ Reviewer-friendliness notes:
-  • auth/login.py:42 — complex regex with no explanation; consider a comment
-  • migrations/ — unrelated to the feature; consider a separate PR
-
-Address these before creating the PR? Or continue as-is? (y = address / n = continue):
+question: "Address these before creating the PR?"
+header: "Review notes"
+options:
+  - label: "Address first"
+    description: "Stop here so you can fix the flagged issues"
+  - label: "Continue as-is"
+    description: "Generate the PR description now"
 ```
 
-Track whether any issues were noted (even if user skips them) — used in Step 5.
+Track whether any issues were noted (even if user skips them) — used in Step 6.
 
 #### Step 6: Generate PR description
 
@@ -385,20 +392,19 @@ Rules:
 
 #### Step 6: Present for review
 
-Show the PR description and ask:
+Print the generated description in a fenced block, then use
+`AskUserQuestion`:
 
 ```
-Generated PR description:
-
-────────────────────────────────────────
-## Summary
-...
-
-## Test plan
-- [ ] ...
-────────────────────────────────────────
-
-Accept (a), Edit (e), or Reject (r)?
+question: "Create PR with this description?"
+header: "PR review"
+options:
+  - label: "Accept"
+    description: "Create the PR now"
+  - label: "Edit"
+    description: "Modify the description before creating"
+  - label: "Reject"
+    description: "Discard — do not create PR"
 ```
 
 #### Step 7: Create PR or print
@@ -425,26 +431,30 @@ cat ~/.claude/active-profile.yaml 2>/dev/null
 
 Extract `git.commit_style`. Default: `conventional` if absent.
 
-#### Step 2: Display styles
+#### Step 2: Offer style selection via AskUserQuestion
 
+Use the `AskUserQuestion` tool with four options — the three built-in
+styles plus "Keep current". Mark the active style with "(active)" in
+its label.
+
+Example (active = conventional):
 ```
-Available commit styles:
-
-  * conventional (active)
-      feat(scope): subject
-
-    imperative
-      Add feature
-
-    tim-pope
-      Add feature  (72-char body wrap)
-
-Switch to style? (enter name, or press Enter to keep current):
+question: "Switch to a different commit style?"
+header: "Commit style"
+options:
+  - label: "conventional (active)"
+    description: "feat(scope): subject — Conventional Commits 1.0"
+  - label: "imperative"
+    description: "Add feature — imperative verb, no type prefix"
+  - label: "tim-pope"
+    description: "Add feature — same as imperative, 72-char body wrap"
+  - label: "Keep current"
+    description: "No change"
 ```
 
 #### Step 3: Apply switch (if requested)
 
-If the user enters a valid style name:
+If user selected a style other than "Keep current":
 1. Read `~/.claude/active-profile.yaml`
 2. Update `git.commit_style: <new_style>` (add `git:` block if
    absent)
@@ -456,7 +466,7 @@ If no active profile exists:
   then use `/dev:git style` to change the git style."
 - Stop.
 
-If user presses Enter without input:
+If user selected "Keep current":
 - Print: "Style unchanged: conventional"
 
 ---
