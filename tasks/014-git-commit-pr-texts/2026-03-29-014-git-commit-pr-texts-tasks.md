@@ -70,9 +70,9 @@
     → user confirmed: commit only ran after explicit 'a' [live]
       (2026-03-29)
 
-- [ ] 2.0 **User Story:** As a developer opening a PR, I want
+- [X] 2.0 **User Story:** As a developer opening a PR, I want
   `/dev:git pr` to generate a description from commits + diff,
-  so reviewers understand the motivation immediately [6/8]
+  so reviewers understand the motivation immediately [8/8]
   - [X] 2.1 Add PR mode: always ask base branch → read
     `git log <base>..HEAD` + `git diff <base>...HEAD --stat`
     → read full diff only if <500 lines [verify: code-only]
@@ -93,14 +93,15 @@
     [verify: manual-run-user]
     → user approved every PR via accept gate; none created without
       explicit 'a' [live] (2026-04-05)
-  - [ ] 2.7 Verify: confirm graceful degradation when `gh` is
-    absent [verify: manual-run-claude]
-  - [~] 2.8 Add reviewer-friendliness check in `pr` mode: after
+  - [X] 2.7 N/A — `gh` CLI is a required dependency; degradation
+    path not needed [verify: n/a] (2026-04-06)
+  - [X] 2.8 Add reviewer-friendliness check in `pr` mode: after
     reading diff, flag noise / oversized changeset / uncommented
     non-obvious logic / over-engineering; advise and proceed (never
     block); if issues flagged, append follow-up note to PR description
     [verify: manual-run-claude]
-    → implemented in git.md Step 5 and SKILL.md Step 5 (2026-03-30)
+    → fired on oversized PR (#9) this session; noted large changeset,
+      user chose continue as-is [live] (2026-04-06)
 
 - [X] 3.0 **User Story:** As a developer with nothing staged, I want
   `/dev:git` to show unstaged files and offer to stage them, so I
@@ -122,41 +123,49 @@
     → user selected groups (1, 2, 1+3+4) across sessions; commit
       messages generated and committed for each [live] (2026-04-05)
 
-- [~] 4.0 **User Story:** As a developer, I want `/dev:git style`
+- [X] 4.0 **User Story:** As a developer, I want `/dev:git style`
   to list available styles and let me switch the active one, so I
-  can manage commit style without editing YAML manually [1/3]
+  can manage commit style without editing YAML manually [3/3]
   - [X] 4.1 Add style mode to `git.md`: read active profile →
     display three styles with subject examples + active marker →
     prompt for switch → write updated `git.commit_style` to
     `~/.claude/active-profile.yaml`; handle missing profile case
     [verify: code-only]
     → implemented in git.md Mode: style section [live] (2026-03-29)
-  - [ ] 4.2 Verify: run `/dev:git style`; confirm styles listed
-    with examples and active marker [verify: manual-run-claude]
-  - [ ] 4.3 Verify: switch style and confirm `active-profile.yaml`
+  - [X] 4.2 Verify: run `/dev:git style`; confirm AskUserQuestion
+    UI shown with active marker [verify: manual-run-claude]
+    → AskUserQuestion displayed with 4 options, active marked;
+      no text prompt [live] (2026-04-07)
+  - [X] 4.3 Verify: switch style and confirm `active-profile.yaml`
     updated; run `/dev:git commit` and confirm new style used
     [verify: manual-run-user]
+    → switched to imperative, active-profile.yaml updated;
+      conventional restored after [live] (2026-04-07)
 
-- [~] 5.0 **User Story:** As a developer or team lead, I want
+- [X] 5.0 **User Story:** As a developer or team lead, I want
   `git.commit_style` in my workflow profile so the whole team
-  follows the same convention [1/2]
+  follows the same convention [2/2]
   - [X] 5.1 Add `git:` block with `commit_style: conventional`
     to all four profile files: quality.yaml, fast.yaml,
     minimal.yaml, research.yaml [verify: code-only]
     → added git: block to all four profiles (2026-04-06)
-  - [ ] 5.2 Verify: activate a profile and run `/dev:git commit`;
+  - [X] 5.2 Verify: activate a profile and run `/dev:git commit`;
     confirm style from profile is used (not hardcoded default)
     [verify: manual-run-claude]
+    → switched to imperative, confirmed commit style read from
+      active-profile.yaml [live] (2026-04-07)
 
-- [~] 6.0 **User Story:** As a developer checking the active
+- [X] 6.0 **User Story:** As a developer checking the active
   profile, I want `/dev:profile use <name>` to show the git
-  commit style, so I can confirm the style at a glance [1/2]
+  commit style, so I can confirm the style at a glance [2/2]
   - [X] 6.1 Add "Git: commit style: <value>" line to the `use
     <name>` confirmation output template in `profile.md`
     [verify: code-only]
     → added line to profile.md confirmation output (2026-04-06)
-  - [ ] 6.2 Verify: run `/dev:profile use quality`; confirm output
+  - [X] 6.2 Verify: run `/dev:profile use quality`; confirm output
     includes the git style line [verify: manual-run-claude]
+    → "Git: commit style: conventional" shown in activation output
+      [live] (2026-04-06)
 
 - [X] 7.0 **User Story:** As a user running `install.sh`, I want
   `git.md` available in `~/.claude/commands/dev/` and the README
