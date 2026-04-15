@@ -8,7 +8,7 @@ RLM-Mem provides a complete workflow for working with large codebases (1000+ fil
 
 - **RLM (Recursive Language Model)**: Analyzes your codebase at scale, discovers patterns, estimates complexity
 - **Claude-Mem**: Provides semantic memory of past decisions, PRDs, implementations, and lessons learned
-- **10 Commands**: Cover the complete development lifecycle from planning to deployment
+- **12 Commands**: Cover the complete development lifecycle from planning to deployment
 
 ### How It Works
 
@@ -237,15 +237,16 @@ After installation, your `~/.claude/` directory will contain:
 │   ├── test-e2e-generator.md   # Playwright test code generator (requires Playwright MCP)
 │   └── test-e2e-healer.md      # Failing test debugger/repair (requires Playwright MCP)
 ├── commands/
-│   └── dev/                    # All 11 dev commands
+│   └── dev/                    # All 12 dev commands
 │       ├── init.md, start.md, health.md, profile.md
-│       ├── prd.md, tech-design.md, tasks.md, check.md
-│       ├── impl.md
+│       ├── prd.md, tech-design.md, test-plan.md, tasks.md, check.md
+│       ├── impl.md, git.md
 │       └── improve.md
 ├── profiles/
 │   ├── quality.yaml            # Full workflow profile
 │   ├── fast.yaml               # Speed mode profile
-│   └── minimal.yaml            # Bare bones profile
+│   ├── minimal.yaml            # Bare bones profile
+│   └── research.yaml           # Evidence-driven research profile
 ├── hooks/
 │   ├── context-guard.sh        # Context window warning hook (optional)
 │   └── behavioral-reminder.sh  # Behavioral rule reminder hook (optional)
@@ -447,7 +448,6 @@ This provides:
 
 ```
 /dev:impl       # Implement with pattern discovery
-/dev:save       # Wrap up session, persist context
 ```
 
 ## 📚 Available Commands
@@ -466,10 +466,12 @@ This provides:
 
 ### Development Phase (2 commands)
 - `/dev:impl` - Implement following patterns
-- `/dev:save` - Wrap up session, save to claude-mem
+- `/dev:git` - Generate commit messages and PR descriptions; manage commit style
 
 ### Support Phase (1 command)
 - `/dev:improve` - Review accumulated corrections and generate improvement proposal
+  *(currently non-functional: depends on `save_memory` MCP tool and a correction-capture
+  pipeline that don't exist yet — see `tasks/009-FEEDBACK-LOOP-workflow-self-improvement/`)*
 
 ## 🧪 Test Subagents
 
@@ -538,32 +540,7 @@ Repeat for `test-e2e-generator.md` and `test-e2e-healer.md`.
 
 ### Command Tree Overview
 
-Three command trees are available after installation:
-
-| Tree | Memory | Code Analysis | Use When |
-|------|--------|---------------|----------|
-| `/dev` | claude-mem | RLM | **Recommended default.** Quality-first. Full history + codebase intelligence. |
-| `/rlm` | None | RLM | No prior session history yet, or one-off large-codebase analysis. |
-| `/coding` | claude-mem | None | Fast work on familiar code. Lightweight — no RLM overhead. |
-
-### When to Use Each Tree
-
-**Use `/dev` when:**
-- Planning any new feature (PRD/design/tasks)
-- Working in unfamiliar parts of codebase
-- Making architectural changes
-- Cross-module modifications
-- Quality > Speed
-
-**Use `/coding` when:**
-- Urgent hotfixes
-- Trivial changes (typos, configs)
-- Very familiar code areas
-- Small repos (<500 files)
-
-**Use `/rlm` when:**
-- First session on a new large codebase (no claude-mem history yet)
-- One-off analysis task where you don't need persistent memory
+All commands live under the `/dev` tree:
 
 
 

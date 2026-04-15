@@ -20,6 +20,9 @@ rules:
     assessment: pessimistic   # assume things don't work until proven
     confirmation: required    # seek external confirmation for claims
 
+git:
+  commit_style: conventional
+
 tools:
   rlm: true
   memory_backend: claude-mem

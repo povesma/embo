@@ -54,6 +54,11 @@
     in `dev:start` [verify: code-only]
   - [X] 1.5 Add `<!-- RULE:GIT-SKILL -->` immediately before
     `## When to Use` in `dev:git` [verify: code-only]
+  - [X] 1.6 Rename `GIT-SKILL` → `DEV-GIT` in hook, baseline tag,
+    and git.md anchor so the label matches the actual `dev:git` skill
+    [verify: manual-run-user]
+    → Claude in other projects now correctly resolves DEV-GIT to the
+      dev:git skill; confirmed across multiple sessions [live] (2026-04-05)
 
 - [X] 2.0 **User Story:** As a developer on any prompt, I want a
   1-line baseline tag-list always injected into Claude's context
@@ -152,6 +157,33 @@
     optional registrations applied [verify: manual-run-claude]
     → all applied, deprecated hook removed, no summary [live]
       (2026-04-01)
+
+- [X] 8.0 **User Story:** As a developer using natural phrasing like
+  "let's commit" or "commit and push", I want the hook to detect git
+  intent without requiring exact phrases, so reminders fire reliably
+  [3/3]
+  - [X] 8.1 Replace bash `case` exact-phrase matching with awk
+    weighted keyword scoring (AWSK): weighted keywords, thresholds,
+    negative patterns for false-positive resistance (~7ms)
+    [verify: code-only]
+  - [X] 8.2 Verify: pipe test prompts into hook; confirm "let's
+    commit" triggers DEV-GIT, "committed to this approach" does not
+    [verify: manual-run-claude]
+    → all four test cases pass: git, criticism, impl trigger
+      correctly; "committed to" negative pattern cancels [live]
+      (2026-04-02)
+  - [X] 8.3 Verify: DEV-GIT reminder triggers correctly in live
+    sessions across multiple projects [verify: manual-run-user]
+    → confirmed: DEV-GIT triggered correctly many times across
+      sessions [live] (2026-04-05)
+    NOTE: CRITICISM and IMPL_REQUEST classifiers not yet thoroughly
+    tested in live sessions — only verified via piped test prompts.
+
+- [X] 9.0 **User Story:** As a researcher, I want the AWSK approach
+  and alternatives documented so future work on ML-based classification
+  has a baseline [1/1]
+  - [X] 9.1 Create `awsk-research.md` with benchmark table, AWSK
+    description, and ML daemon as future target [verify: code-only]
 
 - [X] 7.0 **User Story:** As a new RLM-Mem user reading the README,
   I want the behavioral-reminder hook documented so I understand

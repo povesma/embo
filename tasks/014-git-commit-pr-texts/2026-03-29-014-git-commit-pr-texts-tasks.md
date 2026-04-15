@@ -70,9 +70,9 @@
     → user confirmed: commit only ran after explicit 'a' [live]
       (2026-03-29)
 
-- [ ] 2.0 **User Story:** As a developer opening a PR, I want
+- [X] 2.0 **User Story:** As a developer opening a PR, I want
   `/dev:git pr` to generate a description from commits + diff,
-  so reviewers understand the motivation immediately [7/0]
+  so reviewers understand the motivation immediately [8/8]
   - [X] 2.1 Add PR mode: always ask base branch → read
     `git log <base>..HEAD` + `git diff <base>...HEAD --stat`
     → read full diff only if <500 lines [verify: code-only]
@@ -89,77 +89,101 @@
     → ran on feature/014 branch; base branch prompted, Summary +
       Test plan sections generated, PR created at
       povesma/rlm-mem#8 [live] (2026-03-29)
-  - [ ] 2.6 Verify: confirm no PR created without explicit approval
+  - [X] 2.6 Verify: confirm no PR created without explicit approval
     [verify: manual-run-user]
-  - [ ] 2.7 Verify: confirm graceful degradation when `gh` is
-    absent [verify: manual-run-claude]
-  - [~] 2.8 Add reviewer-friendliness check in `pr` mode: after
+    → user approved every PR via accept gate; none created without
+      explicit 'a' [live] (2026-04-05)
+  - [X] 2.7 N/A — `gh` CLI is a required dependency; degradation
+    path not needed [verify: n/a] (2026-04-06)
+  - [X] 2.8 Add reviewer-friendliness check in `pr` mode: after
     reading diff, flag noise / oversized changeset / uncommented
     non-obvious logic / over-engineering; advise and proceed (never
     block); if issues flagged, append follow-up note to PR description
     [verify: manual-run-claude]
-    → implemented in git.md Step 5 and SKILL.md Step 5 (2026-03-30)
+    → fired on oversized PR (#9) this session; noted large changeset,
+      user chose continue as-is [live] (2026-04-06)
 
-- [ ] 3.0 **User Story:** As a developer with nothing staged, I want
+- [X] 3.0 **User Story:** As a developer with nothing staged, I want
   `/dev:git` to show unstaged files and offer to stage them, so I
-  am not blocked by an empty diff [3/0]
-  - [ ] 3.1 Add empty-staged handler: run `git status --short`;
+  am not blocked by an empty diff [3/3]
+  - [X] 3.1 Add empty-staged handler: run `git status --short`;
     if nothing at all → exit with message; if unstaged changes
     exist → show list and offer stage-all / stage-selected /
     cancel [verify: code-only]
-  - [ ] 3.2 Verify: run `/dev:git commit` with nothing staged but
+    → implemented in git.md Step 2 with grouping, [?] for
+      unrelated files, explicit staging [live] (2026-03-29)
+  - [X] 3.2 Verify: run `/dev:git commit` with nothing staged but
     unstaged changes present; confirm file list shown and staging
     options offered [verify: manual-run-claude]
-  - [ ] 3.3 Verify: user selects files to stage and generation
+    → grouping flow used in multiple sessions; files grouped by
+      intent, user selects groups, files staged explicitly [live]
+      (2026-04-02)
+  - [X] 3.3 Verify: user selects files to stage and generation
     proceeds [verify: manual-run-user]
+    → user selected groups (1, 2, 1+3+4) across sessions; commit
+      messages generated and committed for each [live] (2026-04-05)
 
-- [ ] 4.0 **User Story:** As a developer, I want `/dev:git style`
+- [X] 4.0 **User Story:** As a developer, I want `/dev:git style`
   to list available styles and let me switch the active one, so I
-  can manage commit style without editing YAML manually [3/0]
-  - [ ] 4.1 Add style mode to `git.md`: read active profile →
+  can manage commit style without editing YAML manually [3/3]
+  - [X] 4.1 Add style mode to `git.md`: read active profile →
     display three styles with subject examples + active marker →
     prompt for switch → write updated `git.commit_style` to
     `~/.claude/active-profile.yaml`; handle missing profile case
     [verify: code-only]
-  - [ ] 4.2 Verify: run `/dev:git style`; confirm styles listed
-    with examples and active marker [verify: manual-run-claude]
-  - [ ] 4.3 Verify: switch style and confirm `active-profile.yaml`
+    → implemented in git.md Mode: style section [live] (2026-03-29)
+  - [X] 4.2 Verify: run `/dev:git style`; confirm AskUserQuestion
+    UI shown with active marker [verify: manual-run-claude]
+    → AskUserQuestion displayed with 4 options, active marked;
+      no text prompt [live] (2026-04-07)
+  - [X] 4.3 Verify: switch style and confirm `active-profile.yaml`
     updated; run `/dev:git commit` and confirm new style used
     [verify: manual-run-user]
+    → switched to imperative, active-profile.yaml updated;
+      conventional restored after [live] (2026-04-07)
 
-- [ ] 5.0 **User Story:** As a developer or team lead, I want
+- [X] 5.0 **User Story:** As a developer or team lead, I want
   `git.commit_style` in my workflow profile so the whole team
-  follows the same convention [2/0]
-  - [ ] 5.1 Add `git:` block with `commit_style: conventional`
+  follows the same convention [2/2]
+  - [X] 5.1 Add `git:` block with `commit_style: conventional`
     to all four profile files: quality.yaml, fast.yaml,
     minimal.yaml, research.yaml [verify: code-only]
-  - [ ] 5.2 Verify: activate a profile and run `/dev:git commit`;
+    → added git: block to all four profiles (2026-04-06)
+  - [X] 5.2 Verify: activate a profile and run `/dev:git commit`;
     confirm style from profile is used (not hardcoded default)
     [verify: manual-run-claude]
+    → switched to imperative, confirmed commit style read from
+      active-profile.yaml [live] (2026-04-07)
 
-- [ ] 6.0 **User Story:** As a developer checking the active
+- [X] 6.0 **User Story:** As a developer checking the active
   profile, I want `/dev:profile use <name>` to show the git
-  commit style, so I can confirm the style at a glance [2/0]
-  - [ ] 6.1 Add "Git: commit style: <value>" line to the `use
+  commit style, so I can confirm the style at a glance [2/2]
+  - [X] 6.1 Add "Git: commit style: <value>" line to the `use
     <name>` confirmation output template in `profile.md`
     [verify: code-only]
-  - [ ] 6.2 Verify: run `/dev:profile use quality`; confirm output
+    → added line to profile.md confirmation output (2026-04-06)
+  - [X] 6.2 Verify: run `/dev:profile use quality`; confirm output
     includes the git style line [verify: manual-run-claude]
+    → "Git: commit style: conventional" shown in activation output
+      [live] (2026-04-06)
 
-- [ ] 7.0 **User Story:** As a user running `install.sh`, I want
+- [X] 7.0 **User Story:** As a user running `install.sh`, I want
   `git.md` available in `~/.claude/commands/dev/` and the README
-  updated [2/0]
-  - [ ] 7.1 Confirm `install.sh` wildcard `cp -r commands/dev/*`
+  updated [2/2]
+  - [X] 7.1 Confirm `install.sh` wildcard `cp -r commands/dev/*`
     covers `git.md` — no change needed; document as verified
     [verify: code-only]
-  - [ ] 7.2 Add `/dev:git` row to the Available Commands table in
+    → install.sh uses `cp -r commands/dev/*` which covers git.md;
+      also verified in 8.2 [live] (2026-03-30)
+  - [X] 7.2 Add `/dev:git` row to the Available Commands table in
     `README.md` with description "Generate commit messages and PR
     descriptions; manage commit style" [verify: code-only]
+    → added to Development Phase section in README (2026-04-06)
 
-- [ ] 8.0 **User Story:** As a developer, I want to say "commit my
+- [X] 8.0 **User Story:** As a developer, I want to say "commit my
   changes" or "create a PR" in natural language and have Claude
   auto-invoke `/dev:git`, so I don't need to remember the slash
-  command for routine git operations [4/0]
+  command for routine git operations [4/4]
   - [X] 8.1 Add frontmatter `description` to `git.md` so it
     auto-triggers on natural language — no separate SKILL.md needed
     since commands and skills are the same thing in Claude Code
@@ -171,10 +195,14 @@
     no change needed [verify: code-only]
     → install.sh `cp -r commands/dev/*` already covers git.md;
       verified no skills directory needed [live] (2026-03-30)
-  - [ ] 8.3 Verify: type "commit my changes" without a slash
+  - [X] 8.3 Verify: type "commit my changes" without a slash
     command; confirm Claude auto-invokes `/dev:git` [verify:
     manual-run-user]
-  - [ ] 8.4 Verify: type "create a PR from current changes";
+    → DEV-GIT reminder triggers and Claude invokes dev:git skill;
+      confirmed across multiple sessions [live] (2026-04-05)
+  - [X] 8.4 Verify: type "create a PR from current changes";
     confirm Claude auto-invokes `/dev:git pr` flow [verify:
     manual-run-user]
+    → "let's create a PR" triggered DEV-GIT and routed to
+      /dev:git pr flow [live] (2026-04-05)
 

@@ -15,6 +15,9 @@ rules:
     correction_capture: false
     scope_drift: off
 
+git:
+  commit_style: conventional
+
 tools:
   rlm: true
   memory_backend: claude-mem

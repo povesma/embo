@@ -46,6 +46,7 @@ If no argument is provided, default to `list`.
    - Testing: <approach>, subagents: <subagents list or "none">
    - Workflow: docs-first: <docs_first>, corrections: <on/off>
    - Tools: RLM: <on/off>, memory: <memory_backend>
+   - Git: commit style: <commit_style or "conventional">
    - Required MCPs: <list or "none">
    ```
 
