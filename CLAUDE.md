@@ -96,7 +96,9 @@ Edit `rlm_repl.py` → `LANGUAGE_MAP` dict.
 │   ├── quality.yaml, fast.yaml, minimal.yaml
 ├── hooks/
 │   └── context-guard.sh        # Context window warning hook
-├── rlm_scripts/rlm_repl.py     # REPL (833 lines)
+├── rlm_scripts/rlm_repl.py     # REPL: init-repo supports
+│                                 # .rlmignore + --exclude/--include/
+│                                 # --exclude-from/--no-rlmignore
 └── statusline.sh               # Status line script (copy to ~/.claude/)
 
 README.md                       # User guide

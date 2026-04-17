@@ -579,6 +579,37 @@ RLM-Mem uses:
 
 Estimated cost: ~2-3x vs pure claude-mem, but saves hours in debugging/refactoring.
 
+### Excluding Vendor Paths
+
+RLM's `init-repo` indexes every tracked file by default, which can
+bloat the index on repos that contain large vendor trees (e.g. a
+PHP `html/` directory with 17,000 third-party files). Keep the
+index small with a committed `.rlmignore`:
+
+```gitignore
+# .rlmignore — gitignore-lite syntax
+html/**
+vendor/**
+!vendor/CHANGELOG.md   # rescue specific files with leading !
+```
+
+`rlm_repl.py init-repo` auto-discovers `.rlmignore` from cwd, walks
+up to the repo root, and applies the patterns before indexing. The
+summary block shows a per-pattern breakdown so you can confirm the
+expected trees were dropped.
+
+One-off CLI alternative (no file needed):
+
+```bash
+python3 ~/.claude/rlm_scripts/rlm_repl.py init-repo . \
+    --exclude 'html/**' --exclude 'vendor/**'
+```
+
+Other flags: `--include 'scripts/**'` turns on allowlist mode
+(only matching files kept); `--exclude-from FILE` reads patterns
+from an arbitrary file; `--no-rlmignore` suppresses
+auto-discovery.
+
 ## 🔧 Configuration
 
 ### Customizing Chunk Size
