@@ -64,16 +64,23 @@ python3 ~/.claude/rlm_scripts/rlm_repl.py init-repo .
 ```
 
 This will:
+- Auto-discover any `.rlmignore` (cwd → ancestors → repo root)
 - Discover all files (git-aware)
 - Detect languages (50+ types)
 - Identify binary files
 - Calculate metadata
 - Store in `.claude/rlm_state/state.pkl`
 
+If the repo has a large vendor tree (e.g. `html/`, `node_modules/`)
+and no `.rlmignore` exists, suggest one before running — or pass
+`--exclude 'html/**'` for a one-off run. Other flags:
+`--include` (allowlist), `--exclude-from FILE`, `--no-rlmignore`.
+
 **Capture output**:
 - Total files indexed
 - Repository size
 - Primary languages
+- Per-pattern filter counts (only shown when filters were applied)
 - State file location
 
 ### Step 4: Bootstrap Claude-Mem
@@ -189,6 +196,9 @@ mcp__plugin_claude-mem_mcp-search__search(
   • {lang2}: {count2} files ({pct2:.1f}%)
   • {lang3}: {count3} files ({pct3:.1f}%)
 - ✅ **State saved**: .claude/rlm_state/state.pkl
+
+Include any filter summary lines from the `init-repo` stdout
+verbatim, if present.
 
 ## Claude-Mem Bootstrap
 - ✅ **Project overview**: Indexed
