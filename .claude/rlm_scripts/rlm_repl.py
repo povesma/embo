@@ -50,7 +50,7 @@ import time
 import traceback
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, Set, Optional
+from typing import Any, Dict, List, NamedTuple, Tuple, Set, Optional
 
 
 DEFAULT_STATE_PATH = Path(".claude/rlm_state/state.pkl")
@@ -317,6 +317,422 @@ def _is_binary_file(file_path: Path) -> bool:
         return True
 
 
+class CompiledPattern(NamedTuple):
+    """A compiled gitignore-lite pattern ready for matching."""
+
+    raw: str
+    is_negation: bool
+    anchored: bool
+    dir_only: bool
+    regex: "re.Pattern"
+    source: str = "cli"
+
+
+def _translate_core(core: str) -> str:
+    """Translate the inner body of a gitignore-lite pattern into a regex.
+
+    Does not apply anchoring or directory-only wrapping — caller handles
+    those. Supports `*`, `?`, `**`, `**/`, bracket classes `[abc]`,
+    `[a-z]`, `[!xyz]`, and `\\` escape for the next metacharacter.
+    """
+    parts: List[str] = []
+    i = 0
+    n = len(core)
+    while i < n:
+        ch = core[i]
+        if ch == "\\":
+            if i + 1 >= n:
+                raise RlmReplError(
+                    f"dangling backslash in pattern: {core!r}"
+                )
+            parts.append(re.escape(core[i + 1]))
+            i += 2
+            continue
+        if ch == "*" and i + 1 < n and core[i + 1] == "*":
+            # ** handling
+            if i + 2 < n and core[i + 2] == "/":
+                # `**/` -> zero or more segments followed by /
+                parts.append("(?:.*/)?")
+                i += 3
+                continue
+            if i + 2 == n and parts and parts[-1].endswith("/"):
+                # trailing `/` + `**` pair: drop the trailing slash we
+                # already emitted so the tail can match zero segments
+                parts[-1] = parts[-1][:-1]
+                parts.append("(?:/.*)?")
+                i += 2
+                continue
+            # bare trailing `**` -> any chars including /
+            parts.append(".*")
+            i += 2
+            continue
+        if ch == "*":
+            parts.append("[^/]*")
+            i += 1
+            continue
+        if ch == "?":
+            parts.append("[^/]")
+            i += 1
+            continue
+        if ch == "[":
+            j = i + 1
+            if j < n and core[j] == "!":
+                j += 1
+            if j < n and core[j] == "]":
+                j += 1
+            while j < n and core[j] != "]":
+                j += 1
+            if j >= n:
+                parts.append(re.escape(ch))
+                i += 1
+                continue
+            body = core[i + 1 : j]
+            if body.startswith("!"):
+                body = "^" + body[1:]
+            parts.append("(?![/])[" + body + "]")
+            i = j + 1
+            continue
+        parts.append(re.escape(ch))
+        i += 1
+    return "".join(parts)
+
+
+def _compile_pattern(pattern: str) -> CompiledPattern:
+    """Translate a gitignore-lite pattern into a CompiledPattern.
+
+    Wildcards: `*`, `?`, `**`, `**/`, bracket classes `[abc]`,
+    `[a-z]`, `[!xyz]`. Leading `!` marks negation; `\\!` escapes it.
+    Leading `/` or any internal `/` anchors the pattern to repo root.
+    Bare names match at any depth. Trailing `/` = directory-only
+    (requires at least one char after the matched segment since our
+    file list is files-only).
+    """
+    raw = pattern
+    if not pattern:
+        raise RlmReplError("empty pattern")
+
+    # Negation
+    is_negation = False
+    if pattern.startswith("!"):
+        is_negation = True
+        pattern = pattern[1:]
+    elif pattern.startswith("\\!"):
+        # Escaped bang: strip the backslash so the `!` is literal
+        pattern = pattern[1:]
+
+    if not pattern:
+        raise RlmReplError(f"empty pattern after negation marker: {raw!r}")
+
+    # Directory-only (trailing /)
+    dir_only = False
+    if pattern.endswith("/") and not pattern.endswith("\\/"):
+        dir_only = True
+        pattern = pattern[:-1]
+        if not pattern:
+            raise RlmReplError(f"pattern is only a slash: {raw!r}")
+
+    # Anchoring
+    #
+    # Rules (per task 016 spec, matcher tests):
+    #   - leading `/` -> strip, anchored to root
+    #   - internal `/` -> anchored to root (no cross-depth)
+    #   - no `/`, no wildcards -> bare literal name, matches at any depth
+    #   - no `/`, contains wildcards (`*`/`?`/`[`) -> root-anchored, single segment
+    #   - dir_only (trailing `/`) -> directory segment matches at any depth
+    anchored = False
+    if pattern.startswith("/"):
+        anchored = True
+        pattern = pattern[1:]
+    elif "/" in pattern:
+        anchored = True
+
+    has_wildcards = any(c in pattern for c in "*?[")
+
+    core = _translate_core(pattern)
+
+    if dir_only:
+        # Directory name at any depth; our file list is files-only so
+        # require at least one char after the segment (`.+` not `.*`).
+        if anchored:
+            regex_src = f"{core}/.+"
+        else:
+            regex_src = f"(?:^|.*/){core}/.+"
+    else:
+        if anchored:
+            regex_src = core
+        elif has_wildcards:
+            # Bare pattern with wildcards -> root-only, single segment.
+            regex_src = core
+        else:
+            # Literal bare name -> matches as a segment at any depth.
+            regex_src = f"(?:^|.*/){core}(?:/.*)?"
+
+    return CompiledPattern(
+        raw=raw,
+        is_negation=is_negation,
+        anchored=anchored,
+        dir_only=dir_only,
+        regex=re.compile(regex_src),
+    )
+
+
+def _match_gitignore(rel_path: str, pattern: str) -> bool:
+    """Return True if `rel_path` matches gitignore-lite `pattern`.
+
+    Negation markers are a property of the pattern text; this helper
+    reports raw "did the body match" and callers interpret negation.
+    """
+    return _compile_pattern(pattern).regex.fullmatch(rel_path) is not None
+
+
+def _find_rlmignore(cwd: Path, repo_root: Path) -> Optional[Path]:
+    """Locate a `.rlmignore` file starting at cwd.
+
+    Walks upward from `cwd` through each parent; returns the first
+    `.rlmignore` found. If none found during the walk, falls back to
+    `repo_root/.rlmignore` if it exists. Returns `None` otherwise.
+    """
+    cwd = Path(cwd).resolve()
+    repo_root = Path(repo_root).resolve()
+    # Walk upward from cwd until the filesystem root
+    current = cwd
+    seen: Set[Path] = set()
+    while current not in seen:
+        seen.add(current)
+        candidate = current / ".rlmignore"
+        if candidate.is_file():
+            return candidate
+        parent = current.parent
+        if parent == current:
+            break
+        current = parent
+    # Fallback: repo_root/.rlmignore (handles "cwd outside repo" case)
+    fallback = repo_root / ".rlmignore"
+    if fallback.is_file():
+        return fallback
+    return None
+
+
+def _parse_pattern_file(path: Path) -> List[Tuple[int, str]]:
+    """Parse a `.rlmignore`-style file.
+
+    Returns `[(lineno, raw_pattern), ...]` in input order. Skips blank
+    lines and `#`-prefixed comments. Raises `RlmReplError` with the
+    file path on read failure.
+    """
+    try:
+        text = Path(path).read_text(encoding="utf-8")
+    except (OSError, PermissionError) as e:
+        raise RlmReplError(f"cannot read pattern file {path}: {e}")
+
+    out: List[Tuple[int, str]] = []
+    for idx, line in enumerate(text.splitlines(), start=1):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("#"):
+            continue
+        out.append((idx, stripped))
+    return out
+
+
+def _compile_from_source(raw: str, source: str) -> CompiledPattern:
+    """Compile a raw pattern and stamp a source label."""
+    cp = _compile_pattern(raw)
+    return cp._replace(source=source)
+
+
+def _load_filter_spec(
+    args: Any,
+    repo_root: Path,
+    cwd: Optional[Path] = None,
+) -> Dict[str, Any]:
+    """Build the FilterSpec from CLI args, `--exclude-from`, and `.rlmignore`.
+
+    Precedence for excludes (in order appended):
+      1. `--exclude` flags (CLI, repeatable)
+      2. If `--exclude-from FILE` is given: patterns from FILE (explicit
+         exclude-from overrides auto-discovered `.rlmignore`).
+      3. Else, unless `--no-rlmignore` is set: patterns from an
+         auto-discovered `.rlmignore`.
+
+    Includes come only from `--include` (CLI). FilterSpec is a plain
+    dict with keys `excludes` and `includes`, each a list of
+    `CompiledPattern`.
+    """
+    if cwd is None:
+        cwd = Path.cwd()
+    cwd = Path(cwd)
+    repo_root = Path(repo_root)
+
+    excludes: List[CompiledPattern] = []
+    includes: List[CompiledPattern] = []
+
+    # 1. CLI excludes
+    for raw in getattr(args, "exclude", []) or []:
+        excludes.append(_compile_from_source(raw, "cli"))
+
+    # 2. --exclude-from (explicit) or auto-discovered .rlmignore
+    exclude_from = getattr(args, "exclude_from", None)
+    no_rlmignore = getattr(args, "no_rlmignore", False)
+
+    if exclude_from:
+        exf = Path(exclude_from)
+        if not exf.is_file():
+            raise RlmReplError(f"exclude-from file not found: {exf}")
+        source = f"exclude-from:{exf}"
+        for lineno, raw in _parse_pattern_file(exf):
+            try:
+                excludes.append(_compile_from_source(raw, source))
+            except RlmReplError as e:
+                raise RlmReplError(
+                    f"invalid pattern in {source} line {lineno}: {raw!r}: {e}"
+                )
+    elif not no_rlmignore:
+        found = _find_rlmignore(cwd, repo_root)
+        if found is not None:
+            source = f"rlmignore:{found}"
+            for lineno, raw in _parse_pattern_file(found):
+                try:
+                    excludes.append(_compile_from_source(raw, source))
+                except RlmReplError as e:
+                    raise RlmReplError(
+                        f"invalid pattern in {source} line {lineno}: {raw!r}: {e}"
+                    )
+
+    # 3. CLI includes
+    for raw in getattr(args, "include", []) or []:
+        includes.append(_compile_from_source(raw, "cli"))
+
+    return {"excludes": excludes, "includes": includes}
+
+
+def _apply_filters(
+    files: List[Path],
+    repo_root: Path,
+    spec: Dict[str, Any],
+) -> Tuple[List[Path], Dict[str, Any]]:
+    """Filter `files` according to `spec` and return (kept, stats).
+
+    Semantics:
+      - Walk `spec['excludes']` in order. For each file:
+        * if a non-negation pattern matches: excluded = True
+        * if a negation pattern matches later: excluded = False
+        (last-match-wins, scoped to excludes only)
+      - If `spec['includes']` is non-empty, a file must match at least
+        one include to be kept. Excludes still win (exclude beats
+        include). Negation in includes is not interpreted — a literal
+        `!` at the front of an include would already have been stripped
+        by `_compile_pattern` setting `is_negation=True`; during include
+        scanning we simply skip negated include patterns.
+      - Per-pattern counts recorded in stats.
+    """
+    excludes: List[CompiledPattern] = spec.get("excludes", []) or []
+    includes: List[CompiledPattern] = spec.get("includes", []) or []
+
+    per_exclude_counts: Dict[int, int] = {idx: 0 for idx in range(len(excludes))}
+    per_include_counts: Dict[int, int] = {idx: 0 for idx in range(len(includes))}
+
+    kept: List[Path] = []
+    excluded_total = 0
+    included_total = 0
+
+    repo_root = Path(repo_root)
+    # Pre-resolve once to avoid per-iteration cost
+    repo_root_resolved = repo_root.resolve()
+
+    for f in files:
+        try:
+            rel = Path(f).resolve().relative_to(repo_root_resolved).as_posix()
+        except ValueError:
+            # Path not under repo_root -> keep as-is by posix of path
+            rel = Path(f).as_posix()
+
+        # Resolve exclusion with last-match-wins over all excludes
+        excluded = False
+        matched_exclude_indices: List[int] = []
+        for idx, cp in enumerate(excludes):
+            if cp.regex.fullmatch(rel) is not None:
+                matched_exclude_indices.append(idx)
+                excluded = not cp.is_negation
+
+        # Apply include allowlist if any non-negation include patterns exist
+        positive_includes = [cp for cp in includes if not cp.is_negation]
+        if positive_includes:
+            include_hit = False
+            for idx, cp in enumerate(includes):
+                if cp.is_negation:
+                    continue
+                if cp.regex.fullmatch(rel) is not None:
+                    include_hit = True
+                    per_include_counts[idx] += 1
+            if not include_hit:
+                # Fails allowlist: drop silently (not an exclude match)
+                continue
+
+        if excluded:
+            excluded_total += 1
+            for idx in matched_exclude_indices:
+                per_exclude_counts[idx] += 1
+            continue
+
+        # Kept: still record include counts (already recorded above) and
+        # tally included_total only if an include was active
+        if positive_includes:
+            included_total += 1
+        kept.append(f)
+
+    stats: Dict[str, Any] = {
+        "excluded_total": excluded_total,
+        "included_total": included_total,
+        "per_exclude": [
+            (excludes[idx].raw, excludes[idx].source, per_exclude_counts[idx])
+            for idx in range(len(excludes))
+        ],
+        "per_include": [
+            (includes[idx].raw, includes[idx].source, per_include_counts[idx])
+            for idx in range(len(includes))
+        ],
+    }
+    return kept, stats
+
+
+def _format_filter_stats(stats: Optional[Dict[str, Any]]) -> List[str]:
+    """Render filter stats for inclusion in the init-repo summary.
+
+    Returns an empty list when no filters were active — this preserves
+    byte-identical stdout for the backward-compat path (no flags + no
+    `.rlmignore`). Otherwise emits one overall line per section plus an
+    indented breakdown per pattern (with source tag).
+    """
+    if not stats:
+        return []
+
+    lines: List[str] = []
+    per_exclude = stats.get("per_exclude") or []
+    per_include = stats.get("per_include") or []
+    excluded_total = stats.get("excluded_total", 0) or 0
+    included_total = stats.get("included_total", 0) or 0
+
+    if per_exclude:
+        n_patterns = len(per_exclude)
+        lines.append(
+            f"  - Excluded: {excluded_total} files via {n_patterns} pattern(s):"
+        )
+        for raw, source, count in per_exclude:
+            lines.append(f"    • {count} via '{raw}' [{source}]")
+
+    if per_include:
+        n_patterns = len(per_include)
+        lines.append(
+            f"  - Allowlist kept: {included_total} files via {n_patterns} pattern(s):"
+        )
+        for raw, source, count in per_include:
+            lines.append(f"    • {count} via '{raw}' [{source}]")
+
+    return lines
+
+
 def _discover_git_files(repo_root: Path) -> List[Path]:
     """Use git to discover all tracked and untracked files (respects .gitignore)."""
     try:
@@ -368,10 +784,21 @@ def _discover_files_fallback(repo_root: Path) -> List[Path]:
     return sorted(files)
 
 
-def _build_repo_index(repo_root: Path, max_file_size_mb: int = 10) -> Dict[str, Any]:
-    """Build an index of all files in the repository."""
+def _build_repo_index(
+    repo_root: Path,
+    max_file_size_mb: int = 10,
+    files: Optional[List[Path]] = None,
+) -> Dict[str, Any]:
+    """Build an index of all files in the repository.
+
+    If `files` is provided, skip internal discovery and use the given
+    list directly (enables the `init-repo` filter pipeline to feed a
+    pre-filtered list). When `files` is `None`, behaviour is unchanged
+    from the original implementation (backward-compat).
+    """
     repo_root = repo_root.resolve()
-    files = _discover_git_files(repo_root)
+    if files is None:
+        files = _discover_git_files(repo_root)
 
     index = {
         'repo_root': str(repo_root),
@@ -534,8 +961,23 @@ def cmd_init_repo(args: argparse.Namespace) -> int:
     print(f"Indexing repository: {repo_path}")
     print("This may take a moment for large repositories...")
 
-    # Build file index
-    repo_index = _build_repo_index(repo_path, max_file_size_mb=args.max_file_size_mb)
+    # Load filter spec; if no flags and no .rlmignore, spec is empty and
+    # downstream behaviour is identical to the pre-change path.
+    filter_spec = _load_filter_spec(args, repo_path)
+    active_filters = bool(filter_spec.get("excludes") or filter_spec.get("includes"))
+
+    filter_stats: Optional[Dict[str, Any]] = None
+    if active_filters:
+        discovered = _discover_git_files(repo_path)
+        kept, filter_stats = _apply_filters(discovered, repo_path, filter_spec)
+        repo_index = _build_repo_index(
+            repo_path, max_file_size_mb=args.max_file_size_mb, files=kept
+        )
+    else:
+        # Backward-compat path: no filter work, no extra discovery.
+        repo_index = _build_repo_index(
+            repo_path, max_file_size_mb=args.max_file_size_mb
+        )
 
     # Create state
     state: Dict[str, Any] = {
@@ -571,6 +1013,9 @@ def cmd_init_repo(args: argparse.Namespace) -> int:
             count = stats['count']
             pct = (count / total_files * 100) if total_files > 0 else 0
             print(f"    • {lang}: {count} files ({pct:.1f}%)")
+
+    for line in _format_filter_stats(filter_stats):
+        print(line)
 
     print(f"  - State saved to: {state_path}")
     print(f"\nNext steps:")
@@ -777,6 +1222,41 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=10,
         help="Mark files larger than this as 'too_large' (default: 10 MB)",
+    )
+    p_init_repo.add_argument(
+        "--exclude",
+        action="append",
+        default=[],
+        metavar="PATTERN",
+        help=(
+            "Gitignore-style pattern to exclude (repeatable). "
+            "Example: --exclude 'html/**' --exclude 'vendor/**'"
+        ),
+    )
+    p_init_repo.add_argument(
+        "--include",
+        action="append",
+        default=[],
+        metavar="PATTERN",
+        help=(
+            "Gitignore-style allowlist pattern (repeatable). "
+            "When given, only files matching at least one --include are kept. "
+            "Example: --include 'src/**' --include 'tests/**'"
+        ),
+    )
+    p_init_repo.add_argument(
+        "--exclude-from",
+        metavar="FILE",
+        help=(
+            "Read exclude patterns from FILE (one pattern per line, "
+            "# for comments, .rlmignore format). "
+            "Overrides any auto-discovered .rlmignore."
+        ),
+    )
+    p_init_repo.add_argument(
+        "--no-rlmignore",
+        action="store_true",
+        help="Disable automatic discovery of .rlmignore in cwd/ancestors/repo-root.",
     )
     p_init_repo.set_defaults(func=cmd_init_repo)
 
