@@ -262,6 +262,13 @@ statements. If you're tempted to enumerate identifiers, re-check
 whether that list belongs in tech-design instead (per the
 Requirements guidance above).
 
+### Step 5.6: Sanitization Pass (MANDATORY)
+
+Scan for private data (hostnames, IPs, account/tenant IDs, internal service names, paths, ticket numbers). Defer to CLAUDE.md "Documentation
+Sanitization" rule if defined; otherwise replace with `<descriptor>` placeholders or RFC 5737/2606 examples. Drafts may carry private values
+to keep reasoning concrete; sanitize before `Status: Complete`. Orthogonal to Step 5.5: 5.5 verifies claims are true, 5.6 verifies they are
+shareable; both must hold. If unsure whether a value is private, mask it.
+
 ### Step 6: Save PRD to File System
 
 ```bash
