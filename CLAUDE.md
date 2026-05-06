@@ -43,7 +43,7 @@ Users install to `~/.claude/` to use across all their projects.
      claude-mem or RLM
 
 4. **Commands** (`.claude/commands/dev/`)
-   - 10 commands in flat structure
+   - 11 commands in flat structure
    - Each integrates RLM + claude-mem via Bash and MCP tools
 
 ### Installation Flow

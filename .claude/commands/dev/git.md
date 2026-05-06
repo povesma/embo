@@ -203,54 +203,15 @@ Using the active style definition above, generate a commit message:
 - Write a body that explains *why* the change was made
 - Do not restate file names or line numbers from the diff
 
-#### Step 5: Present for review
+#### Step 5: Commit
 
-Print the generated message in a fenced block, then use
-`AskUserQuestion`:
+Print the generated message in a fenced block, then immediately run `git commit -m "$(cat <<'EOF' ... EOF)"`.
 
-```
-question: "Commit with this message?"
-header: "Commit review"
-options:
-  - label: "Accept"
-    description: "Run git commit with this message"
-  - label: "Edit"
-    description: "Modify the message before committing"
-  - label: "Reject"
-    description: "Discard — do not commit"
-```
+**No skill-level confirmation gate.** Claude Code's harness already prompts "allow this command?" before every Bash tool call — that is the single confirmation point. Adding an AskUserQuestion before the commit would double-prompt the user for the same decision. The user can deny the harness prompt to reject or edit.
 
-- **Accept**: run `git commit -m "$(cat <<'EOF' ... EOF)"`
-  After committing, check branch state:
+**Fallback**: if the harness is ever configured to auto-allow git commands (no permission prompt), re-add a skill-level AskUserQuestion gate before commit/push/PR-create to restore the safety checkpoint. The current design assumes the harness gate exists.
 
-  ```bash
-  git log @{u}..HEAD --oneline 2>/dev/null || echo "NO_UPSTREAM"
-  ```
-
-  Use `AskUserQuestion`:
-  ```
-  question: "Committed. What next?"
-  header: "Next step"
-  options:
-    - label: "push"
-      description: "git push (or git push -u origin <branch> if no upstream)"
-    - label: "push + open PR"
-      description: "Push, then generate PR description"
-    - label: "done"
-      description: "Stop here"
-  ```
-
-  - "push" → run `git push` (or `git push -u origin <branch>`),
-    print confirmation, stop.
-  - "push + open PR" → push, then continue directly into PR mode
-    (skip pre-flight checks — state is already known clean).
-  - "done" → stop.
-
-  If there are more groups left to commit (user selected `1+2`
-  earlier), commit the next group first before offering "what next?".
-
-- **Edit**: apply user changes, then commit (same "what next?" flow)
-- **Reject**: stop, no commit
+If the user asked for push (or push+PR) in the original invocation args, run `git push` (or `git push -u origin <branch>` if no upstream) after the commit succeeds. If multiple groups were selected (`1+2`), commit the next group before pushing. Otherwise just stop after commit.
 
 ---
 
@@ -269,54 +230,13 @@ git status --short
 git log @{u}..HEAD --oneline 2>/dev/null || echo "NO_UPSTREAM"
 ```
 
-- **Uncommitted changes exist** → use `AskUserQuestion`:
-  ```
-  question: "You have uncommitted changes. Run the full sequence
-             (commit → push → PR)?"
-  header: "Pre-flight"
-  options:
-    - label: "Yes, run full sequence"
-      description: "Commit changes, push, then generate PR description"
-    - label: "Cancel"
-      description: "Stop here"
-  ```
-  - "Yes" → run commit mode (grouping + per-group messages), then
-    push, then continue into PR description — all in this turn.
-  - "Cancel" → stop.
-
-- **Unpushed commits, no uncommitted changes** → use `AskUserQuestion`:
-  ```
-  question: "Branch has unpushed commits. Push first?"
-  header: "Pre-flight"
-  options:
-    - label: "Push + open PR"
-      description: "Push to remote, then generate PR description"
-    - label: "Cancel"
-      description: "Stop here"
-  ```
-  - "Push + open PR" → push, then continue into PR description.
-  - "Cancel" → stop.
-
+- **Uncommitted changes exist** → run commit mode (grouping + per-group messages), then push, then continue into PR description — all in this turn. No confirmation prompt needed; the harness gates each individual command.
+- **Unpushed commits, no uncommitted changes** → push, then continue into PR description.
 - Both clean and pushed → proceed.
 
-#### Step 3: Ask for base branch
+#### Step 3: Determine base branch
 
-Use `AskUserQuestion`:
-
-```
-question: "Which base branch should this PR target?"
-header: "Base branch"
-options:
-  - label: "main"
-    description: "Merge into main (Recommended)"
-  - label: "master"
-    description: "Merge into master"
-  - label: "develop"
-    description: "Merge into develop"
-```
-
-User can also select "Other" to type a custom branch name.
-Use the selected value as `<base>`.
+Default to `main`. If the user specified a base branch in args, use that instead. If the repo has no `main` branch, try `master`. Do NOT prompt for the base branch.
 
 #### Step 4: Read branch context
 
@@ -390,34 +310,11 @@ Rules:
 - Description should help a human reviewer understand motivation and
   risk — not restate the diff or list files
 
-#### Step 6: Present for review
+#### Step 6: Create PR
 
-Print the generated description in a fenced block, then use
-`AskUserQuestion`:
+Print the generated description in a fenced block, then immediately run `gh pr create --title "..." --body "$(cat <<'EOF' ... EOF)"`. Same harness-gate principle as commit mode — no skill-level confirmation. The user sees the full command (including title + body) in the harness permission prompt and can deny it there.
 
-```
-question: "Create PR with this description?"
-header: "PR review"
-options:
-  - label: "Accept"
-    description: "Create the PR now"
-  - label: "Edit"
-    description: "Modify the description before creating"
-  - label: "Reject"
-    description: "Discard — do not create PR"
-```
-
-#### Step 7: Create PR or print
-
-- **Accept**:
-  - Check if `gh` is available: `gh --version`
-  - If available: derive title from first commit subject, then
-    `gh pr create --title "..." --body "$(cat <<'EOF' ... EOF)"`
-  - If not available: print the description with instruction:
-    "gh CLI not found. Copy the description above and paste it
-    when creating the PR manually."
-- **Edit**: apply changes, then same branching as Accept
-- **Reject**: stop
+If `gh` is not available, print the description with instruction: "gh CLI not found. Copy the description above and paste it when creating the PR manually."
 
 ---
 
@@ -474,15 +371,70 @@ If user selected "Keep current":
 ## Final Instructions
 
 1. Determine mode from argument or show interactive menu
-2. For `commit`: check staged diff → generate message → review gate
-   → commit only on explicit accept
-3. For `pr`: ask base branch → read commits + diff → generate
-   description → review gate → create PR or print
-4. For `style`: show styles → optionally write updated style to
-   active profile
-5. **Never run `git commit` or `gh pr create` without explicit
-   user approval in the current turn**
-6. **Never use `git add -A` or `git add .`** — always stage files
-   explicitly by name; briefly justify each file before staging
-7. **Never read the full project codebase** — work from git output
-   only
+2. For `commit`: check staged diff → generate message → print message → run `git commit` (harness gate = user approval)
+3. For `pr`: determine base branch → read commits + diff → generate description → print description → run `gh pr create` (harness gate = user approval)
+4. For `style`: show styles → optionally write updated style to active profile
+5. **No skill-level confirmation gates for non-destructive commands** (`git commit`, `git push`, `git add`, `gh pr create`). The Claude Code harness permission prompt is the single approval point. See Step 5 in commit mode for the design rationale and fallback instructions.
+6. **DO use skill-level confirmation (AskUserQuestion) for destructive commands** (`git push --force`, `git reset`, `git rebase`) — explain what will happen and why before running. The harness prompt shows the command but not the context.
+7. **Never use `git add -A` or `git add .`** — always stage files explicitly by name; briefly justify each file before staging
+8. **Never read the full project codebase** — work from git output only
+
+<!--
+DORMANT SAFETY CHECKPOINTS — re-activate if the Claude Code harness ever auto-allows git/gh commands without a permission prompt.
+
+Commit gate (insert before `git commit` in Step 5):
+```
+AskUserQuestion:
+  question: "Commit with this message?"
+  header: "Commit review"
+  options:
+    - label: "Accept"
+      description: "Run git commit with this message"
+    - label: "Edit"
+      description: "Modify the message before committing"
+    - label: "Reject"
+      description: "Discard — do not commit"
+```
+On Accept → run git commit. On Edit → apply changes, re-present. On Reject → stop.
+
+Push gate (insert before `git push`):
+```
+AskUserQuestion:
+  question: "Push to origin?"
+  header: "Push"
+  options:
+    - label: "Push"
+      description: "git push (or -u origin <branch> if no upstream)"
+    - label: "Done"
+      description: "Stop here, do not push"
+```
+
+PR create gate (insert before `gh pr create` in PR Step 6):
+```
+AskUserQuestion:
+  question: "Create PR with this description?"
+  header: "PR review"
+  options:
+    - label: "Accept"
+      description: "Create the PR now"
+    - label: "Edit"
+      description: "Modify the description before creating"
+    - label: "Reject"
+      description: "Discard — do not create PR"
+```
+On Accept → run gh pr create. On Edit → apply changes, re-present. On Reject → stop.
+
+Post-commit next-step gate (insert after successful commit):
+```
+AskUserQuestion:
+  question: "Committed. What next?"
+  header: "Next step"
+  options:
+    - label: "push"
+      description: "git push"
+    - label: "push + open PR"
+      description: "Push, then generate PR description"
+    - label: "done"
+      description: "Stop here"
+```
+-->
