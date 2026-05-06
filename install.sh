@@ -127,6 +127,41 @@ if [ -f "$TARGET/hooks/behavioral-reminder.sh" ]; then
     fi
 fi
 
+# permissions — allow read-only commands used by /dev:start and other workflows
+SETTINGS="$TARGET/settings.json"
+RLM_PERMS=(
+    'Bash(python3 ~/.claude/rlm_scripts/rlm_repl.py:*)'
+    'Bash(find:*)'
+    'Bash(git log:*)'
+    'Bash(git diff:*)'
+    'Bash(git status:*)'
+    'Bash(grep:*)'
+    'Bash(head:*)'
+)
+if ! command -v jq >/dev/null 2>&1; then
+    echo ""
+    echo "  permissions: jq not found — manual step required"
+    echo "    Add to $SETTINGS under permissions.allow:"
+    for p in "${RLM_PERMS[@]}"; do echo "      \"$p\""; done
+else
+    if [ ! -f "$SETTINGS" ]; then
+        echo '{}' > "$SETTINGS"
+    fi
+    ADDED=0
+    for p in "${RLM_PERMS[@]}"; do
+        if ! jq -e --arg p "$p" '[.permissions.allow[]?] | any(. == $p)' "$SETTINGS" > /dev/null 2>&1; then
+            jq --arg p "$p" '.permissions.allow += [$p]' "$SETTINGS" > /tmp/_rlm_settings.tmp \
+                && mv /tmp/_rlm_settings.tmp "$SETTINGS"
+            ADDED=$((ADDED + 1))
+        fi
+    done
+    if [ "$ADDED" -gt 0 ]; then
+        echo "  permissions: $ADDED read-only rules added"
+    else
+        echo "  permissions: all rules already present — skipping"
+    fi
+fi
+
 # clean up old files
 if [ -d "$TARGET/commands/rlm-mem" ]; then
     echo ""
