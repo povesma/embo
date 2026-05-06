@@ -249,5 +249,41 @@ if (-not $bashAvailable) {
     }
 }
 
+# permissions — allow read-only commands used by /dev:start and other workflows
+$rlmPerms = @(
+    'Bash(python3 ~/.claude/rlm_scripts/rlm_repl.py:*)'
+    'Bash(find:*)'
+    'Bash(git log:*)'
+    'Bash(git diff:*)'
+    'Bash(git status:*)'
+    'Bash(grep:*)'
+    'Bash(head:*)'
+)
+$settingsFile = "$Target\settings.json"
+if (-not (Test-Path $settingsFile)) {
+    '{}' | Set-Content $settingsFile -Encoding UTF8
+}
+$settings = Get-Content $settingsFile -Raw | ConvertFrom-Json
+if (-not $settings.permissions) {
+    $settings | Add-Member -NotePropertyName permissions -NotePropertyValue ([PSCustomObject]@{ allow = @(); deny = @() })
+} elseif (-not $settings.permissions.allow) {
+    $settings.permissions | Add-Member -NotePropertyName allow -NotePropertyValue @()
+}
+$existing = @($settings.permissions.allow)
+$added = 0
+foreach ($p in $rlmPerms) {
+    if ($p -notin $existing) {
+        $existing += $p
+        $added++
+    }
+}
+if ($added -gt 0) {
+    $settings.permissions.allow = $existing
+    $settings | ConvertTo-Json -Depth 10 | Set-Content $settingsFile -Encoding UTF8
+    Write-Host "  permissions: $added read-only rules added"
+} else {
+    Write-Host "  permissions: all rules already present - skipping"
+}
+
 Write-Host ""
 Write-Host "Done. Run /dev:start to begin a session."
