@@ -318,6 +318,10 @@
     > (5-min onboarding test by another developer) await
     > user action. Mechanical metrics (line count, grep
     > checks, no-script, table breadth) all green.
+    > **Note 2026-05-06**: PR #12 merged to main as
+    > `10224b8` despite 6.2 and 6.7 still pending. Story
+    > stays `[~]` until those AC items are run; they are
+    > now post-merge follow-ups.
   - [X] 6.1 Run a "no factual content deleted" diff audit
     [verify: manual-run-claude]
     → 21 of 23 baseline H2s preserved; 2 intentional drops:
