@@ -152,6 +152,13 @@ Examples:
     → Docker not running in session [simulated: n/a]
 ```
 
+### Evidence Note Sanitization
+
+Evidence notes follow the parent doc's sanitization rule. Defer to CLAUDE.md "Documentation Sanitization" if defined; otherwise describe
+the *shape* of the observation, not the literal output. No working-state exception — sanitize at write time.
+- Bad:  `→ curl returned 198.51.100.42 from gw.corp.example.com`
+- Good: `→ curl returned the expected egress IP for the corp tunnel`
+
 <!-- RULE:ONE-SUBTASK -->
 ## Task Implementation Protocol
 

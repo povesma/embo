@@ -339,6 +339,12 @@ Methods: `code-only` \| `auto-test` \| `manual-run-claude` \|
 2. Run `/dev:tasks` for task breakdown
 ```
 
+### Step 6.5: Sanitization Pass (MANDATORY)
+
+Apply the same sanitization rule as `/dev:prd` Step 5.6: scan for private data, defer to CLAUDE.md "Documentation Sanitization" if defined,
+otherwise mask with `<descriptor>` placeholders or RFC 5737/2606 examples. Drafts may carry private values; sanitize before
+`Status: Complete`. Orthogonal to Step 1.5 (which verifies inherited PRD facts are true): 6.5 verifies they are shareable.
+
 ### Step 7: Save to File
 
 ```
