@@ -137,6 +137,8 @@ RLM_PERMS=(
     'Bash(git status:*)'
     'Bash(grep:*)'
     'Bash(head:*)'
+    'Bash(basename:*)'
+    'Bash(git rev-parse:*)'
 )
 if ! command -v jq >/dev/null 2>&1; then
     echo ""

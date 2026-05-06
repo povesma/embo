@@ -96,38 +96,33 @@ and no `.rlmignore` exists, suggest one before running — or pass
 
 **4b. Index project overview**:
 
-If README.md or CLAUDE.md exist:
+If README.md or CLAUDE.md exist, read them with the Read tool.
+The PostToolUse hook captures each read as a claude-mem observation automatically.
+
+Then print a structured summary to the conversation:
+
 ```
-mcp__plugin_claude-mem_mcp-search__save_memory(
-  text=f"""[TYPE: PROJECT-OVERVIEW]
 [PROJECT: {project_name}]
-[SOURCE: README.md, CLAUDE.md]
 
 # Project Overview
-
-{readme_content}
-
-{claude_md_content}
+{key points from readme_content}
+{key points from claude_md_content}
 
 ## RLM Index Summary
 - Total files: {rlm_total_files}
 - Repository size: {rlm_size_mb} MB
 - Primary languages: {rlm_top_languages}
 - Indexed at: {timestamp}
-""",
-  title=f"{project_name} - Project Overview",
-  project=project_name
-)
 ```
 
 **4c. Index RLM analysis as baseline**:
 
+Print the RLM codebase analysis to the conversation. Extract and
+format these data points:
+
 ```
-mcp__plugin_claude-mem_mcp-search__save_memory(
-  text=f"""[TYPE: CODEBASE-ANALYSIS]
 [PROJECT: {project_name}]
 [ANALYZER: RLM]
-[SOURCE: Initial indexing]
 
 # Codebase Analysis - Initial Snapshot
 
@@ -144,16 +139,9 @@ mcp__plugin_claude-mem_mcp-search__save_memory(
 - Test files: {test_count}
 - Configuration files: {config_count}
 - Documentation files: {doc_count}
-- Binary files: {binary_count}
 
 ## Key Directories
 {directory_structure}
-
-This baseline analysis was performed by RLM indexing at {timestamp}.
-""",
-  title=f"{project_name} - Initial Codebase Analysis",
-  project=project_name
-)
 ```
 
 **4d. Index existing tasks directory** (if exists):
