@@ -258,6 +258,8 @@ $rlmPerms = @(
     'Bash(git status:*)'
     'Bash(grep:*)'
     'Bash(head:*)'
+    'Bash(basename:*)'
+    'Bash(git rev-parse:*)'
 )
 $settingsFile = "$Target\settings.json"
 if (-not (Test-Path $settingsFile)) {
