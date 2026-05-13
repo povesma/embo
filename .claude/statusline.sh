@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Claude Code statusLine script — RLM-Mem edition
-# Displays: cwd (tilde-abbreviated) | git branch | model | USED/TOTAL $cost | time
+# Displays: cwd (tilde-abbreviated) | git branch | model | USED/TOTAL $cost | ctx % | mem | time
 # Requires: jq (brew install jq / apt install jq)
 # Install:  cp .claude/statusline.sh ~/.claude/statusline.sh && chmod +x ~/.claude/statusline.sh
 # settings.json: { "statusLine": { "type": "command", "command": "~/.claude/statusline.sh" } }
@@ -66,8 +66,52 @@ CYAN='\033[36m'
 GREEN='\033[32m'
 MAGENTA='\033[35m'
 YELLOW='\033[33m'
+RED='\033[31m'
 BRIGHT_WHITE='\033[97m'
 WHITE='\033[37m'
+
+# --- Claude-mem freshness segment ---
+CMEM_GREEN_MAX=10
+CMEM_YELLOW_MAX=30
+cmem_segment() {
+    if ! command -v curl >/dev/null 2>&1; then
+        printf "%b%s%b" "$RED" "mem:NOCURL" "$RESET"
+        return
+    fi
+
+    local resp
+    resp=$(curl -s --max-time 2 \
+        'http://127.0.0.1:37777/api/observations?limit=1' 2>/dev/null || true)
+    if [ -z "$resp" ]; then
+        printf "%b%s%b" "$RED" "mem:DOWN" "$RESET"
+        return
+    fi
+
+    if ! echo "$resp" | jq -e . >/dev/null 2>&1; then
+        printf "%b%s%b" "$RED" "mem:DOWN" "$RESET"
+        return
+    fi
+
+    local epoch_ms
+    epoch_ms=$(echo "$resp" | jq -r '.items[0].created_at_epoch // empty' 2>/dev/null || true)
+    if [ -z "$epoch_ms" ] || [ "$epoch_ms" = "null" ]; then
+        printf "%b%s%b" "$YELLOW" "mem:idle" "$RESET"
+        return
+    fi
+
+    local now_ms elapsed_min
+    now_ms=$(( $(date +%s 2>/dev/null || echo 0) * 1000 ))
+    elapsed_min=$(( (now_ms - epoch_ms) / 60000 ))
+    if [ "$elapsed_min" -lt 0 ]; then elapsed_min=0; fi
+
+    local cmem_color
+    if   [ "$elapsed_min" -le "$CMEM_GREEN_MAX" ];  then cmem_color="$GREEN"
+    elif [ "$elapsed_min" -le "$CMEM_YELLOW_MAX" ]; then cmem_color="$YELLOW"
+    else cmem_color="$RED"
+    fi
+
+    printf "%b%s%b" "$cmem_color" "mem:${elapsed_min}m" "$RESET"
+}
 
 # --- Assemble segments ---
 parts=()
@@ -80,6 +124,7 @@ fi
 parts+=("$(printf "${MAGENTA}%s${RESET}" "$model")")
 parts+=("$(printf "${YELLOW}%s/%s \$%s${RESET}" "$used_short" "$ctx_short" "$(printf '%.3f' "$cost")")")
 parts+=("$(printf "${BRIGHT_WHITE}ctx %s%%${RESET}" "$used_pct")")
+parts+=("$(cmem_segment)")
 parts+=("$(printf "${WHITE}%s${RESET}" "$current_time")")
 
 # --- Join with separator and print ---
