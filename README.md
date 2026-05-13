@@ -372,10 +372,23 @@ context. See `tasks/010-DOCS-FIRST-GUARD/` for the full history.
 The included `statusline.sh` displays live session info in your IDE status bar:
 
 ```
-~/AI/my-project | feature/my-branch | Sonnet 4.6 | 30K/200K $0.072 | 09:32:39
+~/AI/my-project | feature/my-branch | Sonnet 4.6 | 30K/200K $0.072 | ctx 6% | mem:2m | 09:32:39
 ```
 
-Shows: tilde-abbreviated path | git branch | model | used/total context | cost | time.
+Shows: tilde-abbreviated path | git branch | model | used/total context | cost | context % | claude-mem freshness | time.
+
+The `mem:` segment shows minutes since the most recent claude-mem
+observation, with traffic-light coloring:
+
+- `mem:Xm` **green** when the last observation is ≤10 min old
+- `mem:Xm` **yellow** when 11–30 min old
+- `mem:Xm` **red** when >30 min old
+- `mem:idle` **yellow** — worker reachable but the observation DB is empty
+- `mem:DOWN` **red** — worker unreachable or returned unparseable data
+- `mem:NOCURL` **red** — `curl` not on PATH
+
+The freshness check is loopback-only (`127.0.0.1:37777`) with a 2 s
+timeout, so a hung worker cannot stall the statusline.
 
 #### Prerequisites
 
