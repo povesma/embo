@@ -1,3 +1,8 @@
+---
+description: Start a coding session with comprehensive context from RLM code analysis and claude-mem historical knowledge. Use at the beginning of each coding session.
+allowed-tools: Bash(cat ~/.claude/active-profile.yaml *) Read(~/.claude/active-profile.yaml) Bash(python3 ~/.claude/rlm_scripts/rlm_repl.py *) Bash(git log *) Bash(git diff *)
+---
+
 # Start RLM-Mem Coding Session
 
 Start a coding session with comprehensive context from both RLM code analysis and claude-mem historical knowledge.
@@ -20,9 +25,18 @@ Start a coding session with comprehensive context from both RLM code analysis an
 
 ### Step 0: Load Profile
 
-Read `~/.claude/active-profile.yaml` if it exists. If not present,
-use defaults: rlm=true, memory_backend=claude-mem, docs_first=strict.
-Note the active profile name in the session summary output.
+Run this exact command — do not paraphrase, do not rewrite the
+shape. The skill's pre-approved permission entry matches this
+line literally:
+
+```bash
+cat ~/.claude/active-profile.yaml 2>/dev/null || echo "NO_PROFILE"
+```
+
+If the output is the literal string `NO_PROFILE`, use defaults:
+rlm=true, memory_backend=claude-mem, docs_first=strict. Otherwise
+parse the YAML for profile fields. Note the active profile name
+(or "default") in the session summary output.
 
 ## Session Behavioral Rules
 
@@ -87,9 +101,25 @@ Extract: project goals, completed features, active tasks, recent decisions, know
 
 ### Step 3: Codebase Context
 
-- Docs: Glob `**/README*.md`, `**/CLAUDE*.md` — read top-level only
-- Tasks: Glob `tasks/**/*-tasks.md` (exclude `/archive/`) — read active task files
-- Git: `git log --oneline -10` and `git diff --stat HEAD`
+**Do not** use Bash loops (`for`, `while`), `find`, or `$(...)`
+substitution for the discovery steps below. The harness refuses
+to auto-approve those constructs. Use the **Glob tool** as
+directed; if Glob is unavailable, skip the step.
+
+- Docs: use the **Glob tool** (not Bash, not `find`) with pattern
+  `**/README*.md`, then again with `**/CLAUDE*.md`. Read the
+  matched files at the project root only.
+- Tasks: use the **Glob tool** (not Bash, not `find`) with pattern
+  `tasks/**/*-tasks.md`. Discard matches whose path contains
+  `/archive/`. Read the surviving active task files.
+- Git: run these two commands exactly as shown. Do not change
+  flags, count, or `HEAD` reference; they are pre-approved at
+  these exact prefixes.
+
+```bash
+git log --oneline -10
+git diff --stat HEAD
+```
 
 ### Step 4: Synthesize Session Summary
 
