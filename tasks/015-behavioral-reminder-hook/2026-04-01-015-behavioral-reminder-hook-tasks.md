@@ -179,6 +179,29 @@
     NOTE: CRITICISM and IMPL_REQUEST classifiers not yet thoroughly
     tested in live sessions — only verified via piped test prompts.
 
+- [X] 10.0 **User Story:** As a developer receiving a question with
+  multiple choices, I want a SCAN-CHOICES reminder always present in
+  the baseline so Claude formats alternatives as scannable, visually
+  equal options (a/b/c or AskUserQuestion) instead of burying them in
+  prose [4/4]
+  - [X] 10.1 Add `<!-- RULE:SCAN-CHOICES -->` anchor and a
+    `### Present choices as scannable options` subsection to
+    `dev:start.md` under "Session Behavioral Rules", next to
+    WITHSTAND-CRITICISM: each option on its own line, visually equal,
+    short description inline, recommend only when one genuinely is,
+    never bury alternatives in prose [verify: code-only]
+  - [X] 10.2 Append `· SCAN-CHOICES` to the baseline `[RULES ACTIVE: ...]`
+    line in `behavioral-reminder.sh` (line 97) [verify: code-only]
+  - [X] 10.3 Verify: pipe `'{"prompt":"what is the status"}'` into the
+    hook; confirm baseline output now contains `SCAN-CHOICES`
+    [verify: manual-run-claude]
+    → baseline output includes SCAN-CHOICES, hookEventName correct,
+      exit 0 [live] (2026-05-30)
+  - [X] 10.4 Add `SCAN-CHOICES` row to the README §Hooks rule-tag list
+    if such a list exists; otherwise skip [verify: code-only]
+    → skipped: README §Hooks has no per-tag list, only a one-line
+      hook description; nothing to update (2026-05-30)
+
 - [X] 9.0 **User Story:** As a researcher, I want the AWSK approach
   and alternatives documented so future work on ML-based classification
   has a baseline [1/1]
