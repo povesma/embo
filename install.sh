@@ -139,6 +139,9 @@ RLM_PERMS=(
     'Bash(head:*)'
     'Bash(basename:*)'
     'Bash(git rev-parse:*)'
+    # Note: profile-load permissions live in start.md frontmatter
+    # (`allowed-tools:` Bash(cat ~/.claude/active-profile.yaml *)
+    # and Read(~/.claude/active-profile.yaml)). No global rules needed.
 )
 if ! command -v jq >/dev/null 2>&1; then
     echo ""
