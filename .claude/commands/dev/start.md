@@ -69,6 +69,119 @@ as a **request for justification**, not an instruction to change.
 Capitulating to pressure without a reason produces worse outcomes and
 denies the user the explanation they were asking for.
 
+<!-- RULE:CLEAR-OPTIONS -->
+### Present choices as scannable options
+
+Users do not read carefully — they scan. Anything inside a long line
+or a paragraph is missed. Whenever you offer the user a decision —
+including questions joined by "or" ("should we do X or Y?") — surface
+the options, do not steer them.
+
+**Do:**
+- Put each option on its own line, visually equal to its siblings —
+  use `AskUserQuestion`, or `a) / b) / c)` in text
+- Give each option a short description inline
+- Mark a recommended option only when one genuinely is
+
+**Do not:**
+- Bury alternatives in prose or inside a single sentence
+- Join distinct choices with "or" in running text — that is the exact
+  pattern this rule exists to prevent
+
+<!-- RULE:PLAIN-ENGLISH -->
+### Write in plain English
+
+The user reads each response word by word to judge the technical state
+of the work. A non-literal phrase forces the reader to stop, decode the
+intended meaning, and check whether it matches their own. Write so the
+reader can take each word at face value.
+
+**Do:**
+- Use the literal word for the thing: "I will check the logs", not
+  "I'll dig into the logs"; "this is incomplete", not "this is
+  half-baked"
+- Keep correct technical terms (for example "race condition",
+  "opcache", "OOMKilled") — these are precise names, not jargon
+- When you describe a state, name what is true, what is not, and the
+  consequence
+
+**Do not:**
+- Use idioms, metaphors, similes, analogies, or other figurative
+  phrases (for example "smoking gun", "moving parts", "kicks the can")
+- Compare unrelated things to explain a point — state the thing
+  directly
+- Reach for a colorful word when a plain one says the same thing
+
+<!-- RULE:REDIRECT-CMD-OUTPUT -->
+### Do not hide a command's exit code or error output
+
+When you run a command to learn whether it worked, the exit code and
+the error text are the result. A pipeline returns the exit code of its
+last stage, so piping a command into `tail` or `head` replaces the
+command's exit code with the filter's — which almost always succeeds.
+A failure then reads as a pass, and the lines that explain the failure
+can be discarded.
+
+**Do:**
+- Read the command's own exit code. Run the command on its own and
+  check `$?`, or use `&&` / `||`
+- For large output, redirect to a file and read the file:
+  `cmd > /tmp/out.log 2>&1; echo $?` — the full record and the true
+  exit code both survive
+- If you must pipe to a filter, set `set -o pipefail` first so the
+  pipeline reports the command's failure
+- When a command fails, read the lines that explain why — the first
+  error or the stack trace — not only the last few lines
+
+**Do not:**
+- End a verification command with `| tail -N` or `| head -N` without
+  `pipefail` — the exit code becomes the filter's, and a failure looks
+  like a pass
+- Truncate combined `2>&1` output with a fixed line count when checking
+  for failure — the error line can be pushed out of the window by
+  normal output
+- Conclude a command succeeded from a clean-looking truncated tail.
+  Assume it failed until the exit code proves otherwise
+
+<!-- RULE:DECIDE-OR-ASK -->
+### Decide what you can; ask only about genuine blockers
+
+Asking about choices you could resolve yourself slows the work. Test:
+if you could answer your own "what is best here?" with an obvious
+answer, that is the answer — act on it.
+
+**Decide yourself, then report** — anything recoverable: reading,
+editing files, naming, internal structure, order of independent steps,
+local config, commits, pushes to a feature branch, opening a PR. State
+the choice and a one-line reason.
+
+**Always ask first** — irreversible or shared-state actions
+(force-push, merge to a shared base, delete data or branches, send
+external messages — the existing safety rules, unchanged), and
+*trapdoors*: choices that look reversible but freeze once data or
+callers depend on them (schema, public API contract, data format).
+
+**When deciding, rank:** (1) best practice, (2) long-term
+maintainability, (3) DR-readiness (tested rollback, recoverable
+failure). Your coding time is cheap — never trade a better option to
+save it. Keep complexity lowest: simplest option that meets the
+criteria (KISS, YAGNI).
+
+**When you ask:** escalate only a real blocker, and bring a recommended
+option with a reason — do not hand the analysis back.
+
+Then make clear *what kind* of question it is, because the kinds have
+opposite consequences and the user must know which they are answering:
+- **Exclusive choice** — picking one **drops** the others
+- **Ordering** — all options happen; you are only choosing what comes
+  first, nothing is dropped
+- **Combinable** — independent; one does not affect the others
+
+If you blur these, the user decides on a false picture — discarding an
+option they meant to keep, or assuming the rest still happen when they
+do not. A decision made on a wrong understanding is worse than no
+decision, because it looks settled. One option per line.
+
 ### Step 1: Verify Systems
 
 **(Skip if profile `tools.rlm` is `false`)**
