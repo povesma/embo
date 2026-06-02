@@ -57,7 +57,10 @@ PY
 **For confirmed-complete tasks** (tested, passing, or user-confirmed):
 - Mark subtask as `[X]`
 - If all subtasks `[X]`, mark parent as `[X]`
-- Update ai-docs/ when parent complete:
+- Update `ai-docs/` when parent complete **if the directory already
+  exists**. Do not create `ai-docs/` — projects that don't use this
+  convention should be left alone. When present, refresh whichever of
+  these files exist:
   - ai-docs/API.md
   - ai-docs/ARCHITECTURE.md
   - ai-docs/DEVELOPMENT.md
@@ -87,6 +90,7 @@ Stop checking when you find first truly incomplete task
 3. For each `[ ]` task, use RLM to verify in code
 4. Update status: `[~]` if code found but untested, `[X]` only if tested/confirmed
 5. Flag any code found that doesn't match a task (scope drift)
-6. Update ai-docs/ when parent tasks are `[X]`
+6. Update `ai-docs/` when parent tasks are `[X]` — only if the
+   directory already exists; do not create it
 7. Save completions to claude-mem
 8. Halt at first truly incomplete (`[ ]`) task
