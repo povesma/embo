@@ -53,19 +53,33 @@ Follows Conventional Commits 1.0.
 - **scope**: optional; the subsystem changed (e.g. `auth`, `profiles`).
   Omit if the change is cross-cutting.
 - **subject**: imperative mood, ≤72 chars total line, no trailing period
-- **body**: separated by blank line; explain *why*, not *what*;
-  wrap at 72 chars; bullet lists OK when each adds context the diff
-  doesn't provide
+- **body**: **optional and often unnecessary.** Goal of the whole
+  message is to help someone find the right commit later — what
+  and (when non-obvious) why. Add a body only when the diff cannot
+  answer *why* on its own. Never restate file names, line numbers,
+  or what the diff already shows. Keep it short — a sentence or two
+  is usually enough. Bullet lists OK when each item adds context
+  the diff doesn't provide. When in doubt, leave the body off.
 - **footer**: optional; `BREAKING CHANGE: <description>` or
   `Closes #N`
 
-Example:
+Examples — prefer subject-only when the change is self-evident:
+
 ```
 feat(profiles): add git.commit_style field
+```
 
-Teams need a way to standardise commit conventions without
-per-session setup. Adding the field to all four profiles lets
-users override via /dev:git style.
+```
+docs(check): guard ai-docs update step to existing dirs only
+```
+
+Add a body only when *why* is non-obvious from the diff:
+
+```
+fix(installer): skip symlink creation on Windows
+
+Symlinks need admin rights on Windows; the install would fail
+silently for non-admin users.
 ```
 
 ### `imperative`

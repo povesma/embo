@@ -130,7 +130,10 @@ requires it.
 
 ## Commit Messages
 
-One line, super short. Subject only — no body, no explanation.
+Conventional style takes priority. Goal: enough to find the right
+commit later — what and (if non-obvious) why. Add a body only when
+the diff doesn't answer *why*; never restate the diff. A one-line
+commit is fine when the subject is enough.
 
 ## Safety Rules
 
