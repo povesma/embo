@@ -1,4 +1,4 @@
-# Verify RLM-Mem System Dependencies
+# Verify embo System Dependencies
 
 Check that RLM state, claude-mem plugin, and PostToolUse hook are all
 operational. Renders a combined summary table with fix instructions.
@@ -92,7 +92,7 @@ responsive:
 ### Render Summary
 
 ```
-## RLM-Mem Health Check
+## embo Health Check
 
 | Component         | Status | Notes                 |
 |-------------------|--------|-----------------------|

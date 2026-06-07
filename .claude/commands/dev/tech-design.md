@@ -1,4 +1,4 @@
-# Generate Technical Design with RLM-Mem Hybrid Analysis
+# Generate Technical Design with embo Hybrid Analysis
 
 Create a technical design informed by past architectural decisions (claude-mem) and current code patterns (RLM).
 

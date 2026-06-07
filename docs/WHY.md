@@ -1,6 +1,6 @@
 # Why this exists
 
-> Evidence dossier for rlm-mem. The README's "Why this exists"
+> Evidence dossier for embo. The README's "Why this exists"
 > subsection cites the strongest 2-3 numbers; this file holds the
 > full case with citations.
 
@@ -134,7 +134,7 @@ fetches identifiers first, then bodies only when needed:
 
 - [claude-mem README][claudemem]
 
-In rlm-mem, every session save and every observation captured
+In embo, every session save and every observation captured
 by the PostToolUse hook becomes searchable on the next
 `/dev:start`. A correction made on Tuesday surfaces on Friday.
 Architectural decisions made in February inform February's PRD

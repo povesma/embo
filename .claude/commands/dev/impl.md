@@ -1,4 +1,4 @@
-# Task Implementation with RLM-Mem Hybrid
+# Task Implementation with embo Hybrid
 
 Implement tasks with pattern discovery (RLM) + historical context
 (claude-mem).

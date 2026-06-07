@@ -9,15 +9,15 @@ user-defined threshold ($5, $10, $20). Pauses at hard cap.
 
 ### Auto-Generated Session Changelog
 **Rejected by Dmytro**: 2026-03-19
-`/rlm-mem:discover:changelog` — diffs working tree against session
+`/dev:changelog` — diffs working tree against session
 start commit, queries claude-mem for session observations, synthesizes
 a human-readable changelog (files changed, features, decisions, open
 items).
 
 ### Smart Context Compaction Command
 **Rejected by Dmytro**: 2026-03-19
-`/rlm-mem:develop:compact` — saves working state to claude-mem before
-context compression, so `/discover:start` picks up exactly where you
+`/dev:compact` — saves working state to claude-mem before
+context compression, so `/dev:start` picks up exactly where you
 left off in a fresh window.
 
 ## Under Consideration
@@ -30,7 +30,7 @@ Users frequently correct Claude during sessions — rejecting approaches, redire
 to web/docs, changing code style. These corrections die with the session. Proposal:
 (1) teach `impl.md` to capture corrections as claude-mem observations typed
 `correction` (what happened → what user wanted → workflow step); (2) add
-`/rlm-mem:develop:review-corrections` command that queries correction history,
+`/dev:review-corrections` command that queries correction history,
 groups by pattern, and lets the user curate which ones get promoted into command
 prompts. No auto-evolution — user is the curator. Industry context: Windsurf
 memories, Augment RLDB, Copilot Memory all converge on two-tier (stable rules +
@@ -42,7 +42,7 @@ premature — defer until shared rules section grows.
 
 ---
 
-### Settings Profiles & Management (`/rlm-mem:config:profile`)
+### Settings Profiles & Management (`/dev:profile`)
 **Status**: Worth further consideration
 **Proposed**: 2026-03-19
 
@@ -74,7 +74,7 @@ Project settings **can restrict** user permissions (deny overrides allow).
 
 #### What this feature would do
 
-A command/skill `/rlm-mem:config:profile` that manages all three
+A command/skill `/dev:profile` that manages all three
 user-accessible scopes (user, project, local) in one place.
 
 **Core capabilities:**
@@ -99,7 +99,7 @@ user-accessible scopes (user, project, local) in one place.
    - Personal preferences → `.claude/settings.local.json` (gitignored)
    - Global defaults → `~/.claude/settings.json`
 
-4. **Scope-aware editing** — "Allow RLM-Mem hooks in this project"
+4. **Scope-aware editing** — "Allow embo hooks in this project"
    → adds to project-level settings. "Set my default model to
    Opus everywhere" → adds to user-level settings. The skill
    knows which scope is appropriate for each setting type.
@@ -113,14 +113,14 @@ user-accessible scopes (user, project, local) in one place.
 
 **What this is NOT:**
 - Not a general `settings.json` editor — only manages profiles
-  and scope-aware operations relevant to RLM-Mem workflows
+  and scope-aware operations relevant to embo workflows
 - Not a replacement for the built-in `/config` — complements it
   with profile management and scope awareness
 
 #### Example workflow
 
 ```
-> /rlm-mem:config:profile
+> /dev:profile
 
 Current settings (3 scopes active):
   User:    ~/.claude/settings.json (12 keys)
@@ -258,7 +258,7 @@ Key lessons:
 #### How it works (implementation sketch)
 
 ```
-/rlm-mem:review:annotate-pr <pr-number>
+/dev:annotate-pr <pr-number>
 
 1. gh pr diff <pr-number> → get changed files and hunks
 2. Read tasks/*-tasks.md → map files to tasks/subtasks

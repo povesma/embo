@@ -17,7 +17,7 @@ To regenerate the diagram:
 ## Prompt
 
 ```
-Create a workflow-sequence diagram for the rlm-mem developer
+Create a workflow-sequence diagram for the embo developer
 tool, showing how its commands chain together and how feedback
 loops back to earlier specs when inconsistencies are found.
 
@@ -42,7 +42,7 @@ TITLE BLOCK (top-left, spanning above the FEEDBACK column)
 Three-line stack, left-aligned:
 
   Line 1 (kicker, small caps, monospace, ~14px, neutral):
-    "RLM-MEM · SPEC-DRIVEN WORKFLOW"
+    "EMBO · SPEC-DRIVEN WORKFLOW"
 
   Line 2 (title, serif, bold, ~32px, near-black):
     "Waterfall, with self-correction."

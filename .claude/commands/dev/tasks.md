@@ -1,4 +1,4 @@
-# Generate Task List with RLM-Mem Hybrid
+# Generate Task List with embo Hybrid
 
 **🔑 KISS Principle: Keep It Stupid Simple**
 All solutions must follow the KISS principle - favor simplicity over complexity.

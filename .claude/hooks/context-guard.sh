@@ -97,5 +97,5 @@ done
 [ "$BLOCKED" -eq 0 ] && exit 0
 
 # --- 7. Soft warn — inject warning into Claude's context via plain text stdout ---
-printf '[Context Guard] ⚠️ Context is %d%% full (threshold: %d%%). Consider running /rlm-mem:develop:save (or /coding:develop:save) to wrap up this session before starting new work. You may proceed, but be aware the session may run out of context mid-task.\n' \
+printf '[Context Guard] ⚠️ Context is %d%% full (threshold: %d%%). Consider running /dev:git to wrap up this session before starting new work. You may proceed, but be aware the session may run out of context mid-task.\n' \
     "$USED_PCT" "$THRESHOLD"
