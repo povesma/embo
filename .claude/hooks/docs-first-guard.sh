@@ -29,8 +29,8 @@ fi
 WARN_MSG="⚠️ No /impl session active — this code edit is undocumented.
 
 Consider:
-  • /rlm-mem:develop:impl — start documented implementation
-  • /rlm-mem:plan:prd — create docs first
+  • /dev:impl — start documented implementation
+  • /dev:prd — create docs first
   • Allow this edit if it is a quick fix
 
 (docs-first-guard hook — see README §Hooks)"

@@ -1,4 +1,4 @@
-# RLM-Mem
+# embo
 
 **A spec-driven Claude Code workflow** - PRD -> tech-design ->
 tasks -> impl, backed by a persistent codebase index (RLM) and
@@ -8,64 +8,115 @@ cross-session memory (claude-mem).
 > - **Category:** spec-driven development workflow for Claude Code
 > - **Differentiator:** the only framework with **both** persistent
 > codebase indexing **and** cross-session memory
-> - **Install:** `git clone ... && bash install.sh` (one command)
+> - **Install:** **two required steps** — (1) `bash install.sh` in a
+> terminal, (2) install the **claude-mem** plugin inside Claude Code.
+> See [Install](#install) below.
 > - **First session:** `/dev:init` -> `/dev:start` -> `/dev:prd`
 > - **Compare to alternatives:** [Comparison](#comparison)
 > - **Why this exists:** [Why](#why-this-exists) |
 > full evidence: [docs/WHY.md](docs/WHY.md)
 
 <!-- ARCHITECTURE-DIAGRAM-ANCHOR -->
-![rlm-mem architecture: commands, parallel context engines (RLM + claude-mem), and verified outputs feeding /dev:impl](assets/diagrams/architecture-overview.png)
+![embo architecture: commands, parallel context engines (RLM + claude-mem), and verified outputs feeding /dev:impl](assets/diagrams/architecture-overview.png)
 
 <sub>Source prompt: [`assets/diagrams/architecture-overview.prompt.md`](assets/diagrams/architecture-overview.prompt.md) — regenerate via Claude Design.</sub>
 
-![rlm-mem workflow sequence: waterfall with self-correction — every downstream command can revise upstream specs when reality contradicts the plan](assets/diagrams/workflow-sequence.png)
+![embo workflow sequence: waterfall with self-correction — every downstream command can revise upstream specs when reality contradicts the plan](assets/diagrams/workflow-sequence.png)
 
 <sub>Source prompt: [`assets/diagrams/workflow-sequence.prompt.md`](assets/diagrams/workflow-sequence.prompt.md) — regenerate via Claude Design.</sub>
 
-## Quick start
+## Install
+
+Two required steps, run in **two different places**. Do both, in
+order. The `$` lines go in a terminal; the `/` lines are typed
+inside Claude Code.
+
+### Step 1 — Install the workflow (in your terminal)
+
+Run these in a normal terminal/shell. Safe to re-run.
 
 ```bash
-# 1. Clone and install (~30 seconds)
-git clone https://github.com/povesma/rlm-mem ~/rlm-mem
-cd ~/rlm-mem && bash install.sh
-
-# 2. Install the claude-mem plugin in Claude Code
-/plugin marketplace add thedotmack/claude-mem
-/plugin install claude-mem
-
-# 3. In any of your code repos, run:
-/dev:init # one-time: index the repo + bootstrap memory
-/dev:start # every session: load context
-/dev:prd # plan a feature spec-first
+$ git clone https://github.com/povesma/embo ~/embo
+$ cd ~/embo && bash install.sh
 ```
 
-That's the 60-second flavour. Full per-platform details under
-[Reference](#reference).
+This copies the `/dev:*` commands, agents, and RLM scripts into
+`~/.claude/`. It does **not** install the claude-mem plugin — that
+is Step 2.
+
+### Step 2 — Install the claude-mem plugin (inside Claude Code) — REQUIRED
+
+Open Claude Code and type these **at the Claude Code prompt, not in
+the terminal**:
+
+```text
+/plugin marketplace add thedotmack/claude-mem
+/plugin install claude-mem
+```
+
+> [!WARNING]
+> **Install the plugin named exactly `claude-mem`, from the
+> `thedotmack/claude-mem` marketplace.** When the `/plugin` menu
+> lists other plugins (for example `frontend-design`, `figma`),
+> do **not** pick those — they are unrelated. The workflow fails
+> without claude-mem; this is the most common setup mistake.
+
+### Step 3 — Verify (inside Claude Code)
+
+```text
+/dev:health
+```
+
+This must report claude-mem as available. If it does not, Step 2
+did not complete — repeat it before going further.
+
+### First session (inside Claude Code, in any of your code repos)
+
+```text
+/dev:init    # one-time: index the repo + bootstrap memory
+/dev:start   # every session: load context
+/dev:prd     # plan a feature spec-first
+```
+
+Full per-platform details (Windows, Docker, dependency versions)
+under [Reference](#reference).
 
 ## Comparison
 
-How rlm-mem positions against other Claude Code workflow plugins.
-Snapshot 2026-04-30; sources for every cell are in
+How embo positions against other Claude Code workflow plugins.
+Snapshot 2026-06-07; sources for every cell are in
 [`tasks/017-.../comparison-data.md`](tasks/017-README-ONBOARDING-spec-driven-positioning/comparison-data.md).
 
-| Project | Spec phases | Codebase index | X-session memory | TDD | Profiles | Subagents | Worktrees |
+| Project | Spec phases | Code navigation | X-session memory | TDD | Profiles | Agent model | Worktrees |
 |---|---|---|---|---|---|---|---|
-| **rlm-mem** *(this)* | yes | yes | yes | yes | yes (4) | 6 | no |
-| [Superpowers](https://github.com/obra/superpowers) | yes | no | no | yes | partial | 14+ | yes |
-| [BMAD-METHOD](https://github.com/aj-geddes/claude-code-bmad-skills) | yes | no | yes | partial | yes | 9 | no |
-| [Oh-My-ClaudeCode](https://github.com/Yeachan-Heo/oh-my-claudecode) | partial | no | yes | no | yes | 19 | yes |
-| [claude-code-workflows](https://github.com/shinpr/claude-code-workflows) | yes | partial | no | yes | yes | 27 | no |
-| [claude-workflow-template](https://github.com/nicholasmartin/claude-workflow-template) | yes | no | partial | no | no | 1 | no |
+| **embo** *(this)* | yes | index (RLM) | yes | yes | yes (4) | focused (1+5 test) | no |
+| [Superpowers](https://github.com/obra/superpowers) | yes | grep-only | optional | yes | partial | skills (20+) | yes |
+| [BMAD-METHOD](https://github.com/aj-geddes/claude-code-bmad-skills) | yes | none | yes | partial | yes | roles (9) | no |
+| [Oh-My-ClaudeCode](https://github.com/Yeachan-Heo/oh-my-claudecode) | partial | LSP+AST | yes | no | yes | swarm (29) | yes |
+| [claude-code-workflows](https://github.com/shinpr/claude-code-workflows) | yes | grep-only | no | yes | yes | roles (variants) | no |
+| [claude-workflow-template](https://github.com/nicholasmartin/claude-workflow-template) | yes | none | partial | no | no | single (1) | no |
 
-Legend: `yes` = built-in. `partial` = partial or optional. `no` = absent.
+Legend: `yes` = built-in · `partial` / `optional` = partial or
+optional · `no` / `none` = absent. **Code navigation**: how the tool
+locates code — a persistent `index`, live `LSP+AST` lookups, plain
+`grep`, or `none`. **Agent model**: the shape of the agent roster
+(a `focused` set, a large `swarm`, role-based, or a `single` agent) —
+not a quality score; more agents is not inherently better.
 
-**Pick rlm-mem if:** you want both *spatial* (where is code?)
+**Pick embo if:** you want both *spatial* (where is code?)
 and *temporal* (why did we decide this in February?) context
-auto-loaded into every spec, design, and impl.
+auto-loaded into every spec, design, and impl. No other tool here
+has both a persistent codebase index **and** cross-session memory.
 
-**Pick something else if:** you need git-worktree isolation
-(Superpowers, OMC) or maximum agent throughput (OMC, shinpr).
+**Pick something else if:**
+- you need **git-worktree isolation** for parallel agents —
+  Superpowers or OMC
+- you want **maximum agent throughput / parallel swarms** — OMC or
+  shinpr
+- you rely on **LSP/AST "go-to-definition" navigation** rather than a
+  text index — OMC
+- you want **self-looping verification** (audit-fix-retry until a
+  pass signal) — OMC (`ralph`) or shinpr's quality gates
 
 ## Why this exists
 
@@ -85,7 +136,7 @@ each from peer-reviewed or industry-leader sources:
  a 27.8 pp absolute improvement over the next best baseline
  ([TDFlow, 2025](https://arxiv.org/abs/2510.23761))
 
-rlm-mem is the smallest framework that delivers both halves:
+embo is the smallest framework that delivers both halves:
 **enforced decomposition** (PRD -> tech-design -> tasks -> impl)
 to dodge Token Snowball, **and** persistent memory (RLM index +
 claude-mem) so the structure compounds across sessions instead
@@ -167,8 +218,8 @@ read; come back when you need depth on a specific feature.
 ```bash
 # 1. Clone this repository
 cd ~/
-git clone https://github.com/povesma/rlm-mem
-cd rlm-mem
+git clone https://github.com/povesma/embo
+cd embo
 
 # 2. Run the install script (or follow manual steps below)
 bash install.sh
@@ -177,7 +228,7 @@ bash install.sh
 **Or install manually:**
 
 ```bash
-cd rlm-mem
+cd embo
 
 # 2. Copy RLM scripts to Claude config
 mkdir -p ~/.claude/rlm_scripts
@@ -259,8 +310,8 @@ winget install OpenJS.NodeJS.LTS # for claude-mem
 
 # 2. Clone this repository
 cd $env:USERPROFILE
-git clone https://github.com/povesma/rlm-mem
-cd rlm-mem
+git clone https://github.com/povesma/embo
+cd embo
 
 # 3. Run the install script
 powershell -ExecutionPolicy Bypass -File install.ps1
@@ -273,7 +324,7 @@ them will be unavailable.
 **Or install manually:**
 
 ```powershell
-cd rlm-mem
+cd embo
 
 # Create directories
 New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.claude\rlm_scripts"
@@ -494,7 +545,7 @@ guidance.
 
 ### Test Subagents
 
-RLM-Mem ships five specialized test subagents that run in isolated contexts to prevent implementation bias. Invoke them via the `Task` tool from within `/dev:impl`.
+embo ships five specialized test subagents that run in isolated contexts to prevent implementation bias. Invoke them via the `Task` tool from within `/dev:impl`.
 
 #### Agents Overview
 
@@ -592,7 +643,7 @@ interruptions.
 
 #### Cost Considerations
 
-RLM-Mem uses:
+embo uses:
 - **Opus** for orchestration (main LLM)
 - **Haiku** for chunk analysis (sub-LLM)
 
@@ -664,7 +715,7 @@ LANGUAGE_MAP = {
 
 ### Related Projects
 
-- **[claude_code_RLM](https://github.com/brainqub3/claude_code_RLM)**: Original RLM for text files (our foundation). RLM-Mem extends it to entire code repositories - adding multi-language indexing, git integration, and a full development workflow - and integrates claude-mem for persistent cross-session memory.
+- **[claude_code_RLM](https://github.com/brainqub3/claude_code_RLM)**: Original RLM for text files (our foundation). embo extends it to entire code repositories - adding multi-language indexing, git integration, and a full development workflow - and integrates claude-mem for persistent cross-session memory.
 - **[RLM Paper](https://arxiv.org/abs/2512.24601)**: Research paper on Recursive Language Models
 - **[Claude Code](https://claude.ai/download)**: Anthropic's official CLI
 
@@ -714,7 +765,7 @@ To update to the latest version:
 
 ```bash
 # 1. Pull latest changes
-cd ~/rlm-mem # Or wherever you cloned
+cd ~/embo # Or wherever you cloned
 git pull
 
 # 2. Re-run installation steps (or just run install.sh again)

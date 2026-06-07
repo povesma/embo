@@ -1,4 +1,4 @@
-# Generate PRD with RLM-Mem Hybrid Analysis
+# Generate PRD with embo Hybrid Analysis
 
 Create a Product Requirements Document informed by both historical context (claude-mem) and current codebase capabilities (RLM).
 

@@ -1,6 +1,6 @@
-# RLM-Mem Troubleshooting Guide
+# embo Troubleshooting Guide
 
-Common issues and solutions for RLM-Mem installation and usage.
+Common issues and solutions for embo installation and usage.
 
 ## 🔍 Quick Diagnostics
 
@@ -19,8 +19,8 @@ dir %USERPROFILE%\.claude\rlm_scripts\rlm_repl.py  # Windows
 python3 ~/.claude/rlm_scripts/rlm_repl.py --help
 
 # 4. Check commands installed
-ls ~/.claude/commands/rlm-mem/  # macOS/Linux
-dir %USERPROFILE%\.claude\commands\rlm-mem\  # Windows
+ls ~/.claude/commands/dev/  # macOS/Linux
+dir %USERPROFILE%\.claude\commands\dev\  # Windows
 ```
 
 ---
@@ -101,7 +101,7 @@ Usually not needed. If issues persist:
 ### Issue: Commands not appearing in Claude Code
 
 **Symptoms:**
-- Type `/rlm-mem:` and nothing appears
+- Type `/dev:` and nothing appears
 - Commands don't autocomplete
 
 **Solutions:**
@@ -109,10 +109,10 @@ Usually not needed. If issues persist:
 1. **Verify files copied correctly:**
 ```bash
 # macOS/Linux
-ls -R ~/.claude/commands/rlm-mem/
+ls -R ~/.claude/commands/dev/
 
 # Windows
-dir /S %USERPROFILE%\.claude\commands\rlm-mem\
+dir /S %USERPROFILE%\.claude\commands\dev\
 ```
 
 Should show all command .md files.
@@ -128,7 +128,7 @@ claude
 ```bash
 # Files must end in .md
 # Files must be in correct directory structure
-# Example: ~/.claude/commands/rlm-mem/discover/init.md
+# Example: ~/.claude/commands/dev/init.md
 ```
 
 4. **Check Claude Code version:**
@@ -143,16 +143,16 @@ claude --version
 
 **Symptoms:**
 ```
-mkdir: cannot create directory '~/.claude/commands/rlm-mem': File exists
+mkdir: cannot create directory '~/.claude/commands/dev': File exists
 ```
 
 **Solution:**
 ```bash
 # Backup existing if needed
-mv ~/.claude/commands/rlm-mem ~/.claude/commands/rlm-mem.backup
+mv ~/.claude/commands/dev ~/.claude/commands/dev.backup
 
 # Then re-run installation
-cp -r .claude/commands/rlm-mem ~/.claude/commands/
+cp -r .claude/commands/dev ~/.claude/commands/
 ```
 
 ---
@@ -163,7 +163,7 @@ cp -r .claude/commands/rlm-mem ~/.claude/commands/
 
 **Symptoms:**
 ```
-/rlm-mem:discover:init
+/dev:init
 Error: No such file or directory
 ```
 
@@ -347,17 +347,17 @@ Tool 'mcp__plugin_claude-mem_mcp-search__search' not found
 
 **Solution:**
 
-Claude-mem is **optional**. RLM-Mem will work without it, but with reduced functionality.
+Claude-mem is **required**. The embo commands depend on it for
+cross-session memory and will fail with a clear error if it is
+unavailable.
 
-To enable claude-mem:
-1. Install claude-mem plugin separately
-2. Configure in Claude Code settings
-3. Restart Claude Code
+To install claude-mem:
+1. `/plugin marketplace add thedotmack/claude-mem` (inside Claude Code)
+2. `/plugin install claude-mem`
+3. Restart Claude Code, then verify with `/dev:health`
 
-**Working without claude-mem:**
-- RLM analysis still works
-- Pattern discovery still works
-- Historical context features disabled
+See the Install section of `README.md` for the full procedure and
+the common wrong-plugin pitfall.
 
 ---
 
@@ -372,7 +372,7 @@ mcp__plugin_claude-mem_mcp-search__search returned 0 results
 
 1. **Initialize project in claude-mem:**
 ```
-/coding:discover:init
+/dev:init
 ```
 
 2. **Check claude-mem is running:**
@@ -395,7 +395,7 @@ mcp__plugin_claude-mem_mcp-search__save_memory(
 
 **Symptoms:**
 ```
-/rlm-mem:discover:init
+/dev:init
 # Takes 5+ minutes
 ```
 
@@ -440,9 +440,9 @@ Command execution timeout
    - Limit file search in RLM exec calls
    - Use more specific patterns
 
-3. **Use simpler commands for quick tasks:**
-   - Use `/coding:*` commands for trivial changes
-   - Reserve `/rlm-mem:*` for complex features
+3. **Use a lighter profile for quick tasks:**
+   - Switch to the `fast` or `minimal` profile via `/dev:profile`
+   - Reserve the `quality` profile for complex features
 
 ---
 
@@ -575,7 +575,7 @@ python3 ~/.claude/rlm_scripts/rlm_repl.py status 2>&1
 
 ```bash
 # 1. Backup existing
-mv ~/.claude/commands/rlm-mem ~/.claude/commands/rlm-mem.backup
+mv ~/.claude/commands/dev ~/.claude/commands/dev.backup
 mv ~/.claude/rlm_scripts ~/.claude/rlm_scripts.backup
 mv ~/.claude/agents/rlm-subcall.md ~/.claude/agents/rlm-subcall.md.backup
 
@@ -583,12 +583,12 @@ mv ~/.claude/agents/rlm-subcall.md ~/.claude/agents/rlm-subcall.md.backup
 rm -rf .claude/rlm_state/
 
 # 3. Re-install from scratch
-cd ~/rlm-mem
+cd ~/embo
 # Follow installation steps in README.md
 
 # 4. Re-initialize
 claude
-/rlm-mem:discover:init
+/dev:init
 ```
 
 ---

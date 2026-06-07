@@ -18,7 +18,7 @@ To regenerate the diagram:
 
 ```
 Create a clean technical architecture diagram for a developer
-tool called "rlm-mem" - a spec-driven Claude Code workflow.
+tool called "embo" - a spec-driven Claude Code workflow.
 
 Show three horizontal layers, top to bottom:
 

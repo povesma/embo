@@ -3,7 +3,7 @@ description: Start a coding session with comprehensive context from RLM code ana
 allowed-tools: Bash(cat ~/.claude/active-profile.yaml *) Read(~/.claude/active-profile.yaml) Bash(python3 ~/.claude/rlm_scripts/rlm_repl.py *) Bash(git log *) Bash(git diff *)
 ---
 
-# Start RLM-Mem Coding Session
+# Start embo Coding Session
 
 Start a coding session with comprehensive context from both RLM code analysis and claude-mem historical knowledge.
 

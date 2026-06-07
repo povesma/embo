@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Repository Is
 
-RLM-Mem is an **installation package** for Claude Code that combines:
+embo is an **installation package** for Claude Code that combines:
 - **RLM**: Analyzes large codebases via persistent Python REPL
 - **Claude-Mem** (MANDATORY): Semantic memory of past decisions
 - **10 Commands**: Complete development workflow
@@ -63,6 +63,26 @@ Commands use MCP tools (requires plugin):
 - `mcp__plugin_claude-mem_mcp-search__save_memory`
 
 Commands should **fail with clear error** if claude-mem unavailable.
+
+### Runtime: stay on worker tools (do not migrate to server-beta yet)
+
+These commands target the **worker** runtime (`CLAUDE_MEM_RUNTIME=worker`)
+and use `search` / `get_observations` / `save_memory`. As of the
+2026-06-07 plugin update, claude-mem also exposes a `server-beta`
+runtime with a REST backend (`/v1/*`) and a new tool family
+(`observation_search`, `observation_context`, `observation_add`,
+`memory_*`). Those tools are **beta and refuse to run under the worker
+runtime**, so the commands intentionally stay on the worker tools to
+avoid building against a moving target.
+
+**Migration trigger:** when server-beta leaves beta (GA), open a task to
+switch the commands. Tool mapping for that migration:
+`search` → `observation_search`, the `search` + `get_observations`
+two-step → `observation_context` (single call), `save_memory` →
+`observation_add` / `memory_add`. The statusline (`cmem_segment` in
+`.claude/statusline.sh`) also moves from `/api/observations` to the
+`/v1/*` endpoint. Server-beta enables centralized, `projectId`-scoped
+memory shared across developers and agents.
 
 ## Development
 

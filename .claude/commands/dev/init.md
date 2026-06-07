@@ -1,4 +1,4 @@
-# Initialize RLM-Mem Hybrid System
+# Initialize embo Hybrid System
 
 Bootstrap both RLM file indexing and claude-mem semantic memory for a project. This is the foundation for quality-first development workflow.
 
@@ -172,7 +172,7 @@ mcp__plugin_claude-mem_mcp-search__search(
 ### Step 6: Generate Summary Report
 
 ```markdown
-# ✅ RLM-Mem Initialization Complete
+# ✅ embo Initialization Complete
 
 **Project**: {project_name}
 
@@ -252,7 +252,7 @@ Search: "authentication" or "database schema" or "API design"
 ## Output Example
 
 ```
-# ✅ RLM-Mem Initialization Complete
+# ✅ embo Initialization Complete
 
 **Project**: app-astudio
 

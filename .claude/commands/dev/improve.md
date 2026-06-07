@@ -101,7 +101,7 @@ mcp__plugin_claude-mem_mcp-search__save_memory(
 Build and output the proposal as Markdown:
 
 ```markdown
-# RLM-Mem Workflow Improvement Proposal
+# embo Workflow Improvement Proposal
 
 **Generated**: {date}
 **Project**: {project_name}

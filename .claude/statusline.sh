@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Claude Code statusLine script — RLM-Mem edition
+# Claude Code statusLine script — embo edition
 # Displays: cwd (tilde-abbreviated) | git branch | model | USED/TOTAL $cost | ctx % | mem | time
 # Requires: jq (brew install jq / apt install jq)
 # Install:  cp .claude/statusline.sh ~/.claude/statusline.sh && chmod +x ~/.claude/statusline.sh

@@ -92,23 +92,85 @@
 | Subagent count | 1 | "/workflow - Workflow Modifier (Skill) for modifying the workflow system itself" |
 | Git worktrees | ❌ | "No mention of worktrees" |
 
+## Refresh 2026-06-07 — re-verified cells + axis changes
+
+> Re-research via web + NotebookLM ("AI Agentic Workflows and
+> Claude Developer Tools", 40 sources). Changes from the 2026-04-30
+> snapshot:
+>
+> - **Own row Subagents**: was `6`. Repo `.claude/agents/` holds only
+>   `rlm-subcall.md`; the 5 test agents are documented (README "Test
+>   subagents") and invoked via Task tool, not shipped as agent files.
+>   Honest representation: 1 shipped + 5 documented test subagents.
+> - **OMC Subagents**: was `19` → now **29 agents + 34 skills**
+>   (multi-tier Haiku/Sonnet/Opus). Source: OMC docs via NotebookLM
+>   (agent roster table, 29 entries; "34 Total" skills).
+> - **OMC code navigation**: native LSP tools (`lsp_goto_definition`,
+>   `lsp_rename`) + `ast_grep_search`/`ast_grep_replace`. Source: OMC
+>   "Available Tools" / "AST Tools (ast-grep Integration)".
+> - **Superpowers Subagents**: was `14+` → now "20+ skills"; agent vs
+>   skill counting differs, so the integer was always apples-to-oranges.
+> - **Superpowers memory**: core has none, but same author/marketplace
+>   ships `private-journal-mcp` (semantic-search memory) → `🟡 optional`.
+> - **BMAD (aj-geddes port)**: re-verified **9 skills + 15 commands**;
+>   no LSP/AST, no multi-CLI (those live in the separate `bmad-assist`
+>   repo, not this port). Source: aj-geddes.github.io/claude-code-bmad-skills.
+> - **shinpr**: restructured into plugin variants (`dev-skills` vs
+>   `dev-workflows`, frontend/fullstack); flat `27` no longer maps to
+>   one install. Quality gates baked into completion criteria (author
+>   states he avoids hooks). No LSP/AST or multi-CLI orchestration
+>   (Codex used only as side reviewer).
+>
+> **Axis decision (narrow re-axis):** the integer "Subagents" column
+> is misleading (counts mix agents/skills/recipes; "more" is not
+> "better"). Replaced with qualitative **Agent model**. Added one new
+> sourced column, **Code navigation**, because it is the axis where
+> rlm-mem (persistent index) and OMC (LSP/AST) genuinely differ.
+> Emerging axes with no citable data for ≥4 of 6 projects
+> (verification loops, multi-CLI orchestration) are handled in README
+> prose, not as columns, to avoid fabricated negatives.
+
+### Code navigation — per-cell sources
+
+| Project | Value | Source |
+|---|---|---|
+| rlm-mem | index (RLM) | `rlm_repl.py` builds `.pkl` index of all files |
+| Superpowers | grep-only | no index/LSP described; relies on native context |
+| BMAD (port) | none | YAML status files, no code-level navigation |
+| OMC | LSP + AST | `lsp_*` tools + `ast_grep_*` (OMC docs, NotebookLM) |
+| shinpr | grep-only | `codebase-analyzer` agent, no persistent/LSP/AST |
+| claude-workflow-template | none | git/GitHub board reconstruction, no code index |
+
+### Agent model — per-cell sources
+
+| Project | Value | Source |
+|---|---|---|
+| rlm-mem | focused (1 + 5 test) | 1 shipped (`rlm-subcall`) + 5 documented test subagents |
+| Superpowers | skills (20+) | "20+ battle-tested skills"; code-reviewer agent |
+| BMAD (port) | roles (9) | 9 role skills + 15 commands |
+| OMC | swarm (29) | 29 agents + 34 skills, multi-tier |
+| shinpr | roles (variants) | phase agents across plugin variants |
+| claude-workflow-template | single (1) | one workflow-modifier skill |
+
 ## Final compact table (for README paste)
 
 > **Legend**: ✅ built-in · 🟡 partial / optional · ❌ absent
 >
-> Snapshot date: 2026-04-30. Sources for every cell:
+> Snapshot date: 2026-06-07. Sources for every cell:
 > [comparison-data.md](
 > tasks/017-README-ONBOARDING-spec-driven-positioning/comparison-data.md)
 
-| Project | Spec-driven phases | Codebase index | Cross-session memory | TDD enforce | Profiles | Subagents/skills | Git worktrees |
+| Project | Spec phases | Code navigation | X-session memory | TDD | Profiles | Agent model | Worktrees |
 |---|---|---|---|---|---|---|---|
-| **rlm-mem** *(this)* | ✅ | ✅ | ✅ | ✅ | ✅ (4) | 6 | ❌ |
-| [Superpowers](https://github.com/obra/superpowers) | ✅ | ❌ | ❌ | ✅ | 🟡 | 14+ | ✅ |
-| [BMAD-METHOD](https://github.com/aj-geddes/claude-code-bmad-skills) | ✅ | ❌ | ✅ | 🟡 | ✅ (5 levels) | 9 | ❌ |
-| [Oh-My-ClaudeCode](https://github.com/Yeachan-Heo/oh-my-claudecode) | 🟡 | ❌ | ✅ | ❌ | ✅ (6 modes) | 19 | ✅ |
-| [claude-code-workflows](https://github.com/shinpr/claude-code-workflows) | ✅ | 🟡 | ❌ | ✅ | ✅ | 27 | ❌ |
-| [claude-workflow-template](https://github.com/nicholasmartin/claude-workflow-template) | ✅ | ❌ | 🟡 | ❌ | ❌ | 1 | ❌ |
+| **rlm-mem** *(this)* | ✅ | index (RLM) | ✅ | ✅ | ✅ (4) | focused (1+5 test) | ❌ |
+| [Superpowers](https://github.com/obra/superpowers) | ✅ | grep-only | 🟡 | ✅ | 🟡 | skills (20+) | ✅ |
+| [BMAD-METHOD](https://github.com/aj-geddes/claude-code-bmad-skills) | ✅ | none | ✅ | 🟡 | ✅ | roles (9) | ❌ |
+| [Oh-My-ClaudeCode](https://github.com/Yeachan-Heo/oh-my-claudecode) | 🟡 | LSP+AST | ✅ | ❌ | ✅ | swarm (29) | ✅ |
+| [claude-code-workflows](https://github.com/shinpr/claude-code-workflows) | ✅ | grep-only | ❌ | ✅ | ✅ | roles (variants) | ❌ |
+| [claude-workflow-template](https://github.com/nicholasmartin/claude-workflow-template) | ✅ | none | 🟡 | ❌ | ❌ | single (1) | ❌ |
 
 **rlm-mem's only-one-with-both differentiator**: persistent
 codebase index (RLM) **and** cross-session memory (claude-mem)
-in a single workflow. No competitor in the table has both.
+in a single workflow. No competitor in the table has both — OMC
+has memory + LSP/AST navigation but no persistent index; the
+spec-driven ones (Superpowers, shinpr) lack persistent memory.
