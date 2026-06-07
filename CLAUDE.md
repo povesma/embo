@@ -95,7 +95,11 @@ Edit `rlm_repl.py` → `LANGUAGE_MAP` dict.
 ├── profiles/                   # workflow configuration profiles
 │   ├── quality.yaml, fast.yaml, minimal.yaml
 ├── hooks/
-│   └── context-guard.sh        # Context window warning hook
+│   ├── context-guard.sh        # Context window warning hook
+│   ├── behavioral-reminder.sh  # Behavioral rule reminder hook
+│   ├── docs-first-guard.sh     # Docs-first PreToolUse guard
+│   └── approve-compound.sh     # Auto-approve compound/redirected Bash
+│                                 # (+ approve-compound.test.sh)
 ├── rlm_scripts/rlm_repl.py     # REPL: init-repo supports
 │                                 # .rlmignore + --exclude/--include/
 │                                 # --exclude-from/--no-rlmignore

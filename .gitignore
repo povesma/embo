@@ -29,5 +29,8 @@ Desktop.ini
 .claude/rlm_state/
 *.pkl
 
+# Scratch dir for redirected command output (read back via the Read tool)
+tmp/
+
 # Logs
 *.log

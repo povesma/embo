@@ -330,7 +330,8 @@ After installation, your `~/.claude/` directory will contain:
 │ └── research.yaml # Evidence-driven research profile
 ├── hooks/
 │ ├── context-guard.sh # Context window warning hook (optional)
-│ └── behavioral-reminder.sh # Behavioral rule reminder hook (optional)
+│ ├── behavioral-reminder.sh # Behavioral rule reminder hook (optional)
+│ └── approve-compound.sh # Auto-approve compound/redirected Bash cmds (optional)
 ├── rlm_scripts/
 │ └── rlm_repl.py # Persistent REPL for RLM
 └── statusline.sh # Status line script (optional)
@@ -338,13 +339,16 @@ After installation, your `~/.claude/` directory will contain:
 
 ### Hooks
 
-Two optional hooks are included. Both are installed by `install.sh` and
-registered in `~/.claude/settings.json` automatically.
+The hooks below are included. They are installed by `install.sh` and
+registered in `~/.claude/settings.json` automatically. If `jq` is not
+available, register them manually as shown in the disable column / the
+`install.sh` output.
 
 | Hook | Event | Purpose | Disable |
 |------|-------|---------|---------|
 | `context-guard.sh` | `UserPromptSubmit` | Warns when context window is ≥ threshold before new dev work | Set `CONTEXT_GUARD_THRESHOLD=101` in `settings.json` env |
 | `behavioral-reminder.sh` | `UserPromptSubmit` | Injects rule tag reminders before each prompt; targeted on criticism, implementation, and git requests | Set `BEHAVIORAL_REMINDER_DISABLED=1` in `settings.json` env |
+| `approve-compound.sh` | `PreToolUse` (Bash) | Auto-approves a Bash command when every subcommand (after stripping redirects/env/wrappers, splitting on `&& \|\| ; \| &`) already matches your `permissions.allow` and none matches `deny`. Removes the prompt that a redirect or pipe otherwise triggers. Falls through to the normal prompt on anything it cannot parse; never overrides `deny` or protected-dir checks | Remove the `PreToolUse` matcher from `settings.json` |
 
 Both hooks fail open - any error exits silently with code 0 and never
 blocks Claude from responding.

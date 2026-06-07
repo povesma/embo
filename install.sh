@@ -53,12 +53,15 @@ mkdir -p "$TARGET/profiles"
 cp "$REPO_DIR/.claude/profiles/"*.yaml "$TARGET/profiles/"
 echo "  profiles: $(ls "$REPO_DIR/.claude/profiles/"*.yaml | wc -l | tr -d ' ') files"
 
-# hooks
-if ls "$REPO_DIR/.claude/hooks/"*.sh 2>/dev/null | grep -q .; then
+# hooks (exclude *.test.sh — developer test files, not shipped)
+if ls "$REPO_DIR/.claude/hooks/"*.sh 2>/dev/null | grep -qv '\.test\.sh$'; then
     mkdir -p "$TARGET/hooks"
-    cp "$REPO_DIR/.claude/hooks/"*.sh "$TARGET/hooks/"
+    for h in "$REPO_DIR/.claude/hooks/"*.sh; do
+        case "$h" in *.test.sh) continue ;; esac
+        cp "$h" "$TARGET/hooks/"
+    done
     chmod +x "$TARGET/hooks/"*.sh
-    echo "  hooks: $(ls "$REPO_DIR/.claude/hooks/"*.sh | wc -l | tr -d ' ') files"
+    echo "  hooks: $(ls "$REPO_DIR/.claude/hooks/"*.sh | grep -cv '\.test\.sh$' | tr -d ' ') files"
 fi
 
 # rlm_scripts
@@ -123,6 +126,31 @@ if [ -f "$TARGET/hooks/behavioral-reminder.sh" ]; then
                 "$SETTINGS" > /tmp/_rlm_settings.tmp \
                 && mv /tmp/_rlm_settings.tmp "$SETTINGS"
             echo "  settings.json: behavioral-reminder hook registered"
+        fi
+    fi
+fi
+
+# approve-compound hook — register in settings.json (PreToolUse on Bash)
+if [ -f "$TARGET/hooks/approve-compound.sh" ]; then
+    SETTINGS="$TARGET/settings.json"
+    if ! command -v jq >/dev/null 2>&1; then
+        echo ""
+        echo "  approve-compound: jq not found — manual step required"
+        echo "    Add to $SETTINGS under hooks.PreToolUse:"
+        echo '    {"matcher":"Bash","hooks":[{"type":"command","command":"bash ~/.claude/hooks/approve-compound.sh"}]}'
+    else
+        if [ ! -f "$SETTINGS" ]; then
+            echo '{}' > "$SETTINGS"
+        fi
+        if jq -e '[.hooks.PreToolUse[]?.hooks[]?.command] | any(. != null and contains("approve-compound"))' \
+            "$SETTINGS" > /dev/null 2>&1; then
+            echo "  settings.json: approve-compound already registered — skipping"
+        else
+            jq '.hooks.PreToolUse += [{"matcher": "Bash", "hooks": [{"type": "command",
+                "command": "bash ~/.claude/hooks/approve-compound.sh"}]}]' \
+                "$SETTINGS" > /tmp/_rlm_settings.tmp \
+                && mv /tmp/_rlm_settings.tmp "$SETTINGS"
+            echo "  settings.json: approve-compound hook registered"
         fi
     fi
 fi
