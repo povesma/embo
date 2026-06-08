@@ -117,31 +117,39 @@ reader can take each word at face value.
 
 When you run a command to learn whether it worked, the exit code and
 the error text are the result. A pipeline returns the exit code of its
-last stage, so piping a command into `tail` or `head` replaces the
+last stage, so piping such a command into `tail` or `head` replaces the
 command's exit code with the filter's — which almost always succeeds.
 A failure then reads as a pass, and the lines that explain the failure
 can be discarded.
 
 **Do:**
-- Read the command's own exit code. Run the command on its own and
-  check `$?`, or use `&&` / `||`
-- For large output, redirect to a file and read the file:
-  `cmd > /tmp/out.log 2>&1; echo $?` — the full record and the true
-  exit code both survive
-- If you must pipe to a filter, set `set -o pipefail` first so the
-  pipeline reports the command's failure
+- Read the command's own exit code — the harness returns it to you
+  natively. Do NOT append `; echo $?`; it is redundant and the chained
+  `echo` can trigger a permission prompt
+- For large output, redirect to an **in-project** scratch file and read
+  it: `cmd > tmp/out.log 2>&1` — the full record survives and the true
+  exit code is still returned natively. Use the project-relative `tmp/`
+  dir (gitignored), never the absolute `/tmp` (an off-workspace write
+  trips the filesystem sandbox and prompts)
 - When a command fails, read the lines that explain why — the first
   error or the stack trace — not only the last few lines
 
 **Do not:**
-- End a verification command with `| tail -N` or `| head -N` without
-  `pipefail` — the exit code becomes the filter's, and a failure looks
-  like a pass
-- Truncate combined `2>&1` output with a fixed line count when checking
-  for failure — the error line can be pushed out of the window by
-  normal output
+- Pipe a command **whose success you are checking** into `| tail`,
+  `| head`, or `; wc` — the pipeline reports the filter's exit code, not
+  the command's, so a failure reads as a pass, and the error line can be
+  pushed out of the window. (Piping is fine when the output is known and
+  predictable and you are not relying on the exit code — e.g.
+  `git log --oneline | head -5`.)
+- Re-run a command just to re-see its output. Capture once to
+  `tmp/out.log`, then read it as many times as you need
 - Conclude a command succeeded from a clean-looking truncated tail.
   Assume it failed until the exit code proves otherwise
+
+Once output is captured to a file, prefer the **Read tool** (offset/
+limit for a slice) or the **Grep tool** (to search) over a second shell
+command: they inspect the existing file without running new Bash, so
+there is no prompt and no risk of re-executing the original command.
 
 <!-- RULE:DECIDE-OR-ASK -->
 ### Decide what you can; ask only about genuine blockers
@@ -203,12 +211,30 @@ python3 ~/.claude/rlm_scripts/rlm_repl.py status
 
 **(Skip if profile `tools.memory_backend` is `none`)**
 
+**MANDATORY project scoping.** claude-mem uses ONE global database
+shared across every repo. A `search(...)` with no `project` argument
+reads observations from ALL projects, leaking unrelated (and possibly
+confidential) cross-repo context into this session. Every `search(...)`
+call below MUST pass `project` scoped to the current project. This is a
+correctness and confidentiality requirement, not a preference — do not
+omit it, and do not rely on a CLAUDE.md reminder to add it.
+
+Determine the project name = the **basename of the project root
+directory** (for this launch, the current working directory's repo
+root). Use that string as `project` in every call.
+
 ```
-mcp__plugin_claude-mem_mcp-search__search(query="project overview goals architecture", limit=5)
-mcp__plugin_claude-mem_mcp-search__search(query="implementation completed features recent work", limit=10, orderBy="created_at DESC")
-mcp__plugin_claude-mem_mcp-search__search(query="task list TODO in progress", limit=5)
+mcp__plugin_claude-mem_mcp-search__search(query="project overview goals architecture", project="<project-name>", limit=5)
+mcp__plugin_claude-mem_mcp-search__search(query="implementation completed features recent work", project="<project-name>", limit=10, orderBy="created_at DESC")
+mcp__plugin_claude-mem_mcp-search__search(query="task list TODO in progress", project="<project-name>", limit=5)
 ```
 Fetch full observations for top results with `mcp__plugin_claude-mem_mcp-search__get_observations`.
+
+**If the scoped queries return little or nothing**, the project may have
+been renamed since its history was captured (claude-mem stores the
+directory basename used *at capture time*). Only in that case, retry
+once with the prior name if you can infer it, and note the rename in the
+session summary. Never fall back to an unscoped (all-projects) search.
 
 Extract: project goals, completed features, active tasks, recent decisions, known issues.
 
