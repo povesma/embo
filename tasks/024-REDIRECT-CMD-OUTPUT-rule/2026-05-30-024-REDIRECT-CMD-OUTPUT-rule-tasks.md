@@ -25,6 +25,16 @@
 - The rule is centered on preserving the exit code and the error
   text. Recommended technique: redirect to a file and read it; or
   set `pipefail` before piping to a filter.
+- **SUPERSEDED 2026-06-09** (see
+  `2026-06-09-024-REDIRECT-CMD-OUTPUT-rework-tech-design.md`): the
+  "redirect large output to a file" remedy is obsolete. The harness
+  auto-persists oversized output to `…/tool-results/<id>.txt` on the
+  first run; read it with the Read/Grep tools — no re-run, no manual
+  redirect. The rule in `start.md` was rewritten accordingly: run
+  plain, read the saved file, and redirect only to build a reusable
+  artifact in the hook-approved single-command shape. The exit-code
+  integrity lesson (do not pipe a checked command into a truncating
+  filter) is unchanged.
 - Depends on the PLAIN-ENGLISH section existing (task 023), since the
   new section is placed next to it. Task 023 changes are on branch
   feature/023-plain-english, not yet on this branch — confirm

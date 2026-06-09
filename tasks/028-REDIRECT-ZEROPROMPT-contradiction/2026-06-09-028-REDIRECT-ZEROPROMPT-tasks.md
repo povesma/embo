@@ -18,6 +18,16 @@
 
 ## Notes
 
+- **PARTIALLY SUPERSEDED 2026-06-09** by the Task 024 rework (see
+  `tasks/024-REDIRECT-CMD-OUTPUT-rule/2026-06-09-024-REDIRECT-CMD-OUTPUT-rework-tech-design.md`).
+  The harness auto-persists oversized output to `…/tool-results/<id>.txt`
+  on the first run, so manual redirect is no longer the general way to
+  handle large output — the rule now says "run plain, read the saved
+  file." The canonical `<cmd> > tmp/<name>.log 2>&1` shape below
+  survives **only** for the narrow case of producing a reusable
+  artifact, not as the default. The Story 3 hook work
+  (reflexive-tail stripping in `approve-compound.sh`) is unaffected and
+  remains the mechanism that keeps the artifact redirect prompt-free.
 - Doc/rule-text change only. No code, no test suite, TDD not applicable.
 - The only files touched: `start.md`. `.gitignore`,
   `approve-compound.sh`, `behavioral-reminder.sh`, and README need no
