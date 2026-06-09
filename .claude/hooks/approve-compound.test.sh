@@ -12,6 +12,13 @@ source "$HERE/approve-compound.sh"
 PASS=0
 FAIL=0
 
+# capture-wrapper helpers (028): the embo-capture form the hook emits.
+# Pin the wrapper command so tests are independent of the install path;
+# the hook reads EMBO_CAPTURE_CMD (default = installed path).
+export EMBO_CAPTURE_CMD="embo-capture.sh"
+b64() { printf '%s' "$1" | base64 | tr -d '\n'; }
+wrap_cmd() { printf '%s --b64 %s' "$EMBO_CAPTURE_CMD" "$(b64 "$1")"; }
+
 assert_eq() {
   # assert_eq <description> <expected> <actual>
   local desc="$1" exp="$2" act="$3"
@@ -196,6 +203,8 @@ printf '{"permissions":{"allow":["Bash(ls *)"]}}' > "$_TMPH3/.claude/settings.js
 _OUT3="$(HOME="$_TMPH3" run_hook '{"tool_name":"Bash","tool_input":{"command":"ls -la > tmp/x.log 2>&1; echo \"exit=$?\"; cat tmp/x.log"},"cwd":"/nope"}')"
 assert_eq "tail rewrite emits allow" "allow" \
   "$(printf '%s' "$_OUT3" | jq -r '.hookSpecificOutput.permissionDecision')"
+# After 028: tail is stripped, but the survivor already contains a
+# redirect, so it is NOT wrapped — updatedInput is the stripped command.
 assert_eq "tail rewrite strips tail" "ls -la > tmp/x.log 2>&1" \
   "$(printf '%s' "$_OUT3" | jq -r '.hookSpecificOutput.updatedInput.command')"
 rm -rf "$_TMPH3"
@@ -215,6 +224,85 @@ _OUT5="$(HOME="$_TMPH5" run_hook '{"tool_name":"Bash","tool_input":{"command":"r
 assert_eq "deny wins over tail strip" "deny" \
   "$(printf '%s' "$_OUT5" | jq -r '.hookSpecificOutput.permissionDecision')"
 rm -rf "$_TMPH5"
+
+# ---- 2.1/2.2 allow-listed plain command is wrapped ----
+_TC1="$(mktemp -d)"; mkdir -p "$_TC1/.claude"
+printf '{"permissions":{"allow":["Bash(ls *)","Bash(embo-capture *)"]}}' \
+  > "$_TC1/.claude/settings.json"
+_O="$(HOME="$_TC1" run_hook '{"tool_name":"Bash","tool_input":{"command":"ls -la"},"cwd":"/nope"}')"
+assert_eq "wrap: plain allowed -> allow" "allow" \
+  "$(printf '%s' "$_O" | jq -r '.hookSpecificOutput.permissionDecision')"
+assert_eq "wrap: plain allowed -> embo-capture cmd" "$(wrap_cmd 'ls -la')" \
+  "$(printf '%s' "$_O" | jq -r '.hookSpecificOutput.updatedInput.command')"
+rm -rf "$_TC1"
+
+# ---- 2.3/2.4 ordering: strip tail FIRST, then consider wrapping ----
+# Here the survivor still has a redirect, so the already-redirected
+# opt-out applies: stripped but NOT wrapped. (Wrapping-after-strip is
+# exercised by a no-redirect case below.)
+_TC2="$(mktemp -d)"; mkdir -p "$_TC2/.claude"
+printf '{"permissions":{"allow":["Bash(ls *)","Bash(embo-capture *)"]}}' \
+  > "$_TC2/.claude/settings.json"
+_O="$(HOME="$_TC2" run_hook '{"tool_name":"Bash","tool_input":{"command":"ls -la > tmp/x.log 2>&1; echo \"exit=$?\"; cat tmp/x.log"},"cwd":"/nope"}')"
+assert_eq "order: strip, survivor redirected -> not wrapped" \
+  "ls -la > tmp/x.log 2>&1" \
+  "$(printf '%s' "$_O" | jq -r '.hookSpecificOutput.updatedInput.command')"
+rm -rf "$_TC2"
+
+# strip a NON-redirect tail, survivor has no redirect -> wrapped
+_TC2b="$(mktemp -d)"; mkdir -p "$_TC2b/.claude"
+printf '{"permissions":{"allow":["Bash(ls *)","Bash(embo-capture *)"]}}' \
+  > "$_TC2b/.claude/settings.json"
+_O="$(HOME="$_TC2b" run_hook '{"tool_name":"Bash","tool_input":{"command":"ls -la; echo \"exit=$?\""},"cwd":"/nope"}')"
+assert_eq "order: strip then wrap survivor" "$(wrap_cmd 'ls -la')" \
+  "$(printf '%s' "$_O" | jq -r '.hookSpecificOutput.updatedInput.command')"
+rm -rf "$_TC2b"
+
+# ---- 2.5/2.6 unallowed head is NOT wrapped-and-allowed ----
+_TC3="$(mktemp -d)"; mkdir -p "$_TC3/.claude"
+printf '{"permissions":{"allow":["Bash(ls *)","Bash(embo-capture *)"]}}' \
+  > "$_TC3/.claude/settings.json"
+assert_eq "wrap: unallowed head -> no stdout" "" \
+  "$(HOME="$_TC3" run_hook '{"tool_name":"Bash","tool_input":{"command":"kubectl get cm"},"cwd":"/nope"}')"
+rm -rf "$_TC3"
+
+# ---- 3.0 re-entrancy guard: already-wrapped command left alone ----
+_TC4="$(mktemp -d)"; mkdir -p "$_TC4/.claude"
+printf '{"permissions":{"allow":["Bash(ls *)","Bash(embo-capture *)"]}}' \
+  > "$_TC4/.claude/settings.json"
+# an embo-capture command must NOT be re-wrapped (no stdout = fall through)
+assert_eq "guard: already wrapped -> no stdout" "" \
+  "$(HOME="$_TC4" run_hook "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$(wrap_cmd 'ls -la')\"},\"cwd\":\"/nope\"}")"
+rm -rf "$_TC4"
+
+# ---- 3.1/3.2 already-redirected command is NOT wrapped ----
+# (the model deliberately redirected; leave its redirect intact = no wrap)
+_TC5="$(mktemp -d)"; mkdir -p "$_TC5/.claude"
+printf '{"permissions":{"allow":["Bash(ls *)","Bash(embo-capture *)"]}}' \
+  > "$_TC5/.claude/settings.json"
+_O="$(HOME="$_TC5" run_hook '{"tool_name":"Bash","tool_input":{"command":"ls -la > tmp/keep.log 2>&1"},"cwd":"/nope"}')"
+# allow (head is listed) but NOT wrapped: command unchanged -> no updatedInput
+assert_eq "redirected: not wrapped (no updatedInput)" "null" \
+  "$(printf '%s' "$_O" | jq -r '.hookSpecificOutput.updatedInput.command // "null"')"
+rm -rf "$_TC5"
+
+# ---- 3.3/3.4 interactive head is NOT wrapped ----
+_TC6="$(mktemp -d)"; mkdir -p "$_TC6/.claude"
+printf '{"permissions":{"allow":["Bash(ssh *)","Bash(embo-capture *)"]}}' \
+  > "$_TC6/.claude/settings.json"
+_O="$(HOME="$_TC6" run_hook '{"tool_name":"Bash","tool_input":{"command":"ssh host"},"cwd":"/nope"}')"
+assert_eq "interactive: not wrapped (no updatedInput)" "null" \
+  "$(printf '%s' "$_O" | jq -r '.hookSpecificOutput.updatedInput.command // "null"')"
+rm -rf "$_TC6"
+
+# ---- 3.5/3.6 deny still wins; unsafe still falls through ----
+_TC7="$(mktemp -d)"; mkdir -p "$_TC7/.claude"
+printf '{"permissions":{"allow":["Bash(ls *)","Bash(embo-capture *)"],"deny":["Bash(rm *)"]}}' \
+  > "$_TC7/.claude/settings.json"
+_O="$(HOME="$_TC7" run_hook '{"tool_name":"Bash","tool_input":{"command":"rm -rf x"},"cwd":"/nope"}')"
+assert_eq "deny wins over wrap" "deny" \
+  "$(printf '%s' "$_O" | jq -r '.hookSpecificOutput.permissionDecision')"
+rm -rf "$_TC7"
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
