@@ -113,37 +113,36 @@ reader can take each word at face value.
 - Reach for a colorful word when a plain one says the same thing
 
 <!-- RULE:REDIRECT-CMD-OUTPUT -->
-### Run commands plainly; let the harness save large output
+### Run commands plainly; read the captured file on overflow
 
 A command's exit code and error text are the result of running it. Do
 not mask them.
 
-**Run one plain command, once.** The harness returns its output and
-exit code to you directly. A bare command is allow-listed and runs with
-no prompt; adding a redirect, a chain, a pipe, or `$(...)` is shell the
-permission engine cannot analyze, so it prompts — and buys nothing for
-output you could just read.
+**Run one plain command, once.** Its output and exit code come back to
+you directly — you add no redirect, chain, pipe, or `$(...)` to see
+them. The capture hook handles large output for you: it runs the
+command, saves the **full** output to a file, and either shows it inline
+(when small) or returns a short preview ending in this marker:
 
-**Do not predict output size, and never re-run a command to re-see its
-output.** When output is too large to show inline, the harness has
-already saved the full text to a file and printed the path. Read that
-file with the **Read tool** (or search it with **Grep**) — no re-run,
-no redirect needed.
+```
+[embo-capture] truncated — <N> lines, <M> bytes. Full output:
+  <path>  (exit=<code>)
+```
 
-**Redirect to a file for one reason only:** to keep the output as a
-reusable **artifact** (to feed another command, or re-read it) — not
-because it might be large. When you do, write one allow-listed command
-redirected to the project scratch dir, with nothing chained after it,
-so the approval hook can allow it silently. Keep that dir out of
-version control; captured output can hold secrets.
+When you see that marker: the command already ran once, the full output
+is at `<path>`, and its real exit code is `<code>`. **Read that file**
+with the Read tool (offset/limit for a slice) or search it with Grep.
+**Never re-run the command** to see more — the file already has
+everything.
 
 **Do not:**
 - Pipe a command **whose success you are checking** into `| tail` /
   `| head` / `; wc`. The pipeline reports the filter's exit code, not
   the command's, so a failure reads as a pass. (Piping is fine when you
   are not checking the exit code — e.g. `git log --oneline | head -5`.)
-- Conclude success from a clean-looking truncated tail. Assume the
-  command failed until its exit code proves otherwise.
+- Conclude success from a clean-looking truncated tail. The `[embo-
+  capture]` marker carries the true `(exit=<code>)`; trust that, and
+  assume failure until the exit code proves otherwise.
 
 <!-- RULE:DECIDE-OR-ASK -->
 ### Decide what you can; ask only about genuine blockers

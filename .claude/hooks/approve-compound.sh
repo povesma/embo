@@ -190,6 +190,68 @@ decide() {
   echo "allow"
 }
 
+# --- 028 capture wrapper integration ---
+
+# The command the rewrite invokes. Defaults to the installed wrapper
+# path; overridable in tests. The re-entrancy guard and the allow-rule
+# both key off the stable `embo-capture.sh` token in this string.
+EMBO_CAPTURE_CMD="${EMBO_CAPTURE_CMD:-~/.claude/hooks/embo-capture.sh}"
+
+# Heads whose output is interactive or streaming: wrapping would buffer
+# (hang) or hide live output. Left unwrapped. Extend as needed.
+CAPTURE_NOWRAP_HEADS="ssh sftp scp telnet vim vi nano emacs less more man \
+top htop watch tail-f ftp mysql psql redis-cli sqlite3 python python3 node \
+irb pry bash sh zsh fish docker-attach kubectl-exec npm-run-dev yarn-dev"
+
+# has_redirect <command> -> "yes" | "no"  (any >, >>, &>, < redirect)
+has_redirect() {
+  case "$1" in
+    *'>'*|*'<'*) echo "yes" ;;
+    *) echo "no" ;;
+  esac
+}
+
+# is_interactive_head <normalized-subcommand> -> "yes" | "no"
+is_interactive_head() {
+  local head; head="$(printf '%s' "$1" | awk '{print $1}')"
+  # `tail -f` is the streaming case; treat any tail with -f specially.
+  case "$1" in
+    tail\ *-f*|*' -f '*tail*) echo "yes"; return ;;
+  esac
+  case " $CAPTURE_NOWRAP_HEADS " in
+    *" $head "*) echo "yes"; return ;;
+  esac
+  echo "no"
+}
+
+# should_wrap <command> -> "yes" | "no"
+# Wrap an allowed command for output capture UNLESS:
+#  - it is already an embo-capture call (re-entrancy guard, FIRST),
+#  - it already redirects (model owns its output target),
+#  - its (single) head is interactive/streaming,
+#  - it is compound (pipe/&&/||/; ) — capturing a pipeline's tail is
+#    ambiguous; leave compound commands to run as-is.
+should_wrap() {
+  local cmd="$1"
+  case "$cmd" in
+    *embo-capture.sh\ *) echo "no"; return ;;      # re-entrancy guard
+  esac
+  [ "$(has_redirect "$cmd")" = "yes" ] && { echo "no"; return; }
+  [ "$(is_unsafe "$cmd")" = "bail" ] && { echo "no"; return; }
+  # compound? more than one subcommand -> do not wrap
+  local n; n="$(split_subcommands "$cmd" | grep -c '^')"
+  [ "$n" -gt 1 ] && { echo "no"; return; }
+  [ "$(is_interactive_head "$(normalize_subcommand "$cmd")")" = "yes" ] \
+    && { echo "no"; return; }
+  echo "yes"
+}
+
+# wrap_command <command> -> <wrapper> --b64 <base64-of-command>
+wrap_command() {
+  printf '%s --b64 %s' "$EMBO_CAPTURE_CMD" \
+    "$(printf '%s' "$1" | base64 | tr -d '\n')"
+}
+
 # --- Main (only when executed directly, not when sourced by tests) ---
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
   set -uo pipefail
@@ -203,13 +265,24 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
   PROJ="$(printf '%s' "$INPUT" | jq -r '.cwd // empty' 2>/dev/null)" || exit 0
   [ -n "$PROJ" ] || PROJ="$PWD"
 
+  # Re-entrancy guard FIRST: never touch an already-wrapped command.
+  case "$CMD" in
+    *embo-capture.sh\ *) exit 0 ;;
+  esac
+
   STRIPPED="$(strip_redundant_tail "$CMD")"
   DECISION="$(decide "$STRIPPED" "$PROJ")"
   case "$DECISION" in
     allow)
-      if [ "$STRIPPED" != "$CMD" ]; then
-        # Rewrite: run the command without its redundant capture tail.
-        jq -n --arg c "$STRIPPED" '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"allow",updatedInput:{command:$c}}}'
+      # Order: tail already stripped; now consider wrapping the survivor
+      # for output capture. Wrap only an eligible (non-redirect, simple,
+      # non-interactive) command. The emitted command is the final one.
+      FINAL="$STRIPPED"
+      if [ "$(should_wrap "$STRIPPED")" = "yes" ]; then
+        FINAL="$(wrap_command "$STRIPPED")"
+      fi
+      if [ "$FINAL" != "$CMD" ]; then
+        jq -n --arg c "$FINAL" '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"allow",updatedInput:{command:$c}}}'
       else
         jq -n '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"allow"}}'
       fi
