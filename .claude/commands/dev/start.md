@@ -126,11 +126,22 @@ can be discarded.
 - Read the command's own exit code — the harness returns it to you
   natively. Do NOT append `; echo $?`; it is redundant and the chained
   `echo` can trigger a permission prompt
-- For large output, redirect to an **in-project** scratch file and read
-  it: `cmd > tmp/out.log 2>&1` — the full record survives and the true
-  exit code is still returned natively. Use the project-relative `tmp/`
-  dir (gitignored), never the absolute `/tmp` (an off-workspace write
-  trips the filesystem sandbox and prompts)
+- For large output, redirect to an **in-project** scratch file under a
+  project-relative dir (e.g. `tmp/`), never the absolute `/tmp` (an
+  off-workspace write trips the filesystem sandbox and prompts). The
+  scratch dir **must be excluded from version control** — captured
+  output can contain secrets or internal data. Before writing, confirm
+  the dir is in the project's `.gitignore`; if not, add it (or pick a
+  path the project already ignores). Two cases — pick the redirect to
+  match the purpose:
+  - **Diagnose** (did it work? what went wrong?): keep stderr —
+    `cmd > tmp/out.log 2>&1` — then Read the file for the error lines.
+  - **Extract a value to reuse** (e.g. capture YAML to feed another
+    command): stdout only, **no `2>&1`** — `cmd > tmp/value.yaml` —
+    so stderr is not mixed into the data. Then Read the file.
+  In both cases the true exit code is returned natively. Read the slice
+  you need — **never `cat` the whole file back into the conversation**;
+  that re-floods context and defeats the point of capturing to a file.
 - When a command fails, read the lines that explain why — the first
   error or the stack trace — not only the last few lines
 

@@ -39,6 +39,56 @@ strip_redirects() {
     -e 's/[[:space:]]*<[[:space:]]*[^[:space:]|&;]+//g'
 }
 
+# --- strip_redundant_tail <command> -> command with reflexive tail removed ---
+# Removes a trailing `; echo "exit=$?"` / `; echo exit=$?` and/or a
+# trailing `; cat <file>` when <file> equals the redirect target of a
+# `>`/`>>` in the command head. Leaves the command unchanged otherwise.
+# The exit code is returned natively; the cat-back re-floods context.
+strip_redundant_tail() {
+  local cmd="$1" target seg head rest changed=1
+
+  # Capture the first redirect target (`> file` or `>> file`). If none,
+  # there is no captured file, so a trailing cat is not a redundant
+  # read-back — leave the command alone.
+  target="$(printf '%s' "$cmd" | sed -nE 's/.*[^0-9]>>?[[:space:]]*([^[:space:];|&]+).*/\1/p')"
+
+  while [ "$changed" = "1" ]; do
+    changed=0
+    # Last `;`-separated segment and the head before it.
+    case "$cmd" in
+      *\;*)
+        seg="${cmd##*;}"
+        head="${cmd%;*}"
+        ;;
+      *) break ;;
+    esac
+    # Trim surrounding whitespace from the candidate segment.
+    seg="$(printf '%s' "$seg" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+
+    # Strip a reflexive exit-code echo.
+    case "$seg" in
+      'echo "exit=$?"'|"echo 'exit=\$?'"|'echo exit=$?'|'echo "exit=${?}"'|'echo $?'|'echo "$?"')
+        cmd="$(printf '%s' "$head" | sed -E 's/[[:space:]]+$//')"
+        changed=1
+        continue
+        ;;
+    esac
+
+    # Strip a cat of the captured redirect target.
+    if [ -n "$target" ]; then
+      case "$seg" in
+        "cat $target")
+          cmd="$(printf '%s' "$head" | sed -E 's/[[:space:]]+$//')"
+          changed=1
+          continue
+          ;;
+      esac
+    fi
+  done
+
+  printf '%s' "$cmd"
+}
+
 # --- normalize_subcommand <subcommand> -> bare cmd+args ---
 # Strips trailing I/O redirections, leading env-var assignments, and
 # leading process wrappers. Leaves the bare command and its arguments.
@@ -153,10 +203,16 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
   PROJ="$(printf '%s' "$INPUT" | jq -r '.cwd // empty' 2>/dev/null)" || exit 0
   [ -n "$PROJ" ] || PROJ="$PWD"
 
-  DECISION="$(decide "$CMD" "$PROJ")"
+  STRIPPED="$(strip_redundant_tail "$CMD")"
+  DECISION="$(decide "$STRIPPED" "$PROJ")"
   case "$DECISION" in
     allow)
-      jq -n '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"allow"}}'
+      if [ "$STRIPPED" != "$CMD" ]; then
+        # Rewrite: run the command without its redundant capture tail.
+        jq -n --arg c "$STRIPPED" '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"allow",updatedInput:{command:$c}}}'
+      else
+        jq -n '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"allow"}}'
+      fi
       ;;
     deny)
       jq -n '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:"a subcommand matches a deny rule"}}'
