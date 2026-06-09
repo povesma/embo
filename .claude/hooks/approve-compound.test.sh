@@ -137,5 +137,84 @@ assert_eq "allow emits allow" "allow" \
   "$(printf '%s' "$_OUT" | jq -r '.hookSpecificOutput.permissionDecision')"
 rm -rf "$_TMPH2"
 
+# ---- 3.2 strip redundant capture tail ----
+# strip_redundant_tail <command> -> command with a trailing
+#   `; echo "exit=$?"` and/or `; cat <same-file>` removed, where
+#   <same-file> equals the redirect target of a `>`/`>>` in the head.
+# Leaves the command unchanged when the shape does not match.
+
+assert_eq "strip echo exit only" \
+  'ls > tmp/x.log 2>&1' \
+  "$(strip_redundant_tail 'ls > tmp/x.log 2>&1; echo "exit=$?"')"
+
+assert_eq "strip echo bare exit" \
+  'ls > tmp/x.log 2>&1' \
+  "$(strip_redundant_tail 'ls > tmp/x.log 2>&1; echo exit=$?')"
+
+assert_eq "strip cat same file" \
+  'ls > tmp/x.log 2>&1' \
+  "$(strip_redundant_tail 'ls > tmp/x.log 2>&1; cat tmp/x.log')"
+
+assert_eq "strip echo then cat same" \
+  'ls > tmp/x.log 2>&1' \
+  "$(strip_redundant_tail 'ls > tmp/x.log 2>&1; echo "exit=$?"; cat tmp/x.log')"
+
+assert_eq "strip with >> redirect" \
+  'ls >> tmp/x.log' \
+  "$(strip_redundant_tail 'ls >> tmp/x.log; cat tmp/x.log')"
+
+assert_eq "strip stdout-only redirect" \
+  'kubectl get cm > tmp/v.yaml' \
+  "$(strip_redundant_tail 'kubectl get cm > tmp/v.yaml; cat tmp/v.yaml')"
+
+# left alone: cat of a DIFFERENT file
+assert_eq "keep cat other file" \
+  'ls > tmp/x.log 2>&1; cat tmp/other.log' \
+  "$(strip_redundant_tail 'ls > tmp/x.log 2>&1; cat tmp/other.log')"
+
+# left alone: no redirect in head (cat is not a redundant read-back)
+assert_eq "keep cat no redirect" \
+  'cat tmp/x.log' \
+  "$(strip_redundant_tail 'cat tmp/x.log')"
+
+# left alone: plain command, no tail
+assert_eq "keep plain command" \
+  'ls -la' \
+  "$(strip_redundant_tail 'ls -la')"
+
+# left alone: echo that is not the exit-code reflex
+assert_eq "keep real echo" \
+  'ls > tmp/x.log 2>&1; echo done' \
+  "$(strip_redundant_tail 'ls > tmp/x.log 2>&1; echo done')"
+
+# ---- 3.3 / 3.4 rewrite emits updatedInput when head is allowed ----
+# When the stripped head is allow-listed, the hook emits
+# permissionDecision allow + updatedInput.command = stripped command.
+_TMPH3="$(mktemp -d)"; mkdir -p "$_TMPH3/.claude"
+printf '{"permissions":{"allow":["Bash(ls *)"]}}' > "$_TMPH3/.claude/settings.json"
+
+_OUT3="$(HOME="$_TMPH3" run_hook '{"tool_name":"Bash","tool_input":{"command":"ls -la > tmp/x.log 2>&1; echo \"exit=$?\"; cat tmp/x.log"},"cwd":"/nope"}')"
+assert_eq "tail rewrite emits allow" "allow" \
+  "$(printf '%s' "$_OUT3" | jq -r '.hookSpecificOutput.permissionDecision')"
+assert_eq "tail rewrite strips tail" "ls -la > tmp/x.log 2>&1" \
+  "$(printf '%s' "$_OUT3" | jq -r '.hookSpecificOutput.updatedInput.command')"
+rm -rf "$_TMPH3"
+
+# ---- 3.5 safety: head not allowed -> no rewrite, fall through ----
+_TMPH4="$(mktemp -d)"; mkdir -p "$_TMPH4/.claude"
+printf '{"permissions":{"allow":["Bash(ls *)"]}}' > "$_TMPH4/.claude/settings.json"
+# kubectl is NOT allowed: must fall through (no stdout), NOT rewrite-allow
+assert_eq "unallowed head -> no stdout" "" \
+  "$(HOME="$_TMPH4" run_hook '{"tool_name":"Bash","tool_input":{"command":"kubectl get cm > tmp/v.yaml; cat tmp/v.yaml"},"cwd":"/nope"}')"
+rm -rf "$_TMPH4"
+
+# ---- 3.5 safety: deny still wins even with a strippable tail ----
+_TMPH5="$(mktemp -d)"; mkdir -p "$_TMPH5/.claude"
+printf '{"permissions":{"allow":["Bash(ls *)"],"deny":["Bash(rm *)"]}}' > "$_TMPH5/.claude/settings.json"
+_OUT5="$(HOME="$_TMPH5" run_hook '{"tool_name":"Bash","tool_input":{"command":"rm -rf x > tmp/x.log 2>&1; cat tmp/x.log"},"cwd":"/nope"}')"
+assert_eq "deny wins over tail strip" "deny" \
+  "$(printf '%s' "$_OUT5" | jq -r '.hookSpecificOutput.permissionDecision')"
+rm -rf "$_TMPH5"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
