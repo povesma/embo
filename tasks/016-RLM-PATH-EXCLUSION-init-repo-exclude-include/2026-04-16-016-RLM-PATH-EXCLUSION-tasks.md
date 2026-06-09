@@ -85,22 +85,30 @@
     `_is_binary_file` (around line 318)
     [verify: auto-test]
     → 13 passed [live] (2026-04-17)
-  - [ ] 1.5 Write failing tests for `**` recursion (`html/**`
+  - [X] 1.5 Write failing tests for `**` recursion (`html/**`
     matches `html/a.php`, `html/vendor/core/x.php`, NOT
     `htmlfoo/a.php`; `**/node_modules/**` matches at any depth)
     [verify: auto-test]
-  - [ ] 1.6 Extend `_compile_pattern` to translate `**` to the
+    → tests present in test_path_filter.py (double_star group,
+      lines 69–93); full suite 97 passed, exit 0 [live] (2026-06-07)
+  - [X] 1.6 Extend `_compile_pattern` to translate `**` to the
     zero-or-more-segments regex token until 1.5 tests pass
     [verify: auto-test]
-  - [ ] 1.7 Write failing tests for bracket classes (`[abc]`,
+    → `**`/`**/` handling implemented in `_translate_core`
+      (rlm_repl.py:352–365); 97 passed [live] (2026-06-07)
+  - [X] 1.7 Write failing tests for bracket classes (`[abc]`,
     `[a-z]`, `[!xyz]`) within a single segment; confirm
     `[abc].py` matches `a.py`/`b.py`/`c.py`, not `d.py`
     [verify: auto-test]
-  - [ ] 1.8 Extend `_compile_pattern` to support bracket
+    → bracket-class tests present (test_path_filter.py:102–126,
+      217); 97 passed [live] (2026-06-07)
+  - [X] 1.8 Extend `_compile_pattern` to support bracket
     expressions per segment (reuse `fnmatch.translate` on a
     single segment or handwrite the class handling) until 1.7
     passes
     [verify: auto-test]
+    → bracket-class translation implemented in `_translate_core`
+      (rlm_repl.py:335,403); 97 passed [live] (2026-06-07)
   - [X] 1.9 Write failing tests for anchoring: leading `/`
     anchors to repo root (`/html` matches `html`, not
     `docs/html`); patterns with internal `/` anchor to repo

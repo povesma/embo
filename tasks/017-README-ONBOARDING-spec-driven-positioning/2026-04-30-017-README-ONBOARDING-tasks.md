@@ -352,28 +352,38 @@
     completed in ≤ 5 minutes and any friction points
     [verify: manual-run-user]
 
-- [~] 7.0 **User Story:** As a contributor opening this
+- [X] 7.0 **User Story:** As a contributor opening this
   branch a week from now, I want the working tree clean
   (only task-017 files staged) and the branch pushed, so
-  that handoff is unambiguous [0/4]
+  that handoff is unambiguous [4/4]
     > **UN-DEFERRED 2026-05-05** per user instruction:
     > "Un-defer Task 7. Commit task-017 artifacts, and
     > then let's check what else is changed and decide if
     > we commit it now". Earlier 04-30 deferral lifted.
-  - [ ] 7.1 Stage ONLY task-017 artifacts (do NOT stage
+    > **COMPLETED**: artifacts committed as `450832b`,
+    > pushed and merged via PR #12 (`10224b8`); follow-up
+    > `29af737` recorded the open Story 6.0 items. Working
+    > tree confirmed clean for task-017 files [live] (2026-06-07).
+  - [X] 7.1 Stage ONLY task-017 artifacts (do NOT stage
     pre-existing dirty files like task-009 prose or the
     prd.md/tech-design.md edits from the earlier evidence-
     discipline session)
     [verify: code-only]
-  - [ ] 7.2 Compose conventional-style commit message:
+    → committed in `450832b`; `git status` shows no
+      uncommitted task-017/README/WHY files [live] (2026-06-07)
+  - [X] 7.2 Compose conventional-style commit message:
     `docs(017): restructure README for spec-driven
     positioning, add evidence dossier and architecture
     diagram prompt`
     [verify: code-only]
-  - [ ] 7.3 Push branch to origin
+    → commit `450832b` subject matches the planned message
+      [live] (2026-06-07)
+  - [X] 7.3 Push branch to origin
     [verify: manual-run-user]
-  - [ ] 7.4 Open PR and capture URL
+    → merged to main via PR #12 as `10224b8` [live] (2026-06-07)
+  - [X] 7.4 Open PR and capture URL
     [verify: manual-run-user]
+    → PR #12 opened and merged (`10224b8`) [live] (2026-06-07)
 
 - [X] 8.0 **User Story:** As a maintainer, I want every
   reference to `/dev:improve` removed from user-facing docs
