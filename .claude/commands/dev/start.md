@@ -113,54 +113,37 @@ reader can take each word at face value.
 - Reach for a colorful word when a plain one says the same thing
 
 <!-- RULE:REDIRECT-CMD-OUTPUT -->
-### Do not hide a command's exit code or error output
+### Run commands plainly; let the harness save large output
 
-When you run a command to learn whether it worked, the exit code and
-the error text are the result. A pipeline returns the exit code of its
-last stage, so piping such a command into `tail` or `head` replaces the
-command's exit code with the filter's — which almost always succeeds.
-A failure then reads as a pass, and the lines that explain the failure
-can be discarded.
+A command's exit code and error text are the result of running it. Do
+not mask them.
 
-**Do:**
-- Read the command's own exit code — the harness returns it to you
-  natively. Do NOT append `; echo $?`; it is redundant and the chained
-  `echo` can trigger a permission prompt
-- For large output, redirect to an **in-project** scratch file under a
-  project-relative dir (e.g. `tmp/`), never the absolute `/tmp` (an
-  off-workspace write trips the filesystem sandbox and prompts). The
-  scratch dir **must be excluded from version control** — captured
-  output can contain secrets or internal data. Before writing, confirm
-  the dir is in the project's `.gitignore`; if not, add it (or pick a
-  path the project already ignores). Two cases — pick the redirect to
-  match the purpose:
-  - **Diagnose** (did it work? what went wrong?): keep stderr —
-    `cmd > tmp/out.log 2>&1` — then Read the file for the error lines.
-  - **Extract a value to reuse** (e.g. capture YAML to feed another
-    command): stdout only, **no `2>&1`** — `cmd > tmp/value.yaml` —
-    so stderr is not mixed into the data. Then Read the file.
-  In both cases the true exit code is returned natively. Read the slice
-  you need — **never `cat` the whole file back into the conversation**;
-  that re-floods context and defeats the point of capturing to a file.
-- When a command fails, read the lines that explain why — the first
-  error or the stack trace — not only the last few lines
+**Run one plain command, once.** The harness returns its output and
+exit code to you directly. A bare command is allow-listed and runs with
+no prompt; adding a redirect, a chain, a pipe, or `$(...)` is shell the
+permission engine cannot analyze, so it prompts — and buys nothing for
+output you could just read.
+
+**Do not predict output size, and never re-run a command to re-see its
+output.** When output is too large to show inline, the harness has
+already saved the full text to a file and printed the path. Read that
+file with the **Read tool** (or search it with **Grep**) — no re-run,
+no redirect needed.
+
+**Redirect to a file for one reason only:** to keep the output as a
+reusable **artifact** (to feed another command, or re-read it) — not
+because it might be large. When you do, write one allow-listed command
+redirected to the project scratch dir, with nothing chained after it,
+so the approval hook can allow it silently. Keep that dir out of
+version control; captured output can hold secrets.
 
 **Do not:**
-- Pipe a command **whose success you are checking** into `| tail`,
-  `| head`, or `; wc` — the pipeline reports the filter's exit code, not
-  the command's, so a failure reads as a pass, and the error line can be
-  pushed out of the window. (Piping is fine when the output is known and
-  predictable and you are not relying on the exit code — e.g.
-  `git log --oneline | head -5`.)
-- Re-run a command just to re-see its output. Capture once to
-  `tmp/out.log`, then read it as many times as you need
-- Conclude a command succeeded from a clean-looking truncated tail.
-  Assume it failed until the exit code proves otherwise
-
-Once output is captured to a file, prefer the **Read tool** (offset/
-limit for a slice) or the **Grep tool** (to search) over a second shell
-command: they inspect the existing file without running new Bash, so
-there is no prompt and no risk of re-executing the original command.
+- Pipe a command **whose success you are checking** into `| tail` /
+  `| head` / `; wc`. The pipeline reports the filter's exit code, not
+  the command's, so a failure reads as a pass. (Piping is fine when you
+  are not checking the exit code — e.g. `git log --oneline | head -5`.)
+- Conclude success from a clean-looking truncated tail. Assume the
+  command failed until its exit code proves otherwise.
 
 <!-- RULE:DECIDE-OR-ASK -->
 ### Decide what you can; ask only about genuine blockers
@@ -230,9 +213,15 @@ call below MUST pass `project` scoped to the current project. This is a
 correctness and confidentiality requirement, not a preference — do not
 omit it, and do not rely on a CLAUDE.md reminder to add it.
 
-Determine the project name = the **basename of the project root
-directory** (for this launch, the current working directory's repo
-root). Use that string as `project` in every call.
+The project name is the last path segment of the **working directory
+you were launched in** — already shown in your environment as
+`Primary working directory` (e.g. `/Users/.../embo` → `embo`). Take it
+from there directly; it needs no command. Use that string as `project`
+in every call. (claude-mem keys observations by this segment, so two
+repos with the same final segment — `/home/embo` and `/var/embo` —
+share one memory scope. This is a known claude-mem limitation; the read
+scope must match the segment used at capture, so do not substitute a
+full path here.)
 
 ```
 mcp__plugin_claude-mem_mcp-search__search(query="project overview goals architecture", project="<project-name>", limit=5)
