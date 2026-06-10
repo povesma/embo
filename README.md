@@ -400,9 +400,43 @@ available, register them manually as shown in the disable column / the
 | `context-guard.sh` | `UserPromptSubmit` | Warns when context window is ≥ threshold before new dev work | Set `CONTEXT_GUARD_THRESHOLD=101` in `settings.json` env |
 | `behavioral-reminder.sh` | `UserPromptSubmit` | Injects rule tag reminders before each prompt; targeted on criticism, implementation, and git requests | Set `BEHAVIORAL_REMINDER_DISABLED=1` in `settings.json` env |
 | `approve-compound.sh` | `PreToolUse` (Bash) | Auto-approves a Bash command when every subcommand (after stripping redirects/env/wrappers, splitting on `&& \|\| ; \| &`) already matches your `permissions.allow` and none matches `deny`. Removes the prompt that a redirect or pipe otherwise triggers. Falls through to the normal prompt on anything it cannot parse; never overrides `deny` or protected-dir checks | Remove the `PreToolUse` matcher from `settings.json` |
+| `embo-capture.sh` | (invoked by `approve-compound.sh`, not registered as a hook) | Output capture wrapper: approved commands are rewritten to run through it; full output is saved to `tmp/cap/` in your project, small output prints inline, large output prints a preview plus a `[embo-capture]` marker with the file path and real exit code | Remove the `approve-compound.sh` registration (wrapping is part of its rewrite) |
 
-Both hooks fail open - any error exits silently with code 0 and never
+All hooks fail open - any error exits silently with code 0 and never
 blocks Claude from responding.
+
+#### approve-compound + embo-capture setup
+
+`install.sh` performs these steps; to replicate manually:
+
+1. Copy both scripts:
+   `cp .claude/hooks/approve-compound.sh .claude/hooks/embo-capture.sh ~/.claude/hooks/`
+2. Register the PreToolUse hook in `~/.claude/settings.json`:
+   ```json
+   "hooks": {
+     "PreToolUse": [
+       { "matcher": "Bash",
+         "hooks": [ { "type": "command",
+                      "command": "bash ~/.claude/hooks/approve-compound.sh" } ] }
+     ]
+   }
+   ```
+3. Add the wrapper allow-rule to `permissions.allow` in the same file:
+   ```json
+   "Bash(~/.claude/hooks/embo-capture.sh *)"
+   ```
+   Without it, rewritten commands fail allowlist matching and the
+   prompts come back.
+
+**Your allowlist stays yours.** The hook only auto-approves commands
+whose every segment already matches *your* `permissions.allow` rules.
+embo ships no allowlist beyond the wrapper rule above — what runs
+without prompting is entirely the user's decision. Compound commands
+(`&&`, `||`, `;`, `|`) are approved segment-by-segment and captured
+as one unit; `$(...)`, backticks, heredocs, backgrounded (`&`) and
+interactive commands (`ssh`, `vim`, `sudo`, ...) are never
+auto-wrapped, and unparseable commands always fall back to the
+normal permission prompt.
 
 #### context-guard rationale
 

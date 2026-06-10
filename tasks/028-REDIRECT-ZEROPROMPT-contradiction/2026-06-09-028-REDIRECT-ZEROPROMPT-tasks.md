@@ -1,235 +1,234 @@
-# 028-REDIRECT-ZEROPROMPT-contradiction - Task List
+# 028 Bash output capture wrapper - Task List
 
 ## Relevant Files
 
-- [tasks/028-REDIRECT-ZEROPROMPT-contradiction/
-  2026-06-09-028-REDIRECT-ZEROPROMPT-tech-design.md](
-  2026-06-09-028-REDIRECT-ZEROPROMPT-tech-design.md)
-  :: Technical Design (problem, two-gate root cause, resolution)
-- [.claude/commands/dev/start.md](../../.claude/commands/dev/start.md)
-  :: MODIFY — rewrite the `<!-- RULE:REDIRECT-CMD-OUTPUT -->` block
-  (lines 115-144)
-- [.gitignore](../../.gitignore)
-  :: REFERENCE — `tmp/` already reserved at line 33; no change
+- [tasks/028-REDIRECT-ZEROPROMPT-contradiction/2026-06-09-028-REDIRECT-ZEROPROMPT-tech-design.md](2026-06-09-028-REDIRECT-ZEROPROMPT-tech-design.md)
+  :: Technical Design — the auto-capture wrapper mechanism, marker
+  contract, acceptance criteria, opt-outs.
+- [.claude/hooks/embo-capture.sh](../../.claude/hooks/embo-capture.sh)
+  :: NEW — the capture wrapper: run cmd, tee full output to a per-call
+  scratch file, preserve exit code, print inline-or-marker.
+- [.claude/hooks/embo-capture.test.sh](../../.claude/hooks/embo-capture.test.sh)
+  :: NEW — plain-bash unit tests for the wrapper.
 - [.claude/hooks/approve-compound.sh](../../.claude/hooks/approve-compound.sh)
-  :: MODIFY (Story 3) — strip the reflexive `; echo "exit=$?"` /
-  `; cat <same-file>` tail before permission matching so the habit
-  cannot cause a prompt or a cat-back-into-context
+  :: MODIFY — add the capture rewrite (PreToolUse `updatedInput`),
+  coordinated with the existing reflexive-tail strip (one rewriter).
+- [.claude/hooks/approve-compound.test.sh](../../.claude/hooks/approve-compound.test.sh)
+  :: MODIFY — tests for capture-rewrite, opt-out skips, ordering.
+- [install.sh](../../install.sh)
+  :: MODIFY — ship wrapper, add `Bash(embo-capture *)` allow-rule,
+  register/confirm hook; idempotent; manual fallback documented.
+- [.claude/commands/dev/start.md](../../.claude/commands/dev/start.md)
+  :: MODIFY — collapse RULE:REDIRECT-CMD-OUTPUT to marker-based reading.
+- [.gitignore](../../.gitignore)
+  :: REFERENCE — scratch dir `tmp/` already covered (line 33); confirm.
 
 ## Notes
 
-- **PARTIALLY SUPERSEDED 2026-06-09** by the Task 024 rework (see
-  `tasks/024-REDIRECT-CMD-OUTPUT-rule/2026-06-09-024-REDIRECT-CMD-OUTPUT-rework-tech-design.md`).
-  The harness auto-persists oversized output to `…/tool-results/<id>.txt`
-  on the first run, so manual redirect is no longer the general way to
-  handle large output — the rule now says "run plain, read the saved
-  file." The canonical `<cmd> > tmp/<name>.log 2>&1` shape below
-  survives **only** for the narrow case of producing a reusable
-  artifact, not as the default. The Story 3 hook work
-  (reflexive-tail stripping in `approve-compound.sh`) is unaffected and
-  remains the mechanism that keeps the artifact redirect prompt-free.
-- Doc/rule-text change only. No code, no test suite, TDD not applicable.
-- The only files touched: `start.md`. `.gitignore`,
-  `approve-compound.sh`, `behavioral-reminder.sh`, and README need no
-  change (per tech-design Change section).
-- Canonical shape the rule must teach: `<cmd> > tmp/<name>.log 2>&1`
-  (in-project, no chaining), then inspect with the Read/Grep tools.
-- Cross-version sandbox check from the tech-design is dropped: the
-  filesystem sandbox is path-based and predates the redirect-matching
-  changelog, so in-project clearance is not version-dependent.
-- EVIDENCE (2026-06-09): the written rule does NOT stop the
-  `<cmd> > file 2>&1; echo "exit=$?"; cat file` reflex. Observed three
-  times in one external session; the agent quoted the rule correctly
-  while violating it. Conclusion: instruction is insufficient for this
-  pattern — enforcement must be structural. Captured as Story 3.0
-  (no new PRD; this is the same concern as Stories 1-2).
+- **Bash + jq only**, fail-open (`trap 'exit 0' ERR`), matching the
+  existing hooks. No new runtime deps (CLAUDE.md stdlib constraint).
+- RLM complexity estimation skipped — RLM not initialized for this repo
+  this session. Effort modeled on the reflexive-tail-strip work (Story 3
+  of the superseded plan): same hook, same test harness, same
+  `updatedInput` mechanism, built TDD with 61 passing tests.
+- **Single-rewriter constraint** (tech-design Key risk): the capture
+  rewrite and the existing tail-strip both emit `updatedInput` for Bash;
+  docs say the last rewriter wins non-deterministically when separate.
+  They MUST live in one hook with a defined order (strip tail first,
+  then wrap). This is why the work extends `approve-compound.sh` rather
+  than adding a second PreToolUse hook.
+- **Marker contract** (stable): first ~5 lines, then
+  `[embo-capture] truncated — <N> lines, <M> bytes. Full output:` /
+  `  <path>  (exit=<code>)`. Inline (no marker) when ≤10 lines AND
+  ≤300 bytes.
+- **Permission matching is against the rewritten command** — without the
+  `Bash(embo-capture *)` allow-rule every command prompts. Story 4 adds
+  it; Story 6 proves it.
+
+## TDD Planning Guidelines
+
+- The wrapper's size decision, exit-code preservation, and marker
+  formatting are pure logic → strict write-test-then-implement.
+- The hook's opt-out detection and rewrite emission are logic → TDD via
+  the existing `approve-compound.test.sh` harness.
+- Installer edits and `start.md` rule text are config/docs → `code-only`
+  plus a live check.
+- Run wrapper tests: `bash .claude/hooks/embo-capture.test.sh`.
+  Run hook tests: `bash .claude/hooks/approve-compound.test.sh`.
 
 ## Tasks
 
-- [X] 1.0 **User Story:** As a developer running any embo command, I
-  want the REDIRECT-CMD-OUTPUT rule to direct captured output to an
-  in-project scratch path and to inspect it via the Read/Grep tools, so
-  that capturing full output never triggers a permission prompt [4/4]
-  - [X] 1.1 In `start.md`, rewrite the **Do** list of the
-    `<!-- RULE:REDIRECT-CMD-OUTPUT -->` block: replace
-    `cmd > /tmp/out.log 2>&1; echo $?` with `cmd > tmp/out.log 2>&1`
-    (in-project `tmp/`, no chain); state the exit code is returned
-    natively so `echo $?` must NOT be appended
-    [verify: code-only]
-  - [X] 1.2 In the same block, replace "read the file" / pipe-to-filter
-    guidance: inspect the captured file with the **Read tool**
-    (offset/limit for slices) or **Grep tool** (search); the pipe-to-
-    filter ban is conditional (allowed when output is predictable and
-    exit code is not being checked)
-    [verify: code-only]
-  - [X] 1.3 Preserve the original lesson in the **Do not** list: a
-    filter's exit code must not mask a command failure, and the error
-    line must not be truncated away. Add one line: never redirect to an
-    off-workspace path such as `/tmp` (it trips the filesystem sandbox
-    and prompts); always use in-project `tmp/`
-    [verify: code-only]
-    → substance already delivered by 1.1 (off-workspace /tmp warning in
-      Do list) + 1.2 (exit-code-masking lesson kept in Do-not list);
-      this step softened the intro paragraph for consistency
-      ("such a command")
-  - [X] 1.4 Confirm the rewritten block contains `tmp/` and contains no
-    `/tmp`, no `; echo $?`, no `| tail`/`| head`/`; wc`
-    [verify: code-only]
-    → re-read block (start.md:115-152): `tmp/` present as recommended
-      target (130,131,145); `/tmp`, `; echo $?`, and the filter pipes
-      appear ONLY inside forbidding text or the one allowed exception
-      (`git log --oneline | head -5`); none recommended
-
-- [~] 2.0 **User Story:** As a developer, I want the corrected rule
-  verified live — an in-project redirect runs prompt-free and an
-  off-workspace redirect still prompts — so that I know both permission
-  gates behave as designed and the deny path is not weakened [2/3]
-  (2.1, 2.2 live-verified; 2.3 inconclusive — needs a fresh session)
-  - [X] 2.1 Run a command redirected to `tmp/<name>.log 2>&1` (no
-    chain) and confirm it executes with NO permission prompt
-    [verify: manual-run-claude]
-    → `git log --oneline -5 > tmp/out.log 2>&1` ran with no prompt;
-      `mkdir -p tmp` also no prompt (in-project paths) [live] (2026-06-09)
-  - [X] 2.2 Read a slice of that file with the Read tool and search it
-    with the Grep tool; confirm both run with NO prompt and do NOT
-    re-run the original command
-    [verify: manual-run-claude]
-    → Read tool showed tmp/out.log contents with no prompt and without
-      re-running git [live] (2026-06-09). Grep tool not available as a
-      standalone tool in this session; Read demonstrates the core claim
-      (inspect captured file, no prompt, no re-run) [simulated: Grep
-      unavailable]
-  - [~] 2.3 Confirm an off-workspace redirect (`> /tmp/x`) STILL prompts
-    — proves the filesystem-sandbox gate is intact, not weakened
-    [verify: manual-run-claude]
-    → INCONCLUSIVE: `git log ... > /tmp/embo-sandbox-check.log` ran
-      WITHOUT a prompt this session, but the session was contaminated —
-      an earlier "allow access to tmp/ from this project" click granted
-      a session-scoped /tmp allowance (not persisted to
-      settings.local.json). Earlier in THIS session, before that grant,
-      /tmp writes DID prompt (observed repeatedly). Must be re-run in a
-      fresh session to prove the sandbox gate is intact. [live: test
-      invalid due to session grant] (2026-06-09)
-
-- [X] 3.0 **User Story:** As a developer, I want the reflexive
-  `<cmd> > file 2>&1; echo "exit=$?"; cat file` tail stripped
-  structurally (not by instruction) so that the habit cannot cause a
-  permission prompt or cat the captured file back into context, even
-  when the agent ignores the written rule [5/5]
-    > Rationale: three live repeats show instruction alone does not
-    > bind this pattern (see Notes EVIDENCE). PreToolUse hooks can
-    > rewrite the command via `updatedInput` before the permission
-    > check; this is a new capability for our hooks (today they only
-    > allow/deny, never modify) — design it carefully.
-  - [X] 3.1 Decide and document the detection shape: a trailing
-    `; echo "exit=$?"` / `; echo exit=$?` and/or `; cat <path>` where
-    `<path>` equals the redirect target of the preceding `>`/`>>`.
-    Define precisely what is stripped vs left alone (e.g. `cat` of a
-    DIFFERENT file is left intact)
-    [verify: code-only]
-    → DESIGN (verified against official docs + current hook):
-    →
-    → JSON contract (Context7 /websites/code_claude): `updatedInput`
-      REQUIRES `permissionDecision:"allow"` in the same
-      hookSpecificOutput. So the hook may rewrite-and-allow ONLY when
-      the surviving head command is itself allow-listed. If the head is
-      NOT allowed, the hook MUST NOT rewrite-and-allow (that would
-      auto-approve an unallowed command); it falls through unchanged and
-      the command prompts normally.
-    →
-    → Detection target (the reflexive tail), matched on the ORIGINAL
-      command string, anchored at the END:
-      `<head> > <file> [2>&1] ; echo "exit=$?"` and/or `; cat <file>`
-      where the `cat` argument path EQUALS the redirect target of the
-      `>`/`>>` in <head>.
-    → Strip rules:
-      - strip a trailing `; echo "exit=$?"` / `; echo exit=$?` /
-        `; echo "exit=${?}"` segment (the exit code returns natively)
-      - strip a trailing `; cat <path>` ONLY when <path> == the
-        redirect target captured from <head>
-      - after stripping, the surviving command is `<head> > <file>
-        [2>&1]`
-    → Left ALONE (no rewrite, fall through unchanged):
-      - `; cat <other-file>` where path != redirect target
-      - no redirect present in <head> (nothing was captured, so cat is
-        not a redundant read-back)
-      - `$(...)`, backticks, heredoc anywhere → is_unsafe already bails
-      - middle-of-command echo/cat (only a trailing tail is stripped)
-    → Gate before emitting updatedInput:
-      1. run the existing decide() on the STRIPPED command
-      2. if decide()=="deny" → emit deny (unchanged behaviour)
-      3. if decide()=="allow" → emit updatedInput{command:stripped} +
-         permissionDecision:"allow"
-      4. if decide()=="fallthrough" → emit NOTHING (normal prompt on the
-         ORIGINAL command); do NOT rewrite, because we cannot allow it
-    → Safety: this never approves anything decide() would not already
-      approve; it only removes a redundant, prompt-/context-costing tail
-      from an already-approvable command. Deny still wins; protected dirs
-      and unallowed heads still prompt.
-  - [X] 3.2 Write failing tests in `approve-compound.test.sh` for the
-    transform: input with the reflexive tail → output command has the
-    tail removed; `cat` of an unrelated file → unchanged; no redirect
-    present → unchanged
+- [X] 1.0 **User Story:** As a developer, I want a capture wrapper that
+  runs any command, saves full output to a per-call scratch file,
+  preserves the real exit code, and prints inline-or-marker by the
+  ≤10-line/≤300-byte rule, so output is always recoverable without a
+  re-run [8/8]
+  - [X] 1.1 Write tests for exit-code pass-through: wrapper around a
+    command exiting N re-emits N (test N=0 and N!=0) [verify: auto-test]
+    → embo-capture.test.sh exit-code cases written; red run failed on
+      missing wrapper (127) [live] (2026-06-09)
+  - [X] 1.2 Implement the wrapper core: accept `--b64 <base64>`, decode,
+    run `bash -c "$decoded"`, tee full stdout+stderr to `tmp/cap/<id>.log`,
+    capture and re-emit `$?` (invocation contract in tech-design)
     [verify: auto-test]
-    → 12 new tests added (strip echo/cat variants, keep-unrelated,
-      keep-no-redirect, updatedInput emit-allow + stripped-command,
-      safety: unallowed-head no-stdout, deny-wins). Red run: 49 passed,
-      12 failed — all 12 fail on `strip_redundant_tail: command not
-      found`; pre-existing 49 unbroken; the two safety tests not
-      depending on the new fn already pass [live] (2026-06-09)
-  - [X] 3.3 Implement the strip in `approve-compound.sh`: emit
-    `updatedInput.command` with the tail removed when the shape matches;
-    fall through unchanged otherwise. Bash + jq only, fail-open
+    → exit 0/7/3-via-child all propagate [live] (2026-06-09)
+  - [X] 1.3 Write tests for the inline threshold: output ≤10 lines AND
+    ≤300 bytes prints verbatim with NO marker; >either prints marker
     [verify: auto-test]
-    → added `strip_redundant_tail` (after strip_redirects); main block
-      runs decide() on the stripped command and emits
-      updatedInput.command only when stripping changed it AND result is
-      allow. Green run: 61 passed, 0 failed (12 new + 49 existing)
-      [live] (2026-06-09)
-  - [X] 3.4 Live-verify: a command with the reflexive tail runs the
-    stripped form with no prompt and no cat-back; the original exit code
-    is still available natively
-    [verify: manual-run-claude]
-    → live hook invocation (stdin, kubectl allow-listed) on the exact
-      transcript pattern `kubectl get cm ... > tmp/run.yaml 2>&1; echo
-      "exit=$?"; cat tmp/run.yaml` → emitted permissionDecision:allow +
-      updatedInput.command:"kubectl get cm poll -o yaml > tmp/run.yaml
-      2>&1" (both tail segments stripped) [live] (2026-06-09)
-  - [X] 3.5 Confirm the transform does not weaken safety: a denied
-    subcommand in the head still blocks; an unrelated `cat` is not
-    stripped; protected-dir writes still prompt
-    [verify: manual-run-claude]
-    → live stdin invocations (rm denied, ls/kubectl-get allowed):
-      (1) `rm -rf x > tmp/x.log 2>&1; cat tmp/x.log` → deny;
-      (2) `ls > tmp/x.log 2>&1; cat tmp/other.log` → no stdout
-          (unrelated cat not stripped, not approved);
-      (3) `kubectl delete cm > tmp/d.log 2>&1; cat tmp/d.log` → no
-          stdout (unallowed head: no rewrite, normal prompt preserved)
+  - [X] 1.4 Implement the size decision + inline branch (print captured
+    output unchanged when under both limits) [verify: auto-test]
+    → small output inline no marker; 11 lines and >300 bytes both emit
+      marker; 10-line edge stays inline [live] (2026-06-09)
+  - [X] 1.5 Write tests for the marker branch: first ~5 lines present,
+    then the exact `[embo-capture] truncated — <N> lines, <M> bytes`
+    line, the path line, and `(exit=<code>)` [verify: auto-test]
+  - [X] 1.6 Implement the marker branch with the stable contract string
+    [verify: auto-test]
+    → marker carries prefix, line/byte counts, path, (exit=N) with real
+      code; preview is first lines only, not full output [live] (2026-06-09)
+  - [X] 1.7 Write tests for the per-call file: unique path, contains the
+    FULL output (more than the 5-line preview), survives for later Read
+    [verify: auto-test]
+  - [X] 1.8 Implement per-call file naming under `tmp/cap/`; create the
+    dir if missing [verify: auto-test]
+    → log holds first+last line of full output; two calls yield distinct
+      files; 22 passed, 0 failed [live] (2026-06-09)
+
+- [X] 2.0 **User Story:** As a developer, I want the PreToolUse Bash hook
+  to rewrite eligible commands through `embo-capture` via `updatedInput`,
+  coordinated with the existing reflexive-tail strip in one hook, so
+  capture is automatic and prompt-free [6/6]
+  - [X] 2.1 Write tests: an allow-listed plain command is rewritten to
+    `embo-capture <cmd>` via `updatedInput` + permissionDecision allow
+    [verify: auto-test]
+  - [X] 2.2 Implement the capture rewrite in `approve-compound.sh`: after
+    the existing decide()/strip logic, wrap the surviving command
+    [verify: auto-test]
+    → `ls -la` → updatedInput `embo-capture --b64 bHMgLWxh`, allow [live]
+      (2026-06-09)
+  - [X] 2.3 Write tests for ordering: a command WITH a reflexive tail is
+    first stripped, THEN wrapped — one final `updatedInput`, not two
+    competing rewrites [verify: auto-test]
+  - [X] 2.4 Implement the defined order (strip tail → wrap) so a single
+    `updatedInput` is emitted [verify: auto-test]
+    → `ls -la; echo "exit=$?"` → strip → wrap survivor `ls -la`; a
+      redirect-bearing survivor is stripped but not wrapped [live]
+      (2026-06-09)
+  - [X] 2.5 Write tests: a command whose head is NOT allow-listed is NOT
+    wrapped-and-allowed (falls through to a normal prompt; deny still
+    wins) [verify: auto-test]
+  - [X] 2.6 Implement the gate: only wrap-and-allow when decide() on the
+    bare head is allow; else fall through unchanged [verify: auto-test]
+    → unallowed `kubectl get cm` → no stdout (normal prompt preserved)
       [live] (2026-06-09)
 
-- [X] 4.0 **User Story:** As a developer extracting a value to reuse,
-  I want the REDIRECT-CMD-OUTPUT rule to distinguish diagnostic capture
-  from value extraction, so that I do not write stderr into a file I
-  then feed to another command [2/2]
-    > Surfaced 2026-06-09: the agent itself found that `> file 2>&1`
-    > into a YAML file later fed to `kubectl create` corrupts the data
-    > when stderr is present. The current rule only documents the
-    > `2>&1` diagnostic case.
-  - [X] 4.1 In the `start.md` REDIRECT-CMD-OUTPUT block, split the two
-    purposes: diagnose (did it work? — `> tmp/out.log 2>&1`, then Read
-    for errors) vs extract-a-value (clean stdout only — `> tmp/x.yaml`,
-    NO `2>&1`, then Read). State: never `cat` the whole captured file
-    back into the conversation — that defeats the purpose; Read the
-    slice you need
-    [verify: code-only]
-    → also corrected a confidentiality bug: removed the false
-      "(gitignored)" assertion (start.md ships into ANY project); the
-      rule now requires the scratch dir be excluded from VCS and tells
-      the agent to confirm/add the `.gitignore` entry before writing
-  - [X] 4.2 Confirm the block now contains both cases and an explicit
-    "do not cat the whole file back" line
-    [verify: code-only]
-    → re-read block (start.md:129-144): diagnose case (137-138),
-      extract-value no-2>&1 case (139-141), "never cat the whole file
-      back" (143), VCS-exclusion requirement (131-135) all present
+- [X] 3.0 **User Story:** As a developer, I want the hook to skip opt-out
+  commands (interactive/streaming, already-redirected, value-extraction)
+  so wrapping never hangs a command or corrupts reused data [8/8]
+  - [X] 3.0 Write tests: a command already beginning with `embo-capture`
+    is left unwrapped (re-entrancy guard — prevents infinite wrap)
+    [verify: auto-test]
+  - [X] 3.0b Implement the re-entrancy guard as the hook's FIRST check
+    (skip + fall through when already wrapped) [verify: auto-test]
+    → `embo-capture --b64 …` input → no stdout (not re-wrapped) [live]
+      (2026-06-09)
+  - [X] 3.1 Write tests: a command already containing `>`/`>>` is left
+    unwrapped [verify: auto-test]
+  - [X] 3.2 Implement the already-redirected skip [verify: auto-test]
+    → `ls -la > tmp/keep.log 2>&1` → allow, no updatedInput (unwrapped)
+      [live] (2026-06-09)
+  - [X] 3.3 Write tests: known interactive/streaming heads (e.g. a
+    configurable deny-wrap list — `ssh`, `vim`, `less`, `tail -f`, dev
+    servers) are left unwrapped [verify: auto-test]
+  - [X] 3.4 Implement the interactive/streaming skip via a maintainable
+    no-wrap list; document how to extend it [verify: auto-test]
+    → `ssh host` → allow, no updatedInput (CAPTURE_NOWRAP_HEADS list)
+      [live] (2026-06-09)
+  - [X] 3.5 Write tests: when classification is uncertain the command is
+    left UNWRAPPED (conservative default — never hang) [verify: auto-test]
+  - [X] 3.6 Implement the conservative default and confirm value-
+    extraction (stdout-as-data) commands are not forced through `2>&1`
+    [verify: auto-test]
+    → compound/unsafe/`$()` commands fall through unwrapped; only
+      simple single non-redirect non-interactive heads are wrapped; 70
+      passed, 0 failed [live] (2026-06-09)
 
+- [X] 4.0 **User Story:** As a developer, I want `install.sh` to ship the
+  wrapper, add the allow-rule, and register the hook idempotently with a
+  documented manual fallback, so a fresh install is prompt-free out of
+  the box [3/3]
+  - [X] 4.1 Add wrapper copy + `chmod +x` to `install.sh` (alongside the
+    other hooks; exclude `*.test.sh`) [verify: code-only]
+    → existing hooks loop already copies non-test `*.sh` and chmod +x;
+      `embo-capture.sh` ships automatically, `embo-capture.test.sh`
+      excluded
+  - [X] 4.2 Add idempotent insertion of the allow-rule into
+    `permissions.allow` (skip if present), with a jq-absent manual step
+    printed [verify: code-only]
+    → added `Bash(~/.claude/hooks/embo-capture.sh *)` to RLM_PERMS
+      (matches the hook's default EMBO_CAPTURE_CMD); jq-absent branch
+      prints all rules for manual add
+  - [X] 4.3 Run `bash install.sh` on a temp HOME and confirm: wrapper
+    copied, allow-rule present, re-run is a no-op (idempotent)
+    [verify: manual-run-claude]
+    → temp HOME: embo-capture.sh copied; allow-rule appears once; run 1
+      "10 rules added", run 2 "all rules already present — skipping";
+      both exit 0 [live] (2026-06-09)
+
+- [X] 5.0 **User Story:** As a user, I want RULE:REDIRECT-CMD-OUTPUT in
+  `start.md` collapsed to "run plainly; recognize the `[embo-capture]`
+  marker; Read/Grep the file; never re-run", so the prose matches the new
+  mechanism and no model-issued redirect remains [2/2]
+  - [X] 5.1 Rewrite the `<!-- RULE:REDIRECT-CMD-OUTPUT -->` block: remove
+    the manual `> tmp/` redirect guidance; document the `[embo-capture]`
+    marker and the Read/Grep-the-file response; keep the
+    pipe-masks-exit-code lesson [verify: code-only]
+  - [X] 5.2 Confirm the block contains the marker prefix and no
+    model-issued redirect recipe remains [verify: code-only]
+    → block now shows the marker fence, "Read that file", "Never
+      re-run"; no `> tmp/` recipe; pipe-masks-exit-code lesson kept
+
+- [~] 6.0 **User Story:** As a developer, I want the whole path verified
+  live so the acceptance criteria are proven, not assumed [4/5]
+  (logic proven live via direct hook+wrapper invocation; the real-session
+  "no prompt" claim (6.4) needs the hook installed to ~/.claude AND a
+  fresh session — this session has a /tmp grant contamination, same as
+  the old 2.3)
+  - [X] 6.1 Large-output command → model receives preview+marker only;
+    the failing lines are read from the file with NO second run
+    [verify: manual-run-claude]
+    → hook wrapped `grep -rn echo …` → executing the wrapped command
+      printed 5 preview lines + `[embo-capture] truncated — 27 lines,
+      2256 bytes` + path + `(exit=0)`; the file held all 27 lines; read
+      via grep without re-running [live] (2026-06-09)
+  - [X] 6.2 Tiny-output command → inline, no marker [verify: manual-run-claude]
+    → no-match `grep -rn function …` (0 lines) printed inline-empty, no
+      marker; wrapper unit tests cover the ≤10-line/≤300-byte inline
+      branch [live] (2026-06-09)
+  - [X] 6.3 Model-visible exit code equals the wrapped command's real
+    exit code, in both inline and marker cases [verify: manual-run-claude]
+    → no-match grep propagated exit 1 (inline); matching grep propagated
+      exit 0 (marker, shown as `(exit=0)`) [live] (2026-06-09)
+  - [~] 6.4 No prompt fires for the rewritten command (allow-rule
+    installed) [verify: manual-run-claude]
+    → CANNOT verify this session: updated hook not yet installed to
+      ~/.claude, and a session-scoped /tmp grant contaminates prompt
+      observations. Needs `bash install.sh` + a fresh session. The
+      installed allow-rule `Bash(~/.claude/hooks/embo-capture.sh *)`
+      matches the hook's default emitted command [simulated: install +
+      fresh session pending] (2026-06-09)
+  - [X] 6.5 Safety intact: a denied head still blocks; an interactive
+    command is left unwrapped and still works [verify: manual-run-claude]
+    → hook tests (live): `rm -rf x` → deny; `ssh host` → allow, not
+      wrapped; unallowed `kubectl get cm` → no stdout (normal prompt)
+      [live] (2026-06-09)
+
+## Superseded (completed, retained for history)
+
+The prior 028 plan shipped and is committed (504e354): the
+RULE:REDIRECT-CMD-OUTPUT prose rework (manual `tmp/` redirect, since
+superseded by this wrapper) and the reflexive-tail strip in
+`approve-compound.sh` (Story 3 — 61 tests passing, still in force and
+reused as the ordering partner in Story 2.3/2.4 above). That work is not
+reverted; this plan builds on the tail-strip and replaces the manual-
+redirect guidance with the wrapper.
