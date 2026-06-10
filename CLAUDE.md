@@ -117,9 +117,9 @@ Edit `rlm_repl.py` → `LANGUAGE_MAP` dict.
 ├── hooks/
 │   ├── context-guard.sh        # Context window warning hook
 │   ├── behavioral-reminder.sh  # Behavioral rule reminder hook
-│   ├── docs-first-guard.sh     # Docs-first PreToolUse guard
-│   └── approve-compound.sh     # Auto-approve compound/redirected Bash
-│                                 # (+ approve-compound.test.sh)
+│   ├── approve-compound.sh     # Auto-approve compound Bash + rewrite
+│   │                             # through capture wrapper (+ tests)
+│   └── embo-capture.sh         # Output capture wrapper (+ tests)
 ├── rlm_scripts/rlm_repl.py     # REPL: init-repo supports
 │                                 # .rlmignore + --exclude/--include/
 │                                 # --exclude-from/--no-rlmignore

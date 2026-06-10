@@ -120,6 +120,31 @@ if [ "$F1" != "$F2" ]; then PASS=$((PASS + 1)); else
   FAIL=$((FAIL + 1)); printf 'FAIL: per-call files not unique [%s == %s]\n' "$F1" "$F2"
 fi
 
+# ---- 029/3.1 compound exit-code semantics (wrapper UNCHANGED) ----
+# Wrapped execution must equal unwrapped bash: && / || short-circuit,
+# ; and | report the last segment, no pipefail injection.
+
+OUT="$(run 'false && echo x')"
+assert_eq "&&: short-circuit rc"        "1" "$(rc)"
+assert_not_contains "&&: rhs not run"   "x" "$OUT"
+run 'true && sh -c "exit 5"' >/dev/null
+assert_eq "&&: rhs rc propagates"       "5" "$(rc)"
+run 'false || true' >/dev/null
+assert_eq "||: recovers to 0"           "0" "$(rc)"
+OUT="$(run 'echo a; false; echo b')"
+assert_eq ";: last segment rc"          "0" "$(rc)"
+assert_contains ";: all segments ran"   "b" "$OUT"
+run 'false | true' >/dev/null
+assert_eq "|: no pipefail (rc 0)"       "0" "$(rc)"
+run 'true | sh -c "exit 9"' >/dev/null
+assert_eq "|: last segment rc"          "9" "$(rc)"
+
+# compound + large output: marker carries the compound's real code
+OUT="$(run 'seq 1 50 && sh -c "exit 6"')"
+assert_eq       "compound marker: rc"      "6" "$(rc)"
+assert_contains "compound marker: exit=6"  "(exit=6)" "$OUT"
+assert_contains "compound marker: present" "[embo-capture]" "$OUT"
+
 rm -rf "$SCRATCH" "$RC_FILE"
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
