@@ -90,13 +90,34 @@ strip_redundant_tail() {
 }
 
 # --- normalize_subcommand <subcommand> -> bare cmd+args ---
-# Strips trailing I/O redirections, leading env-var assignments, and
-# leading process wrappers. Leaves the bare command and its arguments.
+# Strips trailing I/O redirections, a leading `env` wrapper (with its
+# flags), leading env-var assignments, and leading process wrappers.
+# Leaves the bare command and its arguments.
 normalize_subcommand() {
   local s="$1"
   # Drop redirections and everything after the first redirect operator.
   s="$(strip_redirects "$s")"
   s="$(printf '%s' "$s" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+  # Strip a leading `env` wrapper and its flags (-i, -u NAME, --, ...);
+  # assignments after it are handled by the loop below. Bare `env`
+  # normalizes to empty -> caller falls through.
+  case "$s" in
+    env)
+      s="" ;;
+    env\ *)
+      s="$(printf '%s' "$s" | sed -E 's/^env[[:space:]]+//')"
+      while true; do
+        case "$s" in
+          --)      s=""; break ;;
+          --\ *)   s="$(printf '%s' "$s" | sed -E 's/^--[[:space:]]+//')"; break ;;
+          -u|-u\ *) s="$(printf '%s' "$s" | sed -E 's/^-u([[:space:]]+[^[:space:]]+)?[[:space:]]*//')" ;;
+          -*\ *)   s="$(printf '%s' "$s" | sed -E 's/^-[^[:space:]]+[[:space:]]+//')" ;;
+          -*)      s=""; break ;;
+          *)       break ;;
+        esac
+      done
+      ;;
+  esac
   # Strip leading env-var assignments (WORD=val ...).
   while printf '%s' "$s" | grep -qE '^[A-Za-z_][A-Za-z0-9_]*='; do
     s="$(printf '%s' "$s" | sed -E 's/^[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+//')"
@@ -201,7 +222,8 @@ EMBO_CAPTURE_CMD="${EMBO_CAPTURE_CMD:-~/.claude/hooks/embo-capture.sh}"
 # (hang) or hide live output. Left unwrapped. Extend as needed.
 CAPTURE_NOWRAP_HEADS="ssh sftp scp telnet vim vi nano emacs less more man \
 top htop watch tail-f ftp mysql psql redis-cli sqlite3 python python3 node \
-irb pry bash sh zsh fish docker-attach kubectl-exec npm-run-dev yarn-dev"
+irb pry bash sh zsh fish docker-attach kubectl-exec npm-run-dev yarn-dev \
+sudo"
 
 # has_redirect <command> -> "yes" | "no"  (any >, >>, &>, < redirect)
 has_redirect() {
@@ -225,12 +247,14 @@ is_interactive_head() {
 }
 
 # should_wrap <command> -> "yes" | "no"
-# Wrap an allowed command for output capture UNLESS:
+# Wrap an allowed command (simple OR compound: && || ; |) for output
+# capture UNLESS:
 #  - it is already an embo-capture call (re-entrancy guard, FIRST),
 #  - it already redirects (model owns its output target),
-#  - its (single) head is interactive/streaming,
-#  - it is compound (pipe/&&/||/; ) — capturing a pipeline's tail is
-#    ambiguous; leave compound commands to run as-is.
+#  - it contains an unsafe construct,
+#  - it is backgrounded (trailing &): async capture is undefined,
+#  - any segment's head is interactive/streaming: wrapping buffers
+#    output, which would hang that segment.
 should_wrap() {
   local cmd="$1"
   case "$cmd" in
@@ -238,11 +262,24 @@ should_wrap() {
   esac
   [ "$(has_redirect "$cmd")" = "yes" ] && { echo "no"; return; }
   [ "$(is_unsafe "$cmd")" = "bail" ] && { echo "no"; return; }
-  # compound? more than one subcommand -> do not wrap
-  local n; n="$(split_subcommands "$cmd" | grep -c '^')"
-  [ "$n" -gt 1 ] && { echo "no"; return; }
-  [ "$(is_interactive_head "$(normalize_subcommand "$cmd")")" = "yes" ] \
-    && { echo "no"; return; }
+  # backgrounding & in ANY position, and dangling trailing operators
+  # (checked on the raw string — the split below eats & as a
+  # separator). Redirects are excluded above, so the only legitimate
+  # & forms left are && and |&; remove those, any survivor & is a
+  # backgrounding job.
+  local t; t="$(printf '%s' "$cmd" | sed -E 's/[[:space:]]+$//')"
+  case "$t" in
+    *'&&'|*'||'|*'|') echo "no"; return ;;   # dangling operator
+  esac
+  case "$(printf '%s' "$t" | sed -E 's/&&|\|&//g')" in
+    *'&'*) echo "no"; return ;;              # backgrounding &
+  esac
+  local seg
+  while IFS= read -r seg; do
+    [ -z "$seg" ] && continue
+    [ "$(is_interactive_head "$(normalize_subcommand "$seg")")" = "yes" ] \
+      && { echo "no"; return; }
+  done <<< "$(split_subcommands "$cmd")"
   echo "yes"
 }
 

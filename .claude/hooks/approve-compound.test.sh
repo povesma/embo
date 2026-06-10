@@ -304,5 +304,114 @@ assert_eq "deny wins over wrap" "deny" \
   "$(printf '%s' "$_O" | jq -r '.hookSpecificOutput.permissionDecision')"
 rm -rf "$_TC7"
 
+# ---- 029/1.1 compound wrap eligibility ----
+# should_wrap <command> -> "yes" | "no"
+# Compounds of non-interactive segments are wrapped; backgrounding
+# (trailing &) and any interactive segment disqualify.
+
+assert_eq "wrap: && chain"          "yes" "$(should_wrap 'ls && pwd')"
+assert_eq "wrap: ; chain"           "yes" "$(should_wrap 'ls ; pwd')"
+assert_eq "wrap: || chain"          "yes" "$(should_wrap 'true || pwd')"
+assert_eq "wrap: pipeline"          "yes" "$(should_wrap 'ls | grep x')"
+assert_eq "wrap: mixed chain+pipe"  "yes" "$(should_wrap 'ls && pwd | grep x')"
+assert_eq "nowrap: trailing & (bg)" "no"  "$(should_wrap 'sleep 5 &')"
+assert_eq "nowrap: compound bg"     "no"  "$(should_wrap 'ls && sleep 5 &')"
+assert_eq "nowrap: | less tail"     "no"  "$(should_wrap 'make | less')"
+assert_eq "nowrap: | python3 tail"  "no"  "$(should_wrap 'ls | python3')"
+assert_eq "nowrap: interactive 1st" "no"  "$(should_wrap 'ssh host && ls')"
+assert_eq "nowrap: interactive mid" "no"  "$(should_wrap 'ls && vim x && pwd')"
+
+# ---- 029/1.2 opt-outs hold for compounds ----
+# Redirect, unsafe construct, and re-entrancy must disqualify a
+# compound from wrapping exactly as they do a simple command.
+
+assert_eq "nowrap: compound redirect"    "no" \
+  "$(should_wrap 'ls && pwd > tmp/x.log')"
+assert_eq "nowrap: compound 2>&1"        "no" \
+  "$(should_wrap 'ls 2>&1 | grep x')"
+assert_eq "nowrap: compound cmd subst"   "no" \
+  "$(should_wrap 'echo $(whoami) && ls')"
+assert_eq "nowrap: compound backtick"    "no" \
+  "$(should_wrap 'ls && echo `id`')"
+assert_eq "nowrap: compound heredoc"     "no" \
+  "$(should_wrap 'cat <<EOF && ls')"
+assert_eq "nowrap: compound re-entrant"  "no" \
+  "$(should_wrap "$(wrap_cmd 'ls && pwd')")"
+
+# ---- 029/2.1 strip leading `env` wrapper ----
+# `env [flags] [NAME=VALUE ...] cmd args` must normalize to `cmd args`
+# so the real head matches its allow-rule. Bare `env` -> empty
+# (fallthrough). Live case 2026-06-10: env-prefixed npx prompted.
+
+assert_eq "env: assignments"      "npx test" \
+  "$(normalize_subcommand 'env A=1 B=2 npx test')"
+assert_eq "env: single var"       "git push" \
+  "$(normalize_subcommand 'env FOO=bar git push')"
+assert_eq "env: -i flag"          "ls" \
+  "$(normalize_subcommand 'env -i ls')"
+assert_eq "env: -u NAME"          "ls -la" \
+  "$(normalize_subcommand 'env -u PATH ls -la')"
+assert_eq "env: -- separator"     "ls" \
+  "$(normalize_subcommand 'env -- ls')"
+assert_eq "env: flags then vars"  "npm test" \
+  "$(normalize_subcommand 'env -i A=1 npm test')"
+assert_eq "env: bare -> empty"    "" \
+  "$(normalize_subcommand 'env')"
+assert_eq "env: keeps cmd args"   "npx --prefix tests playwright test" \
+  "$(normalize_subcommand 'env P_A=/tmp/x P_B=dev npx --prefix tests playwright test')"
+
+# ---- 029/9.2 backgrounding & anywhere; dangling operators (G3+G4) ----
+# A backgrounding & in any position disqualifies wrapping (capture of
+# a detached job is undefined). Dangling trailing operators would make
+# bash -c fail on syntax; leave them unwrapped.
+
+assert_eq "nowrap: & then comment"   "no"  "$(should_wrap 'sleep 5 & # start')"
+assert_eq "nowrap: & mid (a & b)"    "no"  "$(should_wrap 'sleep 5 & echo done')"
+assert_eq "nowrap: dangling &&"      "no"  "$(should_wrap 'ls &&')"
+assert_eq "nowrap: dangling ||"      "no"  "$(should_wrap 'pwd ||')"
+assert_eq "nowrap: dangling |"       "no"  "$(should_wrap 'ls |')"
+assert_eq "wrap: trailing ; ok"      "yes" "$(should_wrap 'ls ;')"
+assert_eq "wrap: |& still wraps"     "yes" "$(should_wrap 'ls |& grep x')"
+
+# ---- 029/9.3 sudo never wrapped (G5) ----
+# sudo may prompt for a password (no TTY under bash -c -> hang) and
+# its child may be interactive. Wrap-side opt-out only: sudo is NOT
+# stripped in normalize_subcommand — an allow-rule for `cmd` must not
+# authorize `sudo cmd`.
+
+assert_eq "nowrap: sudo simple"      "no" "$(should_wrap 'sudo ls')"
+assert_eq "nowrap: sudo interactive" "no" "$(should_wrap 'sudo ssh host')"
+assert_eq "nowrap: sudo in compound" "no" "$(should_wrap 'ls && sudo make install')"
+assert_eq "norm: sudo NOT stripped"  "sudo ls" "$(normalize_subcommand 'sudo ls')"
+
+# ---- 029/9.1 glued env flags (G2) ----
+# `env -uNAME cmd` (value glued to flag) must still expose the real
+# command head so deny rules fire on it.
+
+assert_eq "env: glued -uNAME"     "rm -rf /" \
+  "$(normalize_subcommand 'env -uPATH rm -rf /')"
+assert_eq "env: glued -uNAME ls"  "ls -la" \
+  "$(normalize_subcommand 'env -uPATH ls -la')"
+assert_eq "env: glued -u only"    "" \
+  "$(normalize_subcommand 'env -uPATH')"
+
+# ---- 029/9.4 fail-safe pins: quoted separators (G1), env -- (G6) ----
+# The sed split is quote-unaware. These pins document that the
+# resulting mis-split NEVER produces a wrong "allow": the truncated
+# segment fails to match (-> fallthrough) or matches deny (-> deny).
+
+_TMPH9="$(mktemp -d)"; mkdir -p "$_TMPH9/.claude"
+printf '{"permissions":{"allow":["Bash(git log *)","Bash(ls *)"],"deny":["Bash(rm *)"]}}' \
+  > "$_TMPH9/.claude/settings.json"
+dec9() { HOME="$_TMPH9" decide "$1" "$_TMPH9/noproj"; }
+
+assert_eq "quoted &&: never allow"  "fallthrough" \
+  "$(dec9 'git log --format="a && ls"')"
+assert_eq "quoted ; rm: deny wins"  "deny" \
+  "$(dec9 'git log --format="a; rm -rf /"')"
+assert_eq "env -- segment: fall"    "fallthrough" \
+  "$(dec9 'ls && env --')"
+rm -rf "$_TMPH9"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

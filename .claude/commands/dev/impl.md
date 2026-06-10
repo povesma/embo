@@ -162,14 +162,35 @@ the *shape* of the observation, not the literal output. No working-state excepti
 <!-- RULE:ONE-SUBTASK -->
 ## Task Implementation Protocol
 
-- **One sub-task at a time:** Do **NOT** start the next sub-task
-  until you ask the user for permission and they say "yes" or "y"
+- **Default: one sub-task at a time.** Do **NOT** start the next
+  sub-task without the user's go-ahead (see continuation menu below).
 - **Completion protocol:**
-  1. When you finish a **sub-task**, immediately mark it as
-     completed by changing `[ ]` to `[X]`.
+  1. When you finish a **sub-task**, update its marker immediately,
+     applying the **Task Completion Rules** above (marker semantics
+     and the evidence gate for its `[verify:]` type).
   2. If **all** subtasks underneath a parent task are now `[X]`,
-     also mark the **parent task** as completed.
-- Stop after each sub-task and wait for the user's go-ahead.
+     also mark the **parent task** as completed. A parent with any
+     `[~]` stays open.
+- **Continuation menu:** after completing a sub-task, ask via
+  `AskUserQuestion` how to continue:
+  1. **Next sub-task only** — implement one more sub-task, then
+     ask again (default)
+  2. **All sub-tasks of current story** — implement the remaining
+     sub-tasks of the current parent task, then ask again
+  3. **All tasks until input required** — implement story after
+     story, stopping only when user contribution is genuinely
+     required (a `manual-run-user` verification, an approval gate,
+     a destructive/shared-state action, or a real fork between
+     mutually exclusive paths)
+  The selected mode stays active until it completes or the user
+  interrupts; re-ask only at mode boundaries (story end for mode 2).
+  In modes 2 and 3, lean hard on DECIDE-OR-ASK: decide every
+  recoverable choice yourself and record it in evidence notes —
+  do not interrupt the run with questions a later review can fix.
+  All other rules stay fully in force in every mode: evidence gates
+  per `[verify:]` type, TDD order, docs-first, and the safety rules
+  (a mode-3 run NEVER authorizes destructive or shared-state
+  actions without their own approval).
 
 ## Process
 
@@ -331,6 +352,14 @@ When referencing any library, framework, or external API — use the Context7 MC
 - **Naming convention** per profile `naming_convention`:
   - `handler` (default): Use "handler" for application layer components
   - `none`: No naming convention enforced
+- **Allow-listable invocation** (scripts, launchers, documented run
+  commands you generate): design them to be invocable as ONE plain
+  command. Parameters go in CLI flags, a config file, or an env file
+  the script loads itself — never require callers to prepend `VAR=x`
+  assignments or an `env` wrapper. Prefixed invocations defeat
+  permission-allowlist prefix matching and force prompts on every
+  run; a plain invocation stays prompt-free even where no
+  approval/capture hook is installed.
 
 ## Testing Guidelines
 

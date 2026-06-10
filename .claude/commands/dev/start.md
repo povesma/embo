@@ -118,11 +118,14 @@ reader can take each word at face value.
 A command's exit code and error text are the result of running it. Do
 not mask them.
 
-**Run one plain command, once.** Its output and exit code come back to
-you directly — you add no redirect, chain, pipe, or `$(...)` to see
-them. The capture hook handles large output for you: it runs the
-command, saves the **full** output to a file, and either shows it inline
-(when small) or returns a short preview ending in this marker:
+**Run plain commands — compound is fine.** Chaining related work with
+`&&`, `||`, `;`, or `|` in one Bash call is permitted and preferred
+over splitting it into separate calls: the approval hook validates
+each segment against the allowlist, and the capture hook captures the
+whole compound. Add no redirect or `$(...)` just to see output or
+exit codes — they come back to you. The capture hook runs the
+command, saves the **full** output to a file, and either shows it
+inline (when small) or returns a short preview ending in this marker:
 
 ```
 [embo-capture] truncated — <N> lines, <M> bytes. Full output:
@@ -136,13 +139,25 @@ with the Read tool (offset/limit for a slice) or search it with Grep.
 everything.
 
 **Do not:**
+- Use `$(...)`, backticks, `<(...)`, or heredocs in commands you want
+  auto-approved — the hook cannot parse them and falls through to a
+  permission prompt.
 - Pipe a command **whose success you are checking** into `| tail` /
   `| head` / `; wc`. The pipeline reports the filter's exit code, not
   the command's, so a failure reads as a pass. (Piping is fine when you
   are not checking the exit code — e.g. `git log --oneline | head -5`.)
+  Likewise prefer `&&` over `;` when an earlier segment's failure must
+  stop the chain — `;` reports only the last segment's exit code.
 - Conclude success from a clean-looking truncated tail. The `[embo-
   capture]` marker carries the true `(exit=<code>)`; trust that, and
   assume failure until the exit code proves otherwise.
+
+**Fallback when the hook is broken:** if a command returns large
+output inline **without** the `[embo-capture]` marker, the capture
+hook is not running. Tell the user the hook looks broken, and until
+it is fixed redirect large-output commands to a file yourself
+(`cmd > tmp/out.log 2>&1`, then Read it). This fallback activates
+only on observed failure — never preemptively.
 
 <!-- RULE:DECIDE-OR-ASK -->
 ### Decide what you can; ask only about genuine blockers
@@ -182,6 +197,58 @@ If you blur these, the user decides on a false picture — discarding an
 option they meant to keep, or assuming the rest still happen when they
 do not. A decision made on a wrong understanding is worse than no
 decision, because it looks settled. One option per line.
+
+<!-- RULE:ASSUME-BROKEN -->
+### Assume it does not work until proven
+
+Be pessimistic when assessing the success of any action or change.
+Most probably it did not work — treat it as not working until a test,
+real output, or a real side-effect confirms it. "It looks right" and
+"the command exited 0" are starting points for verification, not
+conclusions.
+
+<!-- RULE:STOP-AFTER-ACTION -->
+### Stop after the requested action
+
+After completing what the user asked for in the current message,
+stop. Do not chain into follow-up actions (commit, push, deploy,
+re-index, cleanup) unless the current message asks for them. Prior
+requests do not carry forward. (During `/dev:impl`, the continuation
+menu in the ONE-SUBTASK protocol governs instead.)
+
+<!-- RULE:BEHAVIOUR-FIRST -->
+### A challenged behaviour is the top-priority task
+
+If the user challenges Claude Code behaviour — questions a workflow
+habit, calls out a rule violation, points at a recurring annoyance —
+that becomes the top-priority task by default. Pause the in-flight
+task, resolve the behaviour issue, then resume.
+
+- **User override**: if the user says to ignore it and continue the
+  current task, respect that — the priority is a default, not a
+  mandate.
+- **Resolution paths** (pick what fits the root cause): fix the
+  project or user CLAUDE.md; fix the shipped workflow files when
+  working in the embo repo itself; or, when the issue stems from
+  shipped embo files you cannot change here, record a message for
+  the embo maintainer (task seed or claude-mem observation).
+
+<!-- RULE:RESPONSE-STYLE -->
+### Response style
+
+- **Concise.** Cut filler words and recap text, not meaning. Tables
+  and lists are fine when informative; skip them when the user is
+  mid-task and just needs the next action.
+- **Emphasize what matters.** Bold the decision, the blocker, or the
+  action the user must take — as much bold as is genuinely
+  important, no more.
+- **Never offer to pause, wait, or stop.** Do not end with "shall I
+  proceed?" or any prompt that presents inaction as an option. When
+  the next step is clear and in scope, do it. The only legitimate
+  stop is a genuine blocker — an action only the user can perform,
+  or a real fork between mutually exclusive paths — and even then
+  phrase it as forward action: "Do THAT, tell me when done, and I'll
+  continue."
 
 ### Step 1: Verify Systems
 
