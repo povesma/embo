@@ -90,13 +90,34 @@ strip_redundant_tail() {
 }
 
 # --- normalize_subcommand <subcommand> -> bare cmd+args ---
-# Strips trailing I/O redirections, leading env-var assignments, and
-# leading process wrappers. Leaves the bare command and its arguments.
+# Strips trailing I/O redirections, a leading `env` wrapper (with its
+# flags), leading env-var assignments, and leading process wrappers.
+# Leaves the bare command and its arguments.
 normalize_subcommand() {
   local s="$1"
   # Drop redirections and everything after the first redirect operator.
   s="$(strip_redirects "$s")"
   s="$(printf '%s' "$s" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+  # Strip a leading `env` wrapper and its flags (-i, -u NAME, --, ...);
+  # assignments after it are handled by the loop below. Bare `env`
+  # normalizes to empty -> caller falls through.
+  case "$s" in
+    env)
+      s="" ;;
+    env\ *)
+      s="$(printf '%s' "$s" | sed -E 's/^env[[:space:]]+//')"
+      while true; do
+        case "$s" in
+          --)      s=""; break ;;
+          --\ *)   s="$(printf '%s' "$s" | sed -E 's/^--[[:space:]]+//')"; break ;;
+          -u|-u\ *) s="$(printf '%s' "$s" | sed -E 's/^-u([[:space:]]+[^[:space:]]+)?[[:space:]]*//')" ;;
+          -*\ *)   s="$(printf '%s' "$s" | sed -E 's/^-[^[:space:]]+[[:space:]]+//')" ;;
+          -*)      s=""; break ;;
+          *)       break ;;
+        esac
+      done
+      ;;
+  esac
   # Strip leading env-var assignments (WORD=val ...).
   while printf '%s' "$s" | grep -qE '^[A-Za-z_][A-Za-z0-9_]*='; do
     s="$(printf '%s' "$s" | sed -E 's/^[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+//')"
@@ -190,6 +211,84 @@ decide() {
   echo "allow"
 }
 
+# --- 028 capture wrapper integration ---
+
+# The command the rewrite invokes. Defaults to the installed wrapper
+# path; overridable in tests. The re-entrancy guard and the allow-rule
+# both key off the stable `embo-capture.sh` token in this string.
+EMBO_CAPTURE_CMD="${EMBO_CAPTURE_CMD:-~/.claude/hooks/embo-capture.sh}"
+
+# Heads whose output is interactive or streaming: wrapping would buffer
+# (hang) or hide live output. Left unwrapped. Extend as needed.
+CAPTURE_NOWRAP_HEADS="ssh sftp scp telnet vim vi nano emacs less more man \
+top htop watch tail-f ftp mysql psql redis-cli sqlite3 python python3 node \
+irb pry bash sh zsh fish docker-attach kubectl-exec npm-run-dev yarn-dev \
+sudo"
+
+# has_redirect <command> -> "yes" | "no"  (any >, >>, &>, < redirect)
+has_redirect() {
+  case "$1" in
+    *'>'*|*'<'*) echo "yes" ;;
+    *) echo "no" ;;
+  esac
+}
+
+# is_interactive_head <normalized-subcommand> -> "yes" | "no"
+is_interactive_head() {
+  local head; head="$(printf '%s' "$1" | awk '{print $1}')"
+  # `tail -f` is the streaming case; treat any tail with -f specially.
+  case "$1" in
+    tail\ *-f*|*' -f '*tail*) echo "yes"; return ;;
+  esac
+  case " $CAPTURE_NOWRAP_HEADS " in
+    *" $head "*) echo "yes"; return ;;
+  esac
+  echo "no"
+}
+
+# should_wrap <command> -> "yes" | "no"
+# Wrap an allowed command (simple OR compound: && || ; |) for output
+# capture UNLESS:
+#  - it is already an embo-capture call (re-entrancy guard, FIRST),
+#  - it already redirects (model owns its output target),
+#  - it contains an unsafe construct,
+#  - it is backgrounded (trailing &): async capture is undefined,
+#  - any segment's head is interactive/streaming: wrapping buffers
+#    output, which would hang that segment.
+should_wrap() {
+  local cmd="$1"
+  case "$cmd" in
+    *embo-capture.sh\ *) echo "no"; return ;;      # re-entrancy guard
+  esac
+  [ "$(has_redirect "$cmd")" = "yes" ] && { echo "no"; return; }
+  [ "$(is_unsafe "$cmd")" = "bail" ] && { echo "no"; return; }
+  # backgrounding & in ANY position, and dangling trailing operators
+  # (checked on the raw string — the split below eats & as a
+  # separator). Redirects are excluded above, so the only legitimate
+  # & forms left are && and |&; remove those, any survivor & is a
+  # backgrounding job.
+  local t; t="$(printf '%s' "$cmd" | sed -E 's/[[:space:]]+$//')"
+  case "$t" in
+    *'&&'|*'||'|*'|') echo "no"; return ;;   # dangling operator
+  esac
+  case "$(printf '%s' "$t" | sed -E 's/&&|\|&//g')" in
+    *'&'*) echo "no"; return ;;              # backgrounding &
+  esac
+  local seg
+  while IFS= read -r seg; do
+    [ -z "$seg" ] && continue
+    [ "$(is_interactive_head "$(normalize_subcommand "$seg")")" = "yes" ] \
+      && { echo "no"; return; }
+  done <<< "$(split_subcommands "$cmd")"
+  echo "yes"
+}
+
+# wrap_command <command> -> <wrapper> --b64 <base64-of-command>
+wrap_command() {
+  printf '%s --b64 %s' "$EMBO_CAPTURE_CMD" \
+    "$(printf '%s' "$1" | base64 | tr -d '\n')"
+}
+
 # --- Main (only when executed directly, not when sourced by tests) ---
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
   set -uo pipefail
@@ -203,13 +302,24 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
   PROJ="$(printf '%s' "$INPUT" | jq -r '.cwd // empty' 2>/dev/null)" || exit 0
   [ -n "$PROJ" ] || PROJ="$PWD"
 
+  # Re-entrancy guard FIRST: never touch an already-wrapped command.
+  case "$CMD" in
+    *embo-capture.sh\ *) exit 0 ;;
+  esac
+
   STRIPPED="$(strip_redundant_tail "$CMD")"
   DECISION="$(decide "$STRIPPED" "$PROJ")"
   case "$DECISION" in
     allow)
-      if [ "$STRIPPED" != "$CMD" ]; then
-        # Rewrite: run the command without its redundant capture tail.
-        jq -n --arg c "$STRIPPED" '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"allow",updatedInput:{command:$c}}}'
+      # Order: tail already stripped; now consider wrapping the survivor
+      # for output capture. Wrap only an eligible (non-redirect, simple,
+      # non-interactive) command. The emitted command is the final one.
+      FINAL="$STRIPPED"
+      if [ "$(should_wrap "$STRIPPED")" = "yes" ]; then
+        FINAL="$(wrap_command "$STRIPPED")"
+      fi
+      if [ "$FINAL" != "$CMD" ]; then
+        jq -n --arg c "$FINAL" '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"allow",updatedInput:{command:$c}}}'
       else
         jq -n '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"allow"}}'
       fi
