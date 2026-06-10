@@ -382,6 +382,34 @@ If user selected "Keep current":
 
 ---
 
+<!-- RULE:CHANGELOG-AUTHORING -->
+## CHANGELOG.md Authoring
+
+*Audience: someone deciding whether to upgrade, and someone
+reconstructing history later (downstream packagers, future-you,
+anyone tracing a regression to a version).* Comprehensive but
+ruthless with wording. Include all user-facing changes, categorised
+by impact (Breaking, Security, Added, Changed, Fixed, Deprecated).
+Each item: one sentence stating the change and its user impact. Add
+a second sentence only when a reader must take action (migration
+step, version range affected, workaround) — never to explain
+rationale or implementation. Drop the *how* and the *why*; if
+rationale matters, it lives in the commit message or PR.
+
+<!-- RULE:RELEASE-BODY-AUTHORING -->
+## GitHub Release Body Authoring
+
+*Audience: someone glancing at the release page or a notification
+feed, deciding whether this release needs their attention right
+now.* Executive summary. Open with the most consequential change in
+one sentence; if the release has a coherent theme, name it — if not,
+don't invent one. Follow with a "Highlights" bullet list of anything
+a reader of the release page needs to know without opening the
+CHANGELOG. Breaking, security, deprecations, platform/dependency
+shifts, and major features usually qualify; pure bug fixes and
+internal changes do not. Link to the CHANGELOG for the rest.
+Hand-written, not extracted mechanically from the CHANGELOG.
+
 ## Final Instructions
 
 1. Determine mode from argument or show interactive menu
