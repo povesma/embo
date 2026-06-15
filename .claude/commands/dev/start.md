@@ -83,10 +83,23 @@ the options, do not steer them.
 - Give each option a short description inline
 - Mark a recommended option only when one genuinely is
 
+**Match the presentation to the kind of choice** (the kinds are
+defined in RULE:DECIDE-OR-ASK). When you use `AskUserQuestion`, set
+`multiSelect` from the kind:
+- **Combinable** (independent; one does not drop the others) →
+  `multiSelect: true`. The user can pick any subset.
+- **Exclusive choice** (picking one drops the rest) →
+  `multiSelect: false`.
+- **Ordering** (all happen; only the order differs) →
+  `multiSelect: false`, and say in the question that nothing is
+  dropped, only sequenced.
+
 **Do not:**
 - Bury alternatives in prose or inside a single sentence
 - Join distinct choices with "or" in running text — that is the exact
   pattern this rule exists to prevent
+- Present combinable options as single-select (or the reverse) — that
+  misrepresents the choice, exactly what RULE:DECIDE-OR-ASK forbids
 
 <!-- RULE:PLAIN-ENGLISH -->
 ### Write in plain English
@@ -112,52 +125,133 @@ reader can take each word at face value.
   directly
 - Reach for a colorful word when a plain one says the same thing
 
-<!-- RULE:REDIRECT-CMD-OUTPUT -->
-### Run commands plainly; read the captured file on overflow
+<!-- RULE:CAPTURE-OUTPUT -->
+### Bash calls: write them plainly, read results from the capture
 
-A command's exit code and error text are the result of running it. Do
-not mask them.
+**The problems this rule solves.** Raw Bash usage forces bad
+trade-offs: bulky output floods the context window; filtering it
+(`| head`, `| grep`) makes the pipe report the FILTER's exit code,
+so a failing command reads as success; the lines your filter dropped
+are gone, so a wrong filter guess forces re-running the command —
+slow, and unsafe when it is not idempotent; and reshaping a call
+(adding redirects or filters) can stop it matching the permission
+allowlist, so the harness shows the user an approval dialog and
+work halts until they answer it.
 
-**Run plain commands — compound is fine.** Chaining related work with
-`&&`, `||`, `;`, or `|` in one Bash call is permitted and preferred
-over splitting it into separate calls: the approval hook validates
-each segment against the allowlist, and the capture hook captures the
-whole compound. Add no redirect or `$(...)` just to see output or
-exit codes — they come back to you. The capture hook runs the
-command, saves the **full** output to a file, and either shows it
-inline (when small) or returns a short preview ending in this marker:
+**What this project installs.** A PreToolUse hook checks each Bash
+call against the permission allowlist; when it can approve the call,
+it reroutes it through a capture wrapper that saves the complete
+output to a file and reports the true exit code(s). Your job is to
+write commands in a shape the hook can approve, and to read results
+via the markers below.
+
+**Chain of events on every Bash call:**
+
+1. You write a plain command. Compounds (`&&`, `||`, `;`, `|`) are
+   preferred over separate calls — fewer tool invocations, faster
+   progress — UNLESS the compound makes the command stop for approval
+   (see RULE:AVOID-APPROVAL, which takes priority): keeping commands
+   simple to avoid the approval prompt wins over saving a call.
+2. The hook checks every segment against the allowlist (the
+   `permissions` rules in `.claude/settings.json` and
+   `settings.local.json`, project and user level; practical guide: a
+   shape that auto-approved earlier in the session will auto-approve
+   again).
+   - Every segment matches → the call runs with no approval dialog,
+     through the capture wrapper (step 3). This is the path you
+     want.
+   - Any segment unmatched, or any unparseable construct (`$(...)`,
+     backticks, `<(...)`, heredoc) → the user gets an approval
+     dialog, AND the command runs without the wrapper: full output
+     lands in the context and is saved nowhere. Both costs at once —
+     avoid this path; split the chain so the approvable parts run
+     auto-approved, isolate the rest.
+3. The wrapper runs the command and saves its complete output to a
+   file. A pipeline ending in filters is decomposed: the upstream
+   command runs first, its complete UNFILTERED output is saved, and
+   your filter is applied to the saved copy. Purpose: if the filter
+   did not catch what you needed, the answer is already in the file
+   — re-read the file, not re-run the command.
+4. What appears in your tool result:
+   - small output → shown whole, no marker;
+   - large output → first lines, then the `truncated` marker;
+   - filtered pipeline → the filter's output, then the
+     `filtered view` marker.
+
+**The two markers:**
 
 ```
 [embo-capture] truncated — <N> lines, <M> bytes. Full output:
   <path>  (exit=<code>)
 ```
 
-When you see that marker: the command already ran once, the full output
-is at `<path>`, and its real exit code is `<code>`. **Read that file**
-with the Read tool (offset/limit for a slice) or search it with Grep.
-**Never re-run the command** to see more — the file already has
-everything.
+```
+[embo-capture] filtered view — full output:
+  <path>  (<N> lines, <M> bytes, upstream exit=<EU>, filter exit=<EF>)
+```
 
-**Do not:**
-- Use `$(...)`, backticks, `<(...)`, or heredocs in commands you want
-  auto-approved — the hook cannot parse them and falls through to a
-  permission prompt.
-- Pipe a command **whose success you are checking** into `| tail` /
-  `| head` / `; wc`. The pipeline reports the filter's exit code, not
-  the command's, so a failure reads as a pass. (Piping is fine when you
-  are not checking the exit code — e.g. `git log --oneline | head -5`.)
-  Likewise prefer `&&` over `;` when an earlier segment's failure must
-  stop the chain — `;` reports only the last segment's exit code.
-- Conclude success from a clean-looking truncated tail. The `[embo-
-  capture]` marker carries the true `(exit=<code>)`; trust that, and
-  assume failure until the exit code proves otherwise.
+`exit=` / `upstream exit=` is the command's true exit code — judge
+success ONLY by it, never by clean-looking output. `filter exit=` is
+the filter's own signal (`grep` exit 1 = no match).
 
-**Fallback when the hook is broken:** if a command returns large
-output inline **without** the `[embo-capture]` marker, the capture
-hook is not running. Tell the user the hook looks broken, and until
-it is fixed redirect large-output commands to a file yourself
-(`cmd > tmp/out.log 2>&1`, then Read it). This fallback activates
-only on observed failure — never preemptively.
+**Behavior:**
+
+- **Shape calls to auto-approve.** Prefer segments you know are
+  allowlisted; split a chain into separate auto-approved calls
+  rather than run one compound that triggers the approval dialog.
+- **Add nothing for output management.** No redirects, no `$(...)`
+  just to see or save output — the wrapper captures everything
+  automatically, and you can access the saved file afterwards.
+- **A marker means the command already ran.** The complete output is
+  at `<path>` — Read or Grep that file for anything the preview or
+  your filter missed. Never re-run a command just to re-obtain its
+  output (re-running for a real reason — fresh state, a retry after
+  a fix — is of course fine).
+- **Without a marker, a pipe masks failure** (it reports the
+  filter's exit code). Do not pipe a command whose success you are
+  checking unless the `filtered view` marker confirms the hook
+  decomposed it. Prefer `&&` over `;` when an earlier segment's
+  failure must stop the chain.
+
+**Fallback when the hook is broken:** large output arriving inline
+**without** a marker means the capture hook is not running. Tell the
+user, and until it is fixed redirect large-output commands yourself
+(`cmd > tmp/out.log 2>&1`, then Read it). Activate this only on
+observed failure — never preemptively.
+
+<!-- RULE:AVOID-APPROVAL -->
+### Keep commands simple to avoid approval prompts
+
+Claude Code asks the user to approve a Bash command unless it matches
+a permitted shape; the more elaborate the command, the more likely it
+falls outside what is permitted and stops for approval. You cannot see
+what is permitted and should not try to — just keep each command in
+the simplest shape that does the job. Simpler commands are approved
+more often and keep work moving.
+
+When reminded of this rule, reshape your next commands toward the
+simpler column:
+
+| Reshape this | Into this |
+|---|---|
+| `git log --oneline \| head -5` | `git log --oneline -5` |
+| `cat a.txt && cat b.txt` | two separate Read calls (or two calls) |
+| `cd src && python test.py` | one call `python src/test.py` |
+| `echo "$(date)" > f && cat f` | drop the wrapper; let the capture file hold output |
+| one chain mixing a new tool with routine commands | the new tool in its own call, routine ones separately |
+
+Concretely:
+- Use a command's own flags (`-5`, `-n 5`) instead of piping into
+  `head`/`tail`.
+- Avoid `$(...)`, backticks, redirects (`>`), and subshells in a
+  call — these shapes are the most likely to stop for approval.
+- Run one job per call rather than chaining several with
+  `&&`/`;`/`|`, unless every part is a routine command you use
+  constantly.
+
+This rule steers; it does not enforce. The repo's capture/approve
+hook is what actually reduces prompts. Use this rule on top of it,
+not instead of it.
 
 <!-- RULE:DECIDE-OR-ASK -->
 ### Decide what you can; ask only about genuine blockers
