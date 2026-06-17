@@ -145,7 +145,86 @@ assert_eq       "compound marker: rc"      "6" "$(rc)"
 assert_contains "compound marker: exit=6"  "(exit=6)" "$OUT"
 assert_contains "compound marker: present" "[embo-capture]" "$OUT"
 
-rm -rf "$SCRATCH" "$RC_FILE"
+# ---- 030/2.1 --filter-b64 mode: happy path ----
+# runf <filter-chain> <upstream> ; stderr captured to ERR_FILE.
+ERR_FILE="$(mktemp)"
+runf() {
+  local encf encu; encf="$(b64 "$1")"; encu="$(b64 "$2")"
+  ( cd "$SCRATCH" && bash "$WRAP" --filter-b64 "$encf" --b64 "$encu" ) \
+    2>"$ERR_FILE"
+  printf '%s' "$?" > "$RC_FILE"
+}
+# path extraction for the filter-mode marker line
+fpath() {
+  printf '%s' "$1" | sed -nE \
+    's/^[[:space:]]*([^[:space:]]+\.log)[[:space:]]*\(.*upstream exit=.*/\1/p' \
+    | head -1
+}
+
+OUT="$(runf 'head -3' 'for i in $(seq 1 50); do echo row$i; done')"
+assert_eq           "fm: rc is filter exit (0)"   "0" "$(rc)"
+assert_contains     "fm: view first line"         "row1" "$OUT"
+assert_contains     "fm: view third line"         "row3" "$OUT"
+assert_not_contains "fm: view stops at filter"    "row4" "$OUT"
+assert_contains     "fm: marker prefix"   "[embo-capture] filtered view" "$OUT"
+assert_contains     "fm: marker upstream exit"    "upstream exit=0" "$OUT"
+assert_contains     "fm: marker filter exit"      "filter exit=0" "$OUT"
+assert_contains     "fm: marker lines word"       "lines" "$OUT"
+assert_contains     "fm: marker bytes word"       "bytes" "$OUT"
+
+FILE="$(fpath "$OUT")"
+assert_contains "fm: path under tmp/cap" "tmp/cap/" "$FILE"
+if [ -n "$FILE" ] && [ -f "$SCRATCH/$FILE" ]; then
+  FULL="$(cat "$SCRATCH/$FILE")"
+  assert_contains "fm: file has first line"     "row1"  "$FULL"
+  assert_contains "fm: file has UNFILTERED tail" "row50" "$FULL"
+else
+  FAIL=$((FAIL + 1)); printf 'FAIL: fm: capture file not found [%s]\n' "$FILE"
+fi
+
+# multi-segment filter chain
+OUT="$(runf 'grep row | head -2' 'for i in $(seq 1 9); do echo row$i; done')"
+assert_eq           "fm chain: rc 0"        "0" "$(rc)"
+assert_contains     "fm chain: row2 shown"  "row2" "$OUT"
+assert_not_contains "fm chain: row3 cut"    "row3" "$OUT"
+
+# ---- 030/2.2 --filter-b64 mode: edge semantics ----
+
+# failing upstream: marker reveals it; wrapper still exits with filter's 0
+OUT="$(runf 'head -3' 'for i in $(seq 1 50); do echo row$i; done; exit 4')"
+assert_eq       "fm: rc stays filter (0)"     "0" "$(rc)"
+assert_contains "fm: marker upstream exit=4"  "upstream exit=4" "$OUT"
+
+# grep no-match: filter exit propagates as wrapper exit
+OUT="$(runf 'grep zzz' 'echo row1')"
+assert_eq       "fm: grep no-match rc 1"      "1" "$(rc)"
+assert_contains "fm: marker filter exit=1"    "filter exit=1" "$OUT"
+
+# stderr stays out of the filter path and is emitted separately
+OUT="$(runf 'cat' 'echo data; echo oops >&2')"
+assert_contains     "fm: stdout passes filter"  "data" "$OUT"
+assert_not_contains "fm: stderr not in view"    "oops" "$OUT"
+assert_contains     "fm: stderr emitted"        "oops" "$(cat "$ERR_FILE")"
+FILE="$(fpath "$OUT")"
+if [ -n "$FILE" ] && [ -f "$SCRATCH/$FILE" ]; then
+  assert_not_contains "fm: capture file stdout-only" "oops" \
+    "$(cat "$SCRATCH/$FILE")"
+else
+  FAIL=$((FAIL + 1)); printf 'FAIL: fm: stderr-test file not found\n'
+fi
+
+# large filtered view: preview thresholds still apply
+OUT="$(runf 'cat' 'for i in $(seq 1 50); do echo row$i; done')"
+assert_contains     "fm large view: preview row1"  "row1" "$OUT"
+assert_not_contains "fm large view: row50 cut"     "row50" "$OUT"
+assert_contains     "fm large view: marker"  "[embo-capture] filtered view" "$OUT"
+
+# usage guard: --filter-b64 without --b64 payload
+( cd "$SCRATCH" && bash "$WRAP" --filter-b64 "$(b64 'head -1')" ) \
+  >/dev/null 2>&1
+assert_eq "fm: missing --b64 usage exit" "64" "$?"
+
+rm -rf "$SCRATCH" "$RC_FILE" "$ERR_FILE"
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

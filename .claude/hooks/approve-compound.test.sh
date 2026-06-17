@@ -413,5 +413,120 @@ assert_eq "env -- segment: fall"    "fallthrough" \
   "$(dec9 'ls && env --')"
 rm -rf "$_TMPH9"
 
+# ---- 030/1.1 filter-tail detection ----
+# split_filter_tail <command> -> on detection prints TWO lines:
+#   line 1: upstream command (trimmed)
+#   line 2: filter chain, segments re-joined with " | " (trimmed)
+# No decomposition -> prints nothing.
+# Scope guard: pure pipelines only (no top-level && ; ||).
+
+# positives: single filter tail
+assert_eq "ft: cmd | head"   $'kubectl get pods\nhead -20' \
+  "$(split_filter_tail 'kubectl get pods | head -20')"
+assert_eq "ft: multi-filter tail" $'kubectl get pods -o yaml\ngrep image | head -5' \
+  "$(split_filter_tail 'kubectl get pods -o yaml | grep image | head -5')"
+
+# positives: every FILTER_HEADS member in tail position
+assert_eq "ft: head"   $'git log\nhead -3'      "$(split_filter_tail 'git log | head -3')"
+assert_eq "ft: tail"   $'git log\ntail -3'      "$(split_filter_tail 'git log | tail -3')"
+assert_eq "ft: grep"   $'git log\ngrep fix'     "$(split_filter_tail 'git log | grep fix')"
+assert_eq "ft: sed"    $'git log\nsed -n 1,5p'  "$(split_filter_tail 'git log | sed -n 1,5p')"
+assert_eq "ft: awk"    $'ps aux\nawk "{print}"' "$(split_filter_tail 'ps aux | awk "{print}"')"
+assert_eq "ft: cut"    $'ps aux\ncut -d: -f1'   "$(split_filter_tail 'ps aux | cut -d: -f1')"
+assert_eq "ft: wc"     $'git log\nwc -l'        "$(split_filter_tail 'git log | wc -l')"
+assert_eq "ft: sort"   $'du -s a b\nsort -n'    "$(split_filter_tail 'du -s a b | sort -n')"
+assert_eq "ft: uniq"   $'git log\nuniq -c'      "$(split_filter_tail 'git log | uniq -c')"
+assert_eq "ft: jq"     $'aws s3api list\njq .Buckets' \
+  "$(split_filter_tail 'aws s3api list | jq .Buckets')"
+assert_eq "ft: tr"     $'git log\ntr -d x'      "$(split_filter_tail 'git log | tr -d x')"
+assert_eq "ft: column" $'df -h\ncolumn -t'      "$(split_filter_tail 'df -h | column -t')"
+
+# negatives: shape outside scope -> empty output
+assert_eq "ft: no pipe"          "" "$(split_filter_tail 'ls -la')"
+assert_eq "ft: && compound"      "" "$(split_filter_tail 'cd x && git log | head -3')"
+assert_eq "ft: ; compound"       "" "$(split_filter_tail 'ls; git log | head -3')"
+assert_eq "ft: || compound"      "" "$(split_filter_tail 'a | head || b')"
+assert_eq "ft: pipe after tail"  "" "$(split_filter_tail 'a | grep x && b')"
+assert_eq "ft: non-filter tail"  "" "$(split_filter_tail 'a | grep x | xargs rm')"
+assert_eq "ft: xargs executor"   "" "$(split_filter_tail 'cat list | xargs kubectl delete')"
+# all-filter pipeline: maximal trailing run leaves empty upstream -> none
+assert_eq "ft: all-filter"       "" "$(split_filter_tail 'grep x file | head -3')"
+
+# ---- 030/1.2 opt-outs and upstream exclusions ----
+# Per-head opt-outs: the segment is NOT a filter -> no decomposition.
+assert_eq "ft: tail -f consumer"  "" "$(split_filter_tail 'kubectl logs p | tail -f')"
+assert_eq "ft: tail -F consumer"  "" "$(split_filter_tail 'kubectl logs p | tail -F')"
+assert_eq "ft: grep -q"           "" "$(split_filter_tail 'git log | grep -q fix')"
+assert_eq "ft: grep --quiet"      "" "$(split_filter_tail 'git log | grep --quiet fix')"
+assert_eq "ft: sed -i"            "" "$(split_filter_tail 'ls | sed -i p x')"
+
+# Whole-command opt-outs (existing fail-safes hold at detection level).
+assert_eq "ft: filter redirect"   "" "$(split_filter_tail 'git log | head -3 > out')"
+assert_eq "ft: upstream redirect" "" "$(split_filter_tail 'git log 2>&1 | head -3')"
+assert_eq "ft: unsafe subst"      "" "$(split_filter_tail 'echo $(id) | head -1')"
+assert_eq "ft: backticks"         "" "$(split_filter_tail 'echo `id` | head -1')"
+assert_eq "ft: pipe-amp |&"       "" "$(split_filter_tail 'make |& grep err')"
+assert_eq "ft: backgrounding &"   "" "$(split_filter_tail 'slow | head -3 &')"
+
+# Upstream exclusions: streaming producers and interactive/sudo heads.
+assert_eq "ft: upstream yes"      "" "$(split_filter_tail 'yes | head -5')"
+assert_eq "ft: upstream watch"    "" "$(split_filter_tail 'watch date | head -5')"
+assert_eq "ft: upstream tail -f"  "" "$(split_filter_tail 'tail -f log | grep err')"
+assert_eq "ft: journalctl -f"     "" "$(split_filter_tail 'journalctl -f -u s | grep err')"
+assert_eq "ft: upstream ssh"      "" "$(split_filter_tail 'ssh host ls | head -3')"
+assert_eq "ft: upstream sudo"     "" "$(split_filter_tail 'sudo dmesg | tail -5')"
+
+# Boundary pins: bounded forms of streaming-capable heads stay eligible.
+assert_eq "ft: journalctl -n ok"  $'journalctl -n 50 -u s\ngrep err' \
+  "$(split_filter_tail 'journalctl -n 50 -u s | grep err')"
+
+# Quote ambiguity: quoted | must never mis-split (fail-safe: none).
+assert_eq "ft: quoted pipe"       "" \
+  "$(split_filter_tail 'git log --grep="a | b" | head -3')"
+
+# ---- 030/3.1 final_command: rewrite selection ----
+# final_command <command> -> the command main should emit:
+#   filter pipeline  -> EMBO_CAPTURE_CMD --filter-b64 <b64f> --b64 <b64u>
+#   wrap-eligible    -> EMBO_CAPTURE_CMD --b64 <b64cmd>   (existing)
+#   ineligible       -> unchanged
+wrapf_cmd() { # <upstream> <filter-chain>
+  printf '%s --filter-b64 %s --b64 %s' \
+    "$EMBO_CAPTURE_CMD" "$(b64 "$2")" "$(b64 "$1")"
+}
+
+assert_eq "fc: filter pipeline" \
+  "$(wrapf_cmd 'git log' 'head -3')" \
+  "$(final_command 'git log | head -3')"
+assert_eq "fc: multi-filter chain" \
+  "$(wrapf_cmd 'kubectl get pods' 'grep x | head -5')" \
+  "$(final_command 'kubectl get pods | grep x | head -5')"
+assert_eq "fc: compound whole-wrap" \
+  "$(wrap_cmd 'ls && pwd')" "$(final_command 'ls && pwd')"
+assert_eq "fc: simple whole-wrap" \
+  "$(wrap_cmd 'ls -la')" "$(final_command 'ls -la')"
+assert_eq "fc: grep -q whole-wrap" \
+  "$(wrap_cmd 'git log | grep -q fix')" \
+  "$(final_command 'git log | grep -q fix')"
+assert_eq "fc: backgrounded unchanged" \
+  'sleep 5 &' "$(final_command 'sleep 5 &')"
+assert_eq "fc: interactive tail unchanged" \
+  'make | less' "$(final_command 'make | less')"
+assert_eq "fc: re-entrancy unchanged" \
+  "$(wrap_cmd 'ls')" "$(final_command "$(wrap_cmd 'ls')")"
+
+# decide() still gates per-segment: filter segments need allow rules too
+_TMPHF="$(mktemp -d)"; mkdir -p "$_TMPHF/.claude"
+printf '{"permissions":{"allow":["Bash(git log *)","Bash(head *)"],"deny":[]}}' \
+  > "$_TMPHF/.claude/settings.json"
+decf() { HOME="$_TMPHF" decide "$1" "$_TMPHF/noproj"; }
+
+assert_eq "fc gate: both allowlisted"     "allow" \
+  "$(decf 'git log | head -3')"
+assert_eq "fc gate: filter not listed"    "fallthrough" \
+  "$(decf 'git log | grep x')"
+assert_eq "fc gate: upstream not listed"  "fallthrough" \
+  "$(decf 'kubectl get pods | head -3')"
+rm -rf "$_TMPHF"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
