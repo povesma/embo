@@ -158,6 +158,8 @@ of resetting to zero every morning.
 | Planning | `/dev:check` | Audit task completion status |
 | Development | `/dev:impl` | Implement subtasks one at a time, evidence-gated |
 | Development | `/dev:git` | Generate commit messages and PR descriptions |
+| Research | `/dev:research:examine` | Independent two-pass critique of a decision or doc → reconciled recommendation |
+| Research | `/dev:research:verify` | Prove a chosen approach meets its acceptance criteria before building |
 | Config | `/dev:profile` | Switch workflow profile (quality / fast / minimal / research) |
 
 Full per-command reference under [Reference](#reference).
@@ -364,16 +366,19 @@ After installation, your `~/.claude/` directory will contain:
 ~/.claude/
 ├── agents/
 │ ├── rlm-subcall.md # RLM subagent for chunk analysis
+│ ├── approach-validator.md # Verifies a chosen approach vs its criteria (dev:research:verify)
+│ ├── examine-advisor.md # Examines a decision/doc, two passes (dev:research:examine)
 │ ├── test-backend.md # Backend test writer (pytest/vitest/jest/etc.)
 │ ├── test-review.md # Adversarial coverage gap analyzer
 │ ├── test-e2e-planner.md # E2E test plan generator (requires Playwright MCP)
 │ ├── test-e2e-generator.md # Playwright test code generator (requires Playwright MCP)
 │ └── test-e2e-healer.md # Failing test debugger/repair (requires Playwright MCP)
 ├── commands/
-│ └── dev/ # All 11 dev commands
+│ └── dev/ # dev commands (flat + research/ subdir)
 │ ├── init.md, start.md, health.md, profile.md
 │ ├── prd.md, tech-design.md, test-plan.md, tasks.md, check.md
-│ └── impl.md, git.md
+│ ├── impl.md, git.md
+│ └── research/ # examine.md, verify.md (dev:research:*)
 ├── profiles/
 │ ├── quality.yaml # Full workflow profile
 │ ├── fast.yaml # Speed mode profile
