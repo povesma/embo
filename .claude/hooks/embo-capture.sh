@@ -11,6 +11,14 @@
 #   <first PREVIEW_LINES lines>
 #   [embo-capture] truncated — <N> lines, <M> bytes. Full output:
 #     <path>  (exit=<code>)
+#
+# Filter mode (030): embo-capture --filter-b64 <b64-filter> --b64 <b64-cmd>
+# Runs the upstream alone (stdout to the log, stderr separate), then the
+# filter chain over the captured stdout. The filtered view goes inline
+# (same thresholds); the marker always follows and carries BOTH codes:
+#   [embo-capture] filtered view — full output:
+#     <path>  (<N> lines, <M> bytes, upstream exit=<EU>, filter exit=<EF>)
+# Wrapper exit = filter's exit (native pipe semantics, pipefail off).
 
 set -uo pipefail
 
@@ -19,8 +27,17 @@ MAX_BYTES="${EMBO_CAPTURE_MAX_BYTES:-300}"
 PREVIEW_LINES="${EMBO_CAPTURE_PREVIEW_LINES:-5}"
 SCRATCH_DIR="${EMBO_CAPTURE_DIR:-tmp/cap}"
 
+FILTER=""
+if [ "${1:-}" = "--filter-b64" ] && [ -n "${2:-}" ]; then
+  FILTER="$(printf '%s' "$2" | base64 --decode 2>/dev/null)" || {
+    echo "embo-capture: invalid base64 payload" >&2
+    exit 64
+  }
+  shift 2
+fi
+
 if [ "${1:-}" != "--b64" ] || [ -z "${2:-}" ]; then
-  echo "embo-capture: usage: embo-capture --b64 <base64-command>" >&2
+  echo "embo-capture: usage: embo-capture [--filter-b64 <base64-filter>] --b64 <base64-command>" >&2
   exit 64
 fi
 
@@ -35,6 +52,41 @@ mkdir -p "$SCRATCH_DIR" 2>/dev/null || true
 stamp="$(date +%s%N 2>/dev/null)"
 case "$stamp" in *N|"") stamp="$(date +%s)${RANDOM}" ;; esac
 LOG="$SCRATCH_DIR/cap-$$-$stamp.log"
+
+if [ -n "$FILTER" ]; then
+  # Filter mode: upstream stdout to the log, stderr kept out of the
+  # filter path (a real pipe only routes stdout through the filter).
+  ERRLOG="$LOG.err"
+  VIEW="$LOG.view"
+  bash -c "$CMD" >"$LOG" 2>"$ERRLOG"
+  EU=$?
+  bash -c "$FILTER" <"$LOG" >"$VIEW" 2>>"$ERRLOG"
+  EF=$?
+
+  lines=$(wc -l <"$LOG" | tr -d ' ')
+  bytes=$(wc -c <"$LOG" | tr -d ' ')
+  vlines=$(wc -l <"$VIEW" | tr -d ' ')
+  vbytes=$(wc -c <"$VIEW" | tr -d ' ')
+
+  if [ "$vlines" -le "$MAX_LINES" ] && [ "$vbytes" -le "$MAX_BYTES" ]; then
+    cat "$VIEW"
+  else
+    head -n "$PREVIEW_LINES" "$VIEW"
+  fi
+
+  if [ -s "$ERRLOG" ]; then
+    head -n "$PREVIEW_LINES" "$ERRLOG" >&2
+    elines=$(wc -l <"$ERRLOG" | tr -d ' ')
+    [ "$elines" -gt "$PREVIEW_LINES" ] && printf \
+      '[embo-capture] stderr truncated — %s lines. Full: %s\n' \
+      "$elines" "$ERRLOG" >&2
+  fi
+
+  printf '[embo-capture] filtered view — full output:\n'
+  printf '  %s  (%s lines, %s bytes, upstream exit=%s, filter exit=%s)\n' \
+    "$LOG" "$lines" "$bytes" "$EU" "$EF"
+  exit "$EF"
+fi
 
 # Run the decoded command through a shell, full output to the log.
 bash -c "$CMD" >"$LOG" 2>&1

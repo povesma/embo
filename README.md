@@ -400,7 +400,7 @@ available, register them manually as shown in the disable column / the
 | `context-guard.sh` | `UserPromptSubmit` | Warns when context window is ≥ threshold before new dev work | Set `CONTEXT_GUARD_THRESHOLD=101` in `settings.json` env |
 | `behavioral-reminder.sh` | `UserPromptSubmit` | Injects rule tag reminders before each prompt; targeted on criticism, implementation, and git requests | Set `BEHAVIORAL_REMINDER_DISABLED=1` in `settings.json` env |
 | `approve-compound.sh` | `PreToolUse` (Bash) | Auto-approves a Bash command when every subcommand (after stripping redirects/env/wrappers, splitting on `&& \|\| ; \| &`) already matches your `permissions.allow` and none matches `deny`. Removes the prompt that a redirect or pipe otherwise triggers. Falls through to the normal prompt on anything it cannot parse; never overrides `deny` or protected-dir checks | Remove the `PreToolUse` matcher from `settings.json` |
-| `embo-capture.sh` | (invoked by `approve-compound.sh`, not registered as a hook) | Output capture wrapper: approved commands are rewritten to run through it; full output is saved to `tmp/cap/` in your project, small output prints inline, large output prints a preview plus a `[embo-capture]` marker with the file path and real exit code | Remove the `approve-compound.sh` registration (wrapping is part of its rewrite) |
+| `embo-capture.sh` | (invoked by `approve-compound.sh`, not registered as a hook) | Output capture wrapper: approved commands are rewritten to run through it; full output is saved to `tmp/cap/` in your project, small output prints inline, large output prints a preview plus a `[embo-capture]` marker with the file path and real exit code. Pipelines ending in a filter (`\| head`, `\| grep`, ...) are decomposed: the upstream's full unfiltered output is saved first, the filter runs on the saved copy, and a `filtered view` marker reports both the upstream's and the filter's exit codes | Remove the `approve-compound.sh` registration (wrapping is part of its rewrite) |
 
 All hooks fail open - any error exits silently with code 0 and never
 blocks Claude from responding.
@@ -437,6 +437,32 @@ as one unit; `$(...)`, backticks, heredocs, backgrounded (`&`) and
 interactive commands (`ssh`, `vim`, `sudo`, ...) are never
 auto-wrapped, and unparseable commands always fall back to the
 normal permission prompt.
+
+**Filtered pipelines.** A pipeline whose trailing segments are pure
+filters (`head`, `tail`, `grep`, `sed`, `awk`, `cut`, `wc`, `sort`,
+`uniq`, `jq`, `tr`, `column`) is decomposed by the rewrite: the
+upstream runs alone with its full unfiltered stdout saved to the
+capture file (stderr kept separate), then the filter chain runs over
+the saved copy. The inline result is the filtered view plus a marker:
+
+```
+[embo-capture] filtered view — full output:
+  <path>  (<N> lines, <M> bytes, upstream exit=<EU>, filter exit=<EF>)
+```
+
+The wrapper exits with the filter's code (native pipe semantics);
+the upstream's true code is in the marker. If the filter missed
+something, the full output is already on disk — no re-run needed.
+Decomposition is skipped (the command runs as a normal whole-compound
+wrap or falls through) for: follow/streaming forms (`tail -f`,
+`watch`, `journalctl -f`, `yes`), early-exit filters (`grep -q`),
+in-place filters (`sed -i`), `xargs`, quoted pipes, and anything
+ambiguous — ambiguity always falls back to existing behavior.
+
+Tuning (env, in `settings.json`): `EMBO_CAPTURE_MAX_LINES` /
+`EMBO_CAPTURE_MAX_BYTES` (inline thresholds, default 10/300),
+`EMBO_CAPTURE_PREVIEW_LINES` (default 5), `EMBO_CAPTURE_DIR`
+(default `tmp/cap`).
 
 #### context-guard rationale
 

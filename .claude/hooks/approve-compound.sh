@@ -289,6 +289,123 @@ wrap_command() {
     "$(printf '%s' "$1" | base64 | tr -d '\n')"
 }
 
+# --- 030 filter-triggered capture: detection ---
+
+# Trailing pipeline segments with these heads are pure output filters;
+# a filter signals "more output exists than is wanted inline".
+FILTER_HEADS="head tail grep sed awk cut wc sort uniq jq tr column"
+
+# Upstream heads producing unbounded output that rely on the consumer
+# to terminate them (SIGPIPE); decomposition would hang or run long.
+CAPTURE_STREAM_HEADS="yes watch"
+
+# is_filter_segment <segment> -> "yes" | "no"
+# Filter head, minus per-head opt-outs: follow modes (tail -f), quiet
+# early-exit (grep -q), in-place side effects (sed -i). Opt-out
+# matching is deliberately broad on dash tokens — over-excluding is
+# fail-safe (command simply runs unwrapped).
+is_filter_segment() {
+  local norm head tok
+  norm="$(normalize_subcommand "$1")"
+  head="${norm%% *}"
+  case " $FILTER_HEADS " in
+    *" $head "*) ;;
+    *) echo "no"; return ;;
+  esac
+  for tok in $norm; do
+    case "$tok" in -*) ;; *) continue ;; esac
+    case "$head" in
+      tail) case "$tok" in *f*|*F*) echo "no"; return ;; esac ;;
+      grep) case "$tok" in *q*) echo "no"; return ;; esac ;;
+      sed)  case "$tok" in *i*) echo "no"; return ;; esac ;;
+    esac
+  done
+  echo "yes"
+}
+
+# split_filter_tail <command> -> two lines (upstream, filter chain
+# re-joined with " | ") on detection; no output otherwise. Pure
+# pipelines only; every ambiguity falls back to no-detection.
+split_filter_tail() {
+  local cmd="$1"
+  case "$cmd" in
+    *embo-capture.sh\ *) return ;;     # re-entrancy guard
+    *'&'*|*';'*) return ;;             # compounds, |&, backgrounding
+  esac
+  case "$cmd" in *'|'*) ;; *) return ;; esac
+  [ "$(has_redirect "$cmd")" = "yes" ] && return
+  [ "$(is_unsafe "$cmd")" = "bail" ] && return
+
+  local segs=() seg trimmed q
+  while IFS= read -r seg; do
+    trimmed="$(printf '%s' "$seg" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')"
+    [ -z "$trimmed" ] && return        # || or stray pipe: malformed
+    # odd quote count in a segment = a quoted | was mis-split: bail
+    q="$(printf '%s' "$trimmed" | tr -cd '"' | wc -c | tr -d ' ')"
+    case "$q" in *[13579]) return ;; esac
+    q="$(printf '%s' "$trimmed" | tr -cd "'" | wc -c | tr -d ' ')"
+    case "$q" in *[13579]) return ;; esac
+    segs+=("$trimmed")
+  done <<< "$(printf '%s' "$cmd" | tr '|' '\n')"
+  [ "${#segs[@]}" -lt 2 ] && return
+
+  local i=$(( ${#segs[@]} - 1 ))
+  while [ "$i" -ge 0 ] && \
+        [ "$(is_filter_segment "${segs[$i]}")" = "yes" ]; do
+    i=$((i - 1))
+  done
+  [ "$i" -lt 0 ] && return                      # all-filter: no upstream
+  [ "$i" -eq $(( ${#segs[@]} - 1 )) ] && return # no filter tail
+
+  local j upstream="" filter="" norm head tok
+  for (( j = 0; j <= i; j++ )); do
+    norm="$(normalize_subcommand "${segs[$j]}")"
+    [ -z "$norm" ] && return
+    [ "$(is_interactive_head "$norm")" = "yes" ] && return
+    head="${norm%% *}"
+    case " $CAPTURE_STREAM_HEADS " in *" $head "*) return ;; esac
+    case "$head" in
+      tail|journalctl)
+        for tok in $norm; do
+          case "$tok" in -*[fF]*|--follow*) return ;; esac
+        done ;;
+    esac
+    [ -z "$upstream" ] && upstream="${segs[$j]}" \
+      || upstream="$upstream | ${segs[$j]}"
+  done
+  for (( j = i + 1; j < ${#segs[@]}; j++ )); do
+    [ -z "$filter" ] && filter="${segs[$j]}" \
+      || filter="$filter | ${segs[$j]}"
+  done
+  printf '%s\n%s\n' "$upstream" "$filter"
+}
+
+# wrap_filter_command <upstream> <filter-chain> -> wrapper invocation
+wrap_filter_command() {
+  printf '%s --filter-b64 %s --b64 %s' "$EMBO_CAPTURE_CMD" \
+    "$(printf '%s' "$2" | base64 | tr -d '\n')" \
+    "$(printf '%s' "$1" | base64 | tr -d '\n')"
+}
+
+# final_command <command> -> the command main emits for an allowed
+# call: filter decomposition first, else whole-command wrap, else
+# unchanged. Authorization is decide()'s job — this only picks the
+# execution shape.
+final_command() {
+  local cmd="$1" det
+  det="$(split_filter_tail "$cmd")"
+  if [ -n "$det" ]; then
+    wrap_filter_command "$(printf '%s\n' "$det" | sed -n 1p)" \
+      "$(printf '%s\n' "$det" | sed -n 2p)"
+    return
+  fi
+  if [ "$(should_wrap "$cmd")" = "yes" ]; then
+    wrap_command "$cmd"
+    return
+  fi
+  printf '%s' "$cmd"
+}
+
 # --- Main (only when executed directly, not when sourced by tests) ---
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
   set -uo pipefail
@@ -311,13 +428,10 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
   DECISION="$(decide "$STRIPPED" "$PROJ")"
   case "$DECISION" in
     allow)
-      # Order: tail already stripped; now consider wrapping the survivor
-      # for output capture. Wrap only an eligible (non-redirect, simple,
-      # non-interactive) command. The emitted command is the final one.
-      FINAL="$STRIPPED"
-      if [ "$(should_wrap "$STRIPPED")" = "yes" ]; then
-        FINAL="$(wrap_command "$STRIPPED")"
-      fi
+      # Order: tail already stripped; now pick the execution shape for
+      # the survivor: filter decomposition, whole-command wrap, or
+      # unchanged (final_command applies all eligibility rules).
+      FINAL="$(final_command "$STRIPPED")"
       if [ "$FINAL" != "$CMD" ]; then
         jq -n --arg c "$FINAL" '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"allow",updatedInput:{command:$c}}}'
       else
