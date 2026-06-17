@@ -253,6 +253,28 @@ This rule steers; it does not enforce. The repo's capture/approve
 hook is what actually reduces prompts. Use this rule on top of it,
 not instead of it.
 
+<!-- RULE:RESEARCH-VERIFY -->
+### Don't accept your own confidence as evidence
+
+Your own reasoning is a hypothesis, not proof. When the cost of being
+wrong is **above average** OR your **confidence is low**, get an
+independent check before you commit. Escalate by weight:
+
+- **Slightest doubt about any tool, API, or approach** — especially a
+  **not-widely-used** one — check **Context7 MCP** for current docs
+  instead of relying on memory. Cheap, always-on; do it by reflex.
+- **A real decision, or a doc you're unsure of** (which option? is this
+  PRD/tech-design sound?) — proactively **suggest** `/dev:research:examine`:
+  it runs two independent clean-context passes and reconciles them into
+  a recommendation.
+- **A chosen approach that's risky or complex, before implementing it**
+  — proactively **suggest** `/dev:research:verify`: it proves each
+  acceptance criterion against an independent source.
+
+You **suggest** examine/verify for any non-trivial task and let the user
+decide; you do not auto-run them. The deeper discipline is in
+`docs/VERIFICATION-DISCIPLINE.md`.
+
 <!-- RULE:DECIDE-OR-ASK -->
 ### Decide what you can; ask only about genuine blockers
 
