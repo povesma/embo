@@ -5,7 +5,7 @@ description: >
   examine-advisor agent as two parallel passes — research (prior art via
   NotebookLM) and internal (codebase / consistency) — then reconciles
   them into one report plus a recommendation. Invoke with
-  /embo:examine. Report-only; never edits the target.
+  /embo:research:examine. Report-only; never edits the target.
 ---
 
 # Examine a Decision or Document, Independently

@@ -68,7 +68,7 @@ invalidates the dependent requirement — stop and loop back to
 
 **Discover existing patterns**:
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/rlm_scripts/rlm_repl.py" exec <<'PY'
+rlm_repl exec <<'PY'
 # Find architecture-relevant files
 arch_files = []
 
@@ -96,7 +96,7 @@ PY
 
 **Find where new code will connect**:
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/rlm_scripts/rlm_repl.py" exec <<'PY'
+rlm_repl exec <<'PY'
 # Based on PRD requirements, find integration points
 # Example: If adding auth, find where current auth is used
 

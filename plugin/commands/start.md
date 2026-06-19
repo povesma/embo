@@ -1,6 +1,6 @@
 ---
 description: Start a coding session with comprehensive context from RLM code analysis and claude-mem historical knowledge. Use at the beginning of each coding session.
-allowed-tools: Bash(cat ~/.claude/active-profile.yaml *) Read(~/.claude/active-profile.yaml) Bash(python3 ~/.claude/rlm_scripts/rlm_repl.py *) Bash(git log *) Bash(git diff *)
+allowed-tools: Bash(cat ~/.claude/active-profile.yaml *) Read(~/.claude/active-profile.yaml) Bash(rlm_repl *) Bash(git log *) Bash(git diff *)
 ---
 
 # Start embo Coding Session
@@ -264,11 +264,11 @@ independent check before you commit. Escalate by weight:
   **not-widely-used** one — check **Context7 MCP** for current docs
   instead of relying on memory. Cheap, always-on; do it by reflex.
 - **A real decision, or a doc you're unsure of** (which option? is this
-  PRD/tech-design sound?) — proactively **suggest** `/embo:examine`:
+  PRD/tech-design sound?) — proactively **suggest** `/embo:research:examine`:
   it runs two independent clean-context passes and reconciles them into
   a recommendation.
 - **A chosen approach that's risky or complex, before implementing it**
-  — proactively **suggest** `/embo:verify`: it proves each
+  — proactively **suggest** `/embo:research:verify`: it proves each
   acceptance criterion against an independent source.
 
 You **suggest** examine/verify for any non-trivial task and let the user
@@ -372,19 +372,12 @@ task, resolve the behaviour issue, then resume.
 
 ```bash
 # Check RLM status
-python3 "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/rlm_scripts/rlm_repl.py" status
+rlm_repl status
 ```
 
-**Plugin-install note (one-time):** plugin users run embo's scripts from
-`${CLAUDE_PLUGIN_ROOT}`, which the `allowed-tools` patterns (written for
-the manual `~/.claude` install) do not auto-approve. The first time
-Claude Code prompts for any of these, choose **"Always allow"** so the
-prompt does not recur:
-- `python3 .../rlm_scripts/rlm_repl.py *` — RLM analysis
-- `bash .../hooks/embo-capture.sh *` — output capture wrapper
-- `bash .../hooks/fix-hooks.sh *` — hook-registration doctor
-
-Manual installs already match the bundled patterns and are unaffected.
+`rlm_repl` is a plain command on PATH (the plugin's `bin/` wrapper, or
+`~/.claude/bin/` for a manual install) — no `${...}` expansion, so it
+auto-approves under a `Bash(rlm_repl *)` rule with no prompt.
 
 **If not initialized**: Suggest running `/embo:init` first
 

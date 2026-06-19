@@ -68,7 +68,7 @@ mcp__plugin_claude-mem_mcp-search__get_observations(
 
 **3a. Find related existing features**:
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/rlm_scripts/rlm_repl.py" exec <<'PY'
+rlm_repl exec <<'PY'
 keywords = ['feature_term', 'related_concept']  # fill with terms from the feature name and problem domain
 
 relevant = []

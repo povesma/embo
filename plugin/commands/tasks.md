@@ -65,7 +65,7 @@ Extract:
 ### Step 3: RLM Complexity Estimation
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/rlm_scripts/rlm_repl.py" exec <<'PY'
+rlm_repl exec <<'PY'
 # Estimate based on files to modify/create from tech design
 files_to_change = ['{list_from_design}']
 
