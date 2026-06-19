@@ -102,20 +102,21 @@ verified via claude-code-guide agent, 2026-06-17/18.
   (Built-in bundled skills like `/code-review` carry no prefix; those
   are NOT plugins and are not a counter-example.) Verified via
   claude-code-guide vs docs, 2026-06-18.
-- **Command subdirectory behavior is UNDOCUMENTED / contradicted —
-  flat is the safe shape.** Two Anthropic sources conflict: the
-  official `plugins.md` shows ONLY flat `commands/*.md` and never
-  mentions subdirs; the shipped `plugin-dev` reference
-  (`plugin-features-reference.md`) claims subdirs DO create namespaces
-  (`commands/review/security.md` → `/security`, labeled
-  `(plugin:name:review)`). The official source does not confirm nested
-  discovery. **Decision: flatten** — flat `commands/*.md` is the only
-  documented-and-safe layout; relying on nested-dir namespacing would
-  build on unverified behavior (KISS/risk). NOTE: an earlier draft
-  asserted "nested is NOT discovered (loader error)" as fact — that
-  claim was NOT reconfirmed and is retracted; the accurate position is
-  "nested is unverified, flat is safe." Resolved via two
-  claude-code-guide passes vs live docs + on-disk plugin-dev reference,
+- **Command subdirectories DO create typeable colon-namespaces —
+  VERIFIED LIVE 2026-06-19.** `commands/research/examine.md` registers
+  as **`/embo:research:examine`** (a typeable invocation, not just a
+  `/help` label). Confirmed by installing the plugin with the subdir
+  restored and reading the registered skill list: both research
+  commands appeared as `embo:research:examine` / `embo:research:verify`,
+  and `claude plugin validate --strict` accepted the subdir.
+  **Decision: KEEP `commands/research/{examine,verify}.md`** — the
+  `research:` grouping is preserved (user preference + it has real
+  meaning). This OVERTURNS two earlier wrong positions, both now
+  retracted: (1) the docs-agent's "nested is NOT discovered (loader
+  error)" claim, and (2) the fallback "flatten because nested is
+  unverified." The live install is the authority. History note:
+  flattened in story 6, restored after the live test in this session.
+  Resolved via: live plugin reinstall + skill-list inspection,
   2026-06-18.
 
 ### Critical gap (verified, load-bearing)
@@ -161,9 +162,10 @@ povesma/embo/  (marketplace repo)
 ├── plugin/                  # THE PLUGIN ROOT (${CLAUDE_PLUGIN_ROOT})
 │   ├── .claude-plugin/
 │   │   └── plugin.json      # name:"embo" (NO deps field; see facts)
-│   ├── commands/            # 15 flat .md, NO subdirs (safe shape).
-│   │                        # research/{examine,verify} → top-level
-│   │                        # /embo:examine, /embo:verify
+│   ├── commands/            # 12 flat .md + research/ subdir.
+│   │   └── research/        # examine.md, verify.md →
+│   │                        # /embo:research:examine, :verify
+│   │                        # (nested namespace VERIFIED live)
 │   ├── agents/              # 4 existing (5 test agents deferred → 033)
 │   ├── hooks/
 │   │   ├── hooks.json       # registers the 3 event handlers (FR-5b)
@@ -190,25 +192,20 @@ resolves to the installed `plugin/` dir, so all hook/RLM path rewrites
 nesting does not change those references (the var already abstracts the
 root).
 
-### FR-4: namespace flatten to `/embo:*`
+### FR-4: namespace → `/embo:*`, with `research/` subdir KEPT
 
-**Flattening the `research/` subdir is the safe, documented shape — not
-merely a style choice.** Per the fact above, nested-command-dir
-behavior is undocumented in the official source and contradicted
-between Anthropic sources; flat `commands/*.md` is the only layout the
-official docs confirm. Flattening avoids building on unverified
-behavior. (If a future Claude Code version documents nested namespaces,
-keeping `research/` becomes an option; until then, flatten.)
+**The `research/` subdir is RETAINED — verified live (see fact above).**
+Nested command dirs create typeable colon-namespaces, so
+`commands/research/{examine,verify}.md` give **`/embo:research:examine`**
+and **`/embo:research:verify`**, preserving the `research:` grouping
+(user preference, 2026-06-19). All other commands are flat at
+`commands/*.md`.
 
-- All commands move to a flat `commands/`; `research/examine.md` and
-  `research/verify.md` move to top-level `examine.md` / `verify.md`.
-  Leaf names verified collision-free, so they become **`/embo:examine`**
-  and **`/embo:verify`** (leaf-only). Decision: leaf-only over a
-  `research-examine` hyphenation — shorter, and the `research:` grouping
-  has no functional meaning once flattened. (Override possible in tasks
-  if a grouping prefix is wanted.)
+- `commands/research/examine.md` → `/embo:research:examine`;
+  `commands/research/verify.md` → `/embo:research:verify`. Every other
+  command is `commands/<name>.md` → `/embo:<name>`.
 - The `/embo:` prefix itself is forced by the plugin `name` (verified
-  above) — every command is `/embo:<leaf>`, unavoidable.
+  above) — unavoidable. The `research:` segment comes from the subdir.
 - Every internal cross-reference `/dev:<x>` → `/embo:<x>` across command
   bodies, agent files, README, TROUBLESHOOTING, CLAUDE.md. Note
   `research:examine` / `research:verify` references become
@@ -226,9 +223,49 @@ that shells out to RLM, replace home-rooted paths with plugin-root:
   `~/.claude/hooks/embo-capture.sh` when `CLAUDE_PLUGIN_ROOT` is unset
   (manual install). Shape:
   `EMBO_CAPTURE_CMD="${EMBO_CAPTURE_CMD:-${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/hooks/embo-capture.sh}"`.
-- Commands invoking `~/.claude/rlm_scripts/rlm_repl.py` → resolve via
-  `${CLAUDE_PLUGIN_ROOT}/rlm_scripts/rlm_repl.py` with the same manual
-  fallback.
+- Commands invoking `~/.claude/rlm_scripts/rlm_repl.py` → **REVISED
+  2026-06-19, see below.** Originally rewritten to the inline
+  `${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/rlm_scripts/rlm_repl.py` form.
+
+**FR-5 REVISION (2026-06-19) — `bin/rlm_repl` wrapper for RLM, NOT inline
+`${...}`.** The live install test (story 8) proved the inline form is
+unusable: `/embo:init`'s first RLM call halted at a **"Contains
+expansion" approval dialog**. Verified via claude-code-guide vs docs:
+Claude Code's Bash tool applies a **lexical gate** — any command string
+containing `${...}`/`$(...)`/backticks prompts BEFORE the allowlist is
+consulted, and **no `permissions` rule can suppress it**. So the inline
+form prompts on every RLM-backed command (init/prd/impl/check/…), not
+once.
+
+Fix (the officially-documented pattern): ship an executable wrapper at
+`plugin/bin/rlm_repl`. A plugin's `bin/` is added to the Bash tool PATH
+while enabled, so commands invoke a **bare `rlm_repl …`** — no
+expansion in the command string, so no prompt, and a simple
+`Bash(rlm_repl *)` rule matches. The wrapper resolves `rlm_repl.py`
+relative to its own (symlink-followed) location and does NOT change CWD,
+so RLM state stays project-local. This matches the profile's
+"allow-listable invocation" rule. Verified live: wrapper runs via
+symlink-on-PATH from any CWD, state stays project-local, and
+`/embo:init` completes with no prompt on a real project.
+
+- All 13 RLM command invocations now use bare `rlm_repl`.
+- `start.md` `allowed-tools` updated to `Bash(rlm_repl *)`.
+- Manual install: ship the wrapper to `~/.claude/bin/`, documented as a
+  one-line PATH addition (story 7).
+
+The HOOK path rewrite (`approve-compound.sh:219`, still inline `${...}`)
+is UNAFFECTED: hooks are invoked by Claude Code's hook runner, not the
+Bash tool, so they never hit the expansion gate.
+
+**Executable-bit requirement (2026-06-19, surfaced by story 8):** all
+shipped hook scripts AND the `bin/` wrapper MUST be executable
+(`chmod +x`). The live install failed with exit 126 because the moved
+`embo-capture.sh` lacked the `x` bit (it had only ever been invoked via
+`bash X`, which masks the requirement; `approve-compound.sh` invokes it
+directly via `$EMBO_CAPTURE_CMD`, which needs `+x`). Fixed on:
+approve-compound.sh, embo-capture.sh, behavioral-reminder.sh,
+context-guard.sh, fix-hooks.sh, bin/rlm_repl, rlm_scripts/rlm_repl.py.
+`.test.sh` files stay non-executable (run via `bash X`).
 
 **Registration (FR-5b)** — the plugin's `hooks/hooks.json` registers the
 THREE event handlers (`context-guard.sh`, `behavioral-reminder.sh`,
