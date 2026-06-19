@@ -110,7 +110,7 @@ fi
 
 if [ "$GIT_REQUEST" = "1" ]; then
     REMINDER="$REMINDER
-[REMINDER:DEV-GIT] Git or PR operation detected — use the /dev:git skill, do not run git/gh commands directly. See <!-- RULE:DEV-GIT --> in dev:git."
+[REMINDER:DEV-GIT] Git or PR operation detected — use the /embo:git skill, do not run git/gh commands directly. See <!-- RULE:DEV-GIT --> in /embo:git."
 fi
 
 # --- Output JSON ---

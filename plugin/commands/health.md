@@ -1,3 +1,9 @@
+---
+description: >
+  Verify embo's dependencies are present and working: RLM REPL,
+  claude-mem MCP tools, and the capture/approve hooks.
+---
+
 # Verify embo System Dependencies
 
 Check that RLM state, claude-mem plugin, and PostToolUse hook are all
@@ -30,8 +36,8 @@ python3 "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/rlm_scripts/rlm_repl.py" status
 |---------|-------------|
 | `Total files:` > 0 | pass · notes: `"{N} files indexed"` |
 | `No such file or directory` | fail · notes: `"rlm_repl.py not found"` · fix: `"Run: bash install.sh from the repo root"` |
-| Error / missing state.pkl | fail · notes: `"state.pkl not found or index error"` · fix: `"Run: /dev:init"` |
-| `Total files: 0` | fail · notes: `"Index is empty"` · fix: `"Run: /dev:init"` |
+| Error / missing state.pkl | fail · notes: `"state.pkl not found or index error"` · fix: `"Run: /embo:init"` |
+| `Total files: 0` | fail · notes: `"Index is empty"` · fix: `"Run: /embo:init"` |
 
 ### Check 2 — claude-mem Plugin
 
@@ -101,7 +107,7 @@ responsive:
 | PostToolUse hook  | ✅/❌  | {hook_result.notes}  |
 ```
 
-- **0 failures**: print `All systems operational. Ready for /dev:start`
+- **0 failures**: print `All systems operational. Ready for /embo:start`
 - **≥ 1 failure**: print `{N} issue(s) found:` then for each failed check:
   ```
   ❌ {name} — {notes}

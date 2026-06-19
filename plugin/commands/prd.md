@@ -1,3 +1,10 @@
+---
+description: >
+  Generate a Product Requirements Document informed by claude-mem
+  history and RLM codebase analysis. Asks clarifying questions, then
+  writes a sourced, reality-checked PRD to the task folder.
+---
+
 # Generate PRD with embo Hybrid Analysis
 
 Create a Product Requirements Document informed by both historical context (claude-mem) and current codebase capabilities (RLM).
@@ -5,7 +12,7 @@ Create a Product Requirements Document informed by both historical context (clau
 ## When to Use
 
 - Planning a new feature
-- After `/dev:start` has provided session context
+- After `/embo:start` has provided session context
 - When you need a data-driven, context-aware PRD
 
 ## What This Command Does
@@ -238,8 +245,8 @@ backward compat").
 
 **Next Steps**:
 1. Review and refine this PRD
-2. Run `/dev:tech-design` to create technical design
-3. Run `/dev:tasks` to break down into tasks
+2. Run `/embo:tech-design` to create technical design
+3. Run `/embo:tasks` to break down into tasks
 ```
 
 ### Step 5.5: Reality-Check Pass (MANDATORY)
@@ -316,7 +323,7 @@ Thanks to hybrid analysis, this PRD:
 
 **Create technical design**:
 ```
-/dev:tech-design
+/embo:tech-design
 ```
 
 **Or refine PRD first**:
@@ -377,7 +384,7 @@ Thanks to hybrid analysis, this PRD:
 ✅ Realistic constraints from architecture
 
 ## Next Steps
-/dev:tech-design
+/embo:tech-design
 ```
 
 ## Context7
@@ -393,5 +400,5 @@ When referencing any library, framework, or external API — use the Context7 MC
 5. Synthesize PRD incorporating user's answers + RLM + claude-mem insights
 6. Save to both claude-mem and file system
 7. Report what insights were used and quality improvements
-8. Suggest `/dev:tech-design` as next step
+8. Suggest `/embo:tech-design` as next step
 9. DO NOT start technical design yet, wait for user approval
