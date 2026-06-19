@@ -78,20 +78,43 @@ Must report RLM, claude-mem, and the capture hook as operational.
 ```
 
 > [!NOTE]
-> **Upgrading from the old `cp`-into-`~/.claude/` install?** The old
-> manual install registered the embo hooks in your
-> `~/.claude/settings.json`; the plugin registers its own. Two
-> registrations of the same hook fire twice. Run the migration doctor
-> once to remove the stale entries (it prompts per entry and backs up
-> first):
-> ```bash
-> $ bash "${CLAUDE_PLUGIN_ROOT}/hooks/fix-hooks.sh" --fix
-> ```
-> It also flags any stale `~/.claude/commands/dev/` files (the old
-> `/dev:*` copies) to remove.
+> **Upgrading from the old `cp`-into-`~/.claude/` install?** The plugin
+> and your old files both register the same hooks (they fire twice) and
+> both define `/dev:*` vs `/embo:*` commands. Clean up once — see
+> [Migrating from a manual install](#migrating-from-a-manual-install).
 
 Full per-platform details, the manual (no-plugin) install, and
 dependency versions are under [Reference](#reference).
+
+## Migrating from a manual install
+
+If you installed embo by copying files into `~/.claude/` (the old way),
+do this once after installing the plugin, to remove the stale pieces.
+Steps 3-4 delete files — review each path first.
+
+1. **Install the plugin** (see [Install](#install)) and `/reload-plugins`.
+2. **Remove stale hook registrations** (prevents double-firing). Inside
+   Claude Code, so `${CLAUDE_PLUGIN_ROOT}` resolves:
+   ```bash
+   $ bash "${CLAUDE_PLUGIN_ROOT}/hooks/fix-hooks.sh" --fix
+   ```
+   Detects the old `~/.claude/...` entries in `~/.claude/settings.json`,
+   prompts per entry, removes them (backs up first), and flags stale
+   command files.
+3. **Remove old commands** so `/dev:*` stops shadowing `/embo:*`:
+   ```bash
+   $ rm -rf ~/.claude/commands/dev
+   ```
+4. **Remove old scripts/agents the plugin now ships** (optional tidy):
+   ```bash
+   $ rm -f ~/.claude/rlm_scripts/rlm_repl.py
+   $ rm -f ~/.claude/hooks/approve-compound.sh ~/.claude/hooks/embo-capture.sh \
+           ~/.claude/hooks/behavioral-reminder.sh ~/.claude/hooks/context-guard.sh
+   ```
+   Keep `~/.claude/profiles/` and `~/.claude/active-profile.yaml` — the
+   plugin reads them; they stay user-managed.
+5. **Verify**: `/embo:health` — RLM, claude-mem, and capture hook all
+   green, and one `[embo-capture]` marker per Bash command (not two).
 
 ## Comparison
 
