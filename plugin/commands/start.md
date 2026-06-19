@@ -101,6 +101,11 @@ defined in RULE:DECIDE-OR-ASK). When you use `AskUserQuestion`, set
 - Present combinable options as single-select (or the reverse) — that
   misrepresents the choice, exactly what RULE:DECIDE-OR-ASK forbids
 
+**The closing "what next?" is a choice too** — same structure, never
+a trailing inline "X or Y?" (the most common violation). If nothing
+genuinely forks, offer the fallback: review critically / wrap up the
+session / tell me what to do.
+
 <!-- RULE:PLAIN-ENGLISH -->
 ### Write in plain English
 
@@ -358,13 +363,10 @@ task, resolve the behaviour issue, then resume.
 - **Emphasize what matters.** Bold the decision, the blocker, or the
   action the user must take — as much bold as is genuinely
   important, no more.
-- **Never offer to pause, wait, or stop.** Do not end with "shall I
-  proceed?" or any prompt that presents inaction as an option. When
-  the next step is clear and in scope, do it. The only legitimate
-  stop is a genuine blocker — an action only the user can perform,
-  or a real fork between mutually exclusive paths — and even then
-  phrase it as forward action: "Do THAT, tell me when done, and I'll
-  continue."
+- **Never end in a dead stop.** Not "shall I proceed?" (passive), and
+  not silent completion either — every turn closes with the next
+  move(s) as a structured block (RULE:CLEAR-OPTIONS), never a prose
+  "X or Y?". Do clear in-scope steps, then present what follows.
 
 ### Step 1: Verify Systems
 
