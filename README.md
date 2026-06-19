@@ -8,16 +8,16 @@ cross-session memory (claude-mem).
 > - **Category:** spec-driven development workflow for Claude Code
 > - **Differentiator:** the only framework with **both** persistent
 > codebase indexing **and** cross-session memory
-> - **Install:** **two required steps** — (1) `bash install.sh` in a
-> terminal, (2) install the **claude-mem** plugin inside Claude Code.
+> - **Install:** **two plugins, inside Claude Code** — (1)
+> `/plugin install embo@embo`, (2) install the **claude-mem** plugin.
 > See [Install](#install) below.
-> - **First session:** `/dev:init` -> `/dev:start` -> `/dev:prd`
+> - **First session:** `/embo:init` -> `/embo:start` -> `/embo:prd`
 > - **Compare to alternatives:** [Comparison](#comparison)
 > - **Why this exists:** [Why](#why-this-exists) |
 > full evidence: [docs/WHY.md](docs/WHY.md)
 
 <!-- ARCHITECTURE-DIAGRAM-ANCHOR -->
-![embo architecture: commands, parallel context engines (RLM + claude-mem), and verified outputs feeding /dev:impl](assets/diagrams/architecture-overview.png)
+![embo architecture: commands, parallel context engines (RLM + claude-mem), and verified outputs feeding /embo:impl](assets/diagrams/architecture-overview.png)
 
 <sub>Source prompt: [`assets/diagrams/architecture-overview.prompt.md`](assets/diagrams/architecture-overview.prompt.md) — regenerate via Claude Design.</sub>
 
@@ -27,27 +27,26 @@ cross-session memory (claude-mem).
 
 ## Install
 
-Two required steps, run in **two different places**. Do both, in
-order. The `$` lines go in a terminal; the `/` lines are typed
-inside Claude Code.
+embo installs as a **Claude Code plugin**. Two required steps, both
+typed **inside Claude Code** (at the `/` prompt, not a terminal).
 
-### Step 1 — Install the workflow (in your terminal)
+### Step 1 — Install embo (inside Claude Code)
 
-Run these in a normal terminal/shell. Safe to re-run.
-
-```bash
-$ git clone https://github.com/povesma/embo ~/embo
-$ cd ~/embo && bash install.sh
+```text
+/plugin marketplace add povesma/embo
+/plugin install embo@embo
 ```
 
-This copies the `/dev:*` commands, agents, and RLM scripts into
-`~/.claude/`. It does **not** install the claude-mem plugin — that
-is Step 2.
+This registers all `/embo:*` commands, agents, and hooks. Read
+`install <plugin-name>@<marketplace-name>` — both are `embo`.
+
+> [!TIP]
+> To try a specific branch before it merges, add the marketplace with
+> a `#ref` suffix: `/plugin marketplace add povesma/embo#some-branch`.
+> To develop locally, point the marketplace at a working copy:
+> `/plugin marketplace add /path/to/embo`.
 
 ### Step 2 — Install the claude-mem plugin (inside Claude Code) — REQUIRED
-
-Open Claude Code and type these **at the Claude Code prompt, not in
-the terminal**:
 
 ```text
 /plugin marketplace add thedotmack/claude-mem
@@ -56,30 +55,43 @@ the terminal**:
 
 > [!WARNING]
 > **Install the plugin named exactly `claude-mem`, from the
-> `thedotmack/claude-mem` marketplace.** When the `/plugin` menu
-> lists other plugins (for example `frontend-design`, `figma`),
-> do **not** pick those — they are unrelated. The workflow fails
-> without claude-mem; this is the most common setup mistake.
+> `thedotmack/claude-mem` marketplace.** claude-mem is MANDATORY —
+> embo verifies it at runtime and its commands fail with a clear
+> error without it. (It is a separate plugin, not a bundled
+> dependency.) When the `/plugin` menu lists unrelated plugins
+> (`frontend-design`, `figma`, …), do not pick those.
 
 ### Step 3 — Verify (inside Claude Code)
 
 ```text
-/dev:health
+/embo:health
 ```
 
-This must report claude-mem as available. If it does not, Step 2
-did not complete — repeat it before going further.
+Must report RLM, claude-mem, and the capture hook as operational.
 
 ### First session (inside Claude Code, in any of your code repos)
 
 ```text
-/dev:init    # one-time: index the repo + bootstrap memory
-/dev:start   # every session: load context
-/dev:prd     # plan a feature spec-first
+/embo:init    # one-time: index the repo + bootstrap memory
+/embo:start   # every session: load context
+/embo:prd     # plan a feature spec-first
 ```
 
-Full per-platform details (Windows, Docker, dependency versions)
-under [Reference](#reference).
+> [!NOTE]
+> **Upgrading from the old `cp`-into-`~/.claude/` install?** The old
+> manual install registered the embo hooks in your
+> `~/.claude/settings.json`; the plugin registers its own. Two
+> registrations of the same hook fire twice. Run the migration doctor
+> once to remove the stale entries (it prompts per entry and backs up
+> first):
+> ```bash
+> $ bash "${CLAUDE_PLUGIN_ROOT}/hooks/fix-hooks.sh" --fix
+> ```
+> It also flags any stale `~/.claude/commands/dev/` files (the old
+> `/dev:*` copies) to remove.
+
+Full per-platform details, the manual (no-plugin) install, and
+dependency versions are under [Reference](#reference).
 
 ## Comparison
 
@@ -148,26 +160,26 @@ of resetting to zero every morning.
 
 | Phase | Command | Purpose |
 |---|---|---|
-| Discovery | `/dev:init` | Index repo + bootstrap claude-mem (one-time) |
-| Discovery | `/dev:start` | Load session context (every session) |
-| Discovery | `/dev:health` | Verify dependencies |
-| Planning | `/dev:prd` | Generate PRD with codebase + memory awareness |
-| Planning | `/dev:tech-design` | Architecture design grounded in real code |
-| Planning | `/dev:test-plan` | Map stories to verification methods |
-| Planning | `/dev:tasks` | Break tech-design into TDD-ready subtasks |
-| Planning | `/dev:check` | Audit task completion status |
-| Development | `/dev:impl` | Implement subtasks one at a time, evidence-gated |
-| Development | `/dev:git` | Generate commit messages and PR descriptions |
-| Research | `/dev:research:examine` | Independent two-pass critique of a decision or doc → reconciled recommendation |
-| Research | `/dev:research:verify` | Prove a chosen approach meets its acceptance criteria before building |
-| Config | `/dev:profile` | Switch workflow profile (quality / fast / minimal / research) |
+| Discovery | `/embo:init` | Index repo + bootstrap claude-mem (one-time) |
+| Discovery | `/embo:start` | Load session context (every session) |
+| Discovery | `/embo:health` | Verify dependencies |
+| Planning | `/embo:prd` | Generate PRD with codebase + memory awareness |
+| Planning | `/embo:tech-design` | Architecture design grounded in real code |
+| Planning | `/embo:test-plan` | Map stories to verification methods |
+| Planning | `/embo:tasks` | Break tech-design into TDD-ready subtasks |
+| Planning | `/embo:check` | Audit task completion status |
+| Development | `/embo:impl` | Implement subtasks one at a time, evidence-gated |
+| Development | `/embo:git` | Generate commit messages and PR descriptions |
+| Research | `/embo:research:examine` | Independent two-pass critique of a decision or doc → reconciled recommendation |
+| Research | `/embo:research:verify` | Prove a chosen approach meets its acceptance criteria before building |
+| Config | `/embo:profile` | Switch workflow profile (quality / fast / minimal / research) |
 
 Full per-command reference under [Reference](#reference).
 
 ## Test subagents
 
 Five specialised agents run in **isolated contexts** during
-`/dev:impl` to prevent implementation bias:
+`/embo:impl` to prevent implementation bias:
 
 - **test-backend** (Haiku) - writes & runs unit/integration
  tests; auto-detects pytest/vitest/jest/go/cargo/phpunit
@@ -217,64 +229,63 @@ read; come back when you need depth on a specific feature.
 
 #### macOS / Linux Installation
 
-```bash
-# 1. Clone this repository
-cd ~/
-git clone https://github.com/povesma/embo
-cd embo
+**The recommended install is the plugin** — see [Install](#install)
+(`/plugin marketplace add povesma/embo` + `/plugin install embo@embo`).
+The steps below are the **manual (no-plugin) alternative**: they place
+the same components under `~/.claude/` by hand. The plugin path is
+simpler and self-updating; use manual only if you cannot use the
+plugin system.
 
-# 2. Run the install script (or follow manual steps below)
-bash install.sh
-```
-
-**Or install manually:**
+The repo ships everything under `plugin/`. Copy from there:
 
 ```bash
-cd embo
+git clone https://github.com/povesma/embo ~/embo
+cd ~/embo
 
-# 2. Copy RLM scripts to Claude config
-mkdir -p ~/.claude/rlm_scripts
+# 1. RLM script + the bin/ wrapper that runs it as a plain `rlm_repl`
+mkdir -p ~/.claude/rlm_scripts ~/.claude/bin
+cp plugin/rlm_scripts/rlm_repl.py ~/.claude/rlm_scripts/
+cp plugin/bin/rlm_repl ~/.claude/bin/
+chmod +x ~/.claude/rlm_scripts/rlm_repl.py ~/.claude/bin/rlm_repl
+
+# 2. Put ~/.claude/bin on PATH so commands can call `rlm_repl` directly
+#    (add to your shell profile, e.g. ~/.zshrc or ~/.bashrc):
+#    export PATH="$HOME/.claude/bin:$PATH"
+
+# 3. Agents
 mkdir -p ~/.claude/agents
-cp .claude/rlm_scripts/rlm_repl.py ~/.claude/rlm_scripts/
-cp .claude/agents/rlm-subcall.md ~/.claude/agents/
+cp plugin/agents/*.md ~/.claude/agents/
 
-# 3. Copy test subagents (optional but recommended)
-# test-backend and test-review work immediately
-# test-e2e-* require Playwright MCP (see "Nice to Have" prerequisites)
-cp .claude/agents/test-*.md ~/.claude/agents/
+# 4. Commands — copy into an `embo/` namespace dir so they invoke as
+#    /embo:* (the research/ subdir gives /embo:research:examine etc.)
+mkdir -p ~/.claude/commands/embo
+cp -r plugin/commands/* ~/.claude/commands/embo/
 
-# 4. Copy command definitions
-mkdir -p ~/.claude/commands
-cp -r .claude/commands/dev ~/.claude/commands/
-
-# 5. Make REPL script executable
-chmod +x ~/.claude/rlm_scripts/rlm_repl.py
-
-# 6. Copy hooks (optional but recommended)
+# 5. Hooks
 mkdir -p ~/.claude/hooks
-cp .claude/hooks/context-guard.sh ~/.claude/hooks/
+cp plugin/hooks/*.sh ~/.claude/hooks/
 chmod +x ~/.claude/hooks/*.sh
 
-# 7. Set up status line (optional but recommended)
-# Requires jq: brew install jq
-cp .claude/statusline.sh ~/.claude/statusline.sh
+# 6. Register hooks in ~/.claude/settings.json — see §Hook Setup.
+#    (The plugin does this automatically; a manual install must add the
+#    PreToolUse + UserPromptSubmit entries by hand.)
+
+# 7. Status line (optional; requires jq: brew install jq)
+cp plugin/statusline.sh ~/.claude/statusline.sh
 chmod +x ~/.claude/statusline.sh
 # Then add to ~/.claude/settings.json:
 # { "statusLine": { "type": "command", "command": "~/.claude/statusline.sh" } }
-# Or ask Claude: "use the existing script at ~/.claude/statusline.sh"
-# (see §Statusline below for details)
 
-# 8. Verify Python 3 is available
-python3 --version # Should show 3.8 or higher
-
-# 9. Test installation
-python3 ~/.claude/rlm_scripts/rlm_repl.py --help
+# 8. Verify
+python3 --version          # 3.8+
+~/.claude/bin/rlm_repl --help
 ```
 
-**Upgrading from `/rlm-mem:*` commands?** Remove the old tree:
-```bash
-rm -rf ~/.claude/commands/rlm-mem
-```
+> [!NOTE]
+> Manual installs that predate the plugin used `~/.claude/commands/dev/`
+> (giving `/dev:*`). The current layout uses `~/.claude/commands/embo/`
+> (`/embo:*`). If upgrading, remove the old tree:
+> `rm -rf ~/.claude/commands/dev`.
 
 **Expected output:**
 ```
@@ -395,10 +406,10 @@ After installation, your `~/.claude/` directory will contain:
 
 ### Hooks
 
-The hooks below are included. They are installed by `install.sh` and
-registered in `~/.claude/settings.json` automatically. If `jq` is not
-available, register them manually as shown in the disable column / the
-`install.sh` output.
+The hooks below are included. **With the plugin install they register
+automatically** (via the plugin's `hooks/hooks.json` — nothing to
+configure). A **manual install** must register them by hand in
+`~/.claude/settings.json` (see setup below). All hooks require `jq`.
 
 | Hook | Event | Purpose | Disable |
 |------|-------|---------|---------|
@@ -412,26 +423,46 @@ blocks Claude from responding.
 
 #### approve-compound + embo-capture setup
 
-`install.sh` performs these steps; to replicate manually:
+**Plugin install:** registration is automatic. To get fully
+prompt-free operation, add these to `permissions.allow` in your
+`~/.claude/settings.json` (the plugin cannot set permissions for you):
 
-1. Copy both scripts:
-   `cp .claude/hooks/approve-compound.sh .claude/hooks/embo-capture.sh ~/.claude/hooks/`
-2. Register the PreToolUse hook in `~/.claude/settings.json`:
-   ```json
-   "hooks": {
-     "PreToolUse": [
-       { "matcher": "Bash",
-         "hooks": [ { "type": "command",
-                      "command": "bash ~/.claude/hooks/approve-compound.sh" } ] }
-     ]
-   }
-   ```
-3. Add the wrapper allow-rule to `permissions.allow` in the same file:
-   ```json
-   "Bash(~/.claude/hooks/embo-capture.sh *)"
-   ```
-   Without it, rewritten commands fail allowlist matching and the
-   prompts come back.
+```json
+"Bash(rlm_repl *)",
+"Bash(bash */hooks/embo-capture.sh *)",
+"Bash(bash */hooks/fix-hooks.sh *)"
+```
+
+`rlm_repl` is the bin/ wrapper (RLM); the other two are the capture
+wrapper and the migration doctor. Without these you get a one-time
+"allow?" prompt per command — choose **"Always allow"** and it does
+not recur. (RLM is invoked as a bare `rlm_repl`, never with `${...}`
+expansion, specifically so a simple allow rule like the above
+matches — Claude Code prompts unconditionally for any command
+containing shell expansion.)
+
+**Manual install:** also register the hooks yourself in
+`~/.claude/settings.json`:
+
+```json
+"hooks": {
+  "PreToolUse": [
+    { "matcher": "Bash",
+      "hooks": [ { "type": "command",
+                   "command": "bash ~/.claude/hooks/approve-compound.sh" } ] }
+  ],
+  "UserPromptSubmit": [
+    { "hooks": [
+        { "type": "command", "command": "bash ~/.claude/hooks/context-guard.sh" },
+        { "type": "command", "command": "bash ~/.claude/hooks/behavioral-reminder.sh" }
+    ] }
+  ]
+}
+```
+
+and add the capture wrapper allow-rule:
+`"Bash(~/.claude/hooks/embo-capture.sh *)"`. Without it, rewritten
+commands fail allowlist matching and the prompts come back.
 
 **Your allowlist stays yours.** The hook only auto-approves commands
 whose every segment already matches *your* `permissions.allow` rules.
@@ -573,9 +604,9 @@ RLM/memory enablement, and MCP requirements.
 #### Usage
 
 ```bash
-/dev:profile list # See available profiles
-/dev:profile use quality # Activate a profile
-/dev:profile off # Deactivate, use defaults
+/embo:profile list # See available profiles
+/embo:profile use quality # Activate a profile
+/embo:profile off # Deactivate, use defaults
 ```
 
 Profiles live in `~/.claude/profiles/` (user) and `.claude/profiles/`
@@ -593,7 +624,7 @@ See `.claude/profiles/quality.yaml` for the full schema.
 
 #### Current Limitations
 
-Profiles are currently **prompt-based** - they instruct `/dev:*` commands to
+Profiles are currently **prompt-based** - they instruct `/embo:*` commands to
 skip or include steps, but do not modify system infrastructure. This means:
 
 - **claude-mem hooks** continue capturing observations even under `minimal`
@@ -610,7 +641,7 @@ guidance.
 
 ### Test Subagents
 
-embo ships five specialized test subagents that run in isolated contexts to prevent implementation bias. Invoke them via the `Task` tool from within `/dev:impl`.
+embo ships five specialized test subagents that run in isolated contexts to prevent implementation bias. Invoke them via the `Task` tool from within `/embo:impl`.
 
 #### Agents Overview
 
@@ -694,7 +725,7 @@ git diff *
 On macOS/Linux: Claude Code settings -> Permissions -> Add allowed
 commands. On Windows, use the equivalent paths with backslashes.
 
-Once configured, `/dev:start` runs without any
+Once configured, `/embo:start` runs without any
 interruptions.
 
 #### Performance Expectations
