@@ -223,7 +223,7 @@ mcp__plugin_claude-mem_mcp-search__search(
 **Initialize RLM**
 (skip if profile `tools.rlm` is `false`):
 ```bash
-python3 ~/.claude/rlm_scripts/rlm_repl.py status
+python3 "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/rlm_scripts/rlm_repl.py" status
 ```
 - If not initialized, suggest `/dev:init`
 
@@ -256,7 +256,7 @@ ls tasks/{feature-id}-{feature-name}/*-test-plan.md 2>/dev/null
 
 **3a. Find relevant existing code:**
 ```bash
-python3 ~/.claude/rlm_scripts/rlm_repl.py exec <<'PY'
+python3 "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/rlm_scripts/rlm_repl.py" exec <<'PY'
 keywords = ['feature_term', 'related_concept']  # fill with terms from the task description
 
 relevant = []
@@ -280,7 +280,7 @@ PY
 
 **3c. Find existing tests:**
 ```bash
-python3 ~/.claude/rlm_scripts/rlm_repl.py exec <<'PY'
+python3 "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/rlm_scripts/rlm_repl.py" exec <<'PY'
 test_files = find_files_by_pattern('**/*test*') + find_files_by_pattern('**/*.spec.*')
 relevant_stems = {f.split('/')[-1].split('.')[0] for f in relevant}
 related = [t for t in test_files if any(s in t for s in relevant_stems)]
