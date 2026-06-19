@@ -196,40 +196,73 @@ are verified by validation, grep gates, or live run.
       user's private ~/.claude/settings.json). `claude plugin validate
       --strict ./plugin` → "✔ Validation passed" [live] (2026-06-19)
 
-- [ ] 5.0 **User Story:** As a maintainer, I want embo's components in a
+- [X] 5.0 **User Story:** As a maintainer, I want embo's components in a
   `plugin/` subdir per the proven plugin layout, so that the plugin
-  loads correctly. [6/0]
-  - [ ] 5.1 `git mv .claude/hooks/*` → `plugin/hooks/` (preserving the
+  loads correctly. [7/7]
+  - [X] 5.1 `git mv .claude/hooks/*` → `plugin/hooks/` (preserving the
     modified `approve-compound.sh` and new `fix-hooks.sh`/`hooks.json`)
     [verify: code-only]
-  - [ ] 5.2 `git mv .claude/agents/*` → `plugin/agents/` [verify:
+    → moved 7 files; all 3 hook suites green at new location (168 +
+      60 + 21) [live] (2026-06-19)
+  - [X] 5.2 `git mv .claude/agents/*` → `plugin/agents/` [verify:
     code-only]
-  - [ ] 5.3 `git mv .claude/commands/dev/*.md` → `plugin/commands/`;
+    → moved 3 tracked agents (approach-validator, examine-advisor,
+      rlm-subcall); untracked visual-qa-reviewer prototype left in
+      .claude/ (not part of 032) [live] (2026-06-19)
+  - [X] 5.3 `git mv .claude/commands/dev/*.md` → `plugin/commands/`;
     FLATTEN `research/examine.md`→`plugin/commands/examine.md`,
     `research/verify.md`→`plugin/commands/verify.md` (flat is the
     documented-safe shape; nested-dir namespacing is unverified)
     [verify: code-only]
-  - [ ] 5.4 `git mv .claude/rlm_scripts/`, `.claude/profiles/`,
+    → moved 12 tracked commands + flattened 2 research → top level;
+      untracked visual-impl.md prototype left behind [live]
+      (2026-06-19)
+  - [X] 5.4 `git mv .claude/rlm_scripts/`, `.claude/profiles/`,
     `.claude/statusline.sh` → `plugin/` [verify: code-only]
-  - [ ] 5.5 Confirm `plugin/.claude-plugin/` contains ONLY `plugin.json`,
+    → all three moved to plugin/ [live] (2026-06-19)
+  - [X] 5.5 Confirm `plugin/.claude-plugin/` contains ONLY `plugin.json`,
     repo-root `.claude-plugin/` contains ONLY `marketplace.json`, and
     RLM state path is still project-local `.claude/rlm_state/`
     [verify: code-only]
-  - [ ] 5.6 Run `claude plugin validate --strict` on the restructured
+    → verified all three; .claude/ retains only settings.local.json,
+      rlm_state/, commands-archive/, and untracked prototypes [live]
+      (2026-06-19)
+  - [X] 5.6 Run `claude plugin validate --strict` on the restructured
     root; 0 errors [verify: manual-run-claude]
+    → after 5.7, `claude plugin validate --strict ./plugin` →
+      "✔ Validation passed", 0 warnings (manifest + 14 commands + 3
+      agents + hooks) [live] (2026-06-19)
+  - [X] 5.7 Add YAML `description` frontmatter to the 10 commands that
+    lacked it (surfaced by --strict: prd, tech-design, improve, impl,
+    init, check, tasks, health, test-plan, profile) [verify: auto-test]
+    → added folded `description:` blocks matching existing style; took
+      strict validation from 10 warnings → 0. Hook suites still green
+      [live] (2026-06-19)
 
-- [ ] 6.0 **User Story:** As a user, I want every command reference to
+- [X] 6.0 **User Story:** As a user, I want every command reference to
   use `/embo:*`, so that no command or doc points at a non-existent
-  name. [4/0]
-  - [ ] 6.1 Rewrite `/dev:<x>` → `/embo:<x>` across all `commands/*.md`
+  name. [4/4]
+  - [X] 6.1 Rewrite `/dev:<x>` → `/embo:<x>` across all `commands/*.md`
     [verify: code-only]
-  - [ ] 6.2 Rewrite `research:examine`/`research:verify` references →
+    → swept 11 command files (replace_all /dev: → /embo:) [live]
+      (2026-06-19)
+  - [X] 6.2 Rewrite `research:examine`/`research:verify` references →
     `/embo:examine`/`/embo:verify` (drop the `research:` segment, do not
     rename) in commands and agents [verify: code-only]
-  - [ ] 6.3 Rewrite `/dev:` references in `agents/*.md` [verify:
+    → fixed nested refs in examine.md, verify.md, start.md FIRST
+      (specific-before-general) so the broad sweep didn't produce
+      /embo:research:* [live] (2026-06-19)
+  - [X] 6.3 Rewrite `/dev:` references in `agents/*.md` [verify:
     code-only]
-  - [ ] 6.4 Acceptance gate: `grep -rn '/dev:' commands/ agents/` (and
+    → agents had 0 /dev: refs; nothing to change. BUT the gate caught
+      2 in hooks/ (behavioral-reminder.sh, context-guard.sh) —
+      rewritten to /embo:git [live] (2026-06-19)
+  - [X] 6.4 Acceptance gate: `grep -rn '/dev:' commands/ agents/` (and
     root docs) returns 0 hits [verify: manual-run-claude]
+    → `grep -rn '/dev:' plugin/` = 0 (commands + agents + hooks). Root
+      docs (README/CLAUDE.md) still have /dev: refs — deferred to
+      Story 7.0 (docs). `claude plugin validate --strict` still passes
+      [live] (2026-06-19)
 
 - [ ] 7.0 **User Story:** As any user, I want complete plugin AND manual
   install docs, so that either install path works standalone. [5/0]

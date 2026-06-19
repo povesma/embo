@@ -1,3 +1,9 @@
+---
+description: >
+  Check a task list's status against the codebase using RLM, reporting
+  which subtasks appear done, in progress, or not started.
+---
+
 # Check Task List Status with RLM
 
 Check task completion status by analyzing actual code implementation.

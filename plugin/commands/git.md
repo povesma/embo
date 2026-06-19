@@ -23,10 +23,10 @@ changes and branch history. Manage commit style via the active profile.
 
 | Invocation | Mode |
 |------------|------|
-| `/dev:git` | Interactive menu: commit / pr / style |
-| `/dev:git commit` | Generate commit message for staged changes |
-| `/dev:git pr` | Generate PR description for current branch |
-| `/dev:git style` | List available styles; switch active style |
+| `/embo:git` | Interactive menu: commit / pr / style |
+| `/embo:git commit` | Generate commit message for staged changes |
+| `/embo:git pr` | Generate PR description for current branch |
+| `/embo:git style` | List available styles; switch active style |
 
 If no argument is provided, show the interactive menu.
 
@@ -174,7 +174,7 @@ Present the proposed groups:
 ```
 Nothing is staged. I analysed the changes and suggest these commits:
 
-  [1] feat(git): add /dev:git command
+  [1] feat(git): add /embo:git command
       .claude/commands/dev/git.md
       — new command implementing commit/pr/style workflow
 
@@ -373,8 +373,8 @@ If user selected a style other than "Keep current":
 4. Print: "Style updated: conventional → imperative"
 
 If no active profile exists:
-- Print: "No active profile. Run `/dev:profile use <name>` first,
-  then use `/dev:git style` to change the git style."
+- Print: "No active profile. Run `/embo:profile use <name>` first,
+  then use `/embo:git style` to change the git style."
 - Stop.
 
 If user selected "Keep current":

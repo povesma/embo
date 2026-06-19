@@ -1,3 +1,10 @@
+---
+description: >
+  Generate a technical design from an approved PRD, verifying inherited
+  facts against the codebase (RLM) and past decisions (claude-mem).
+  Produces components, contracts, trade-offs, and a verification table.
+---
+
 # Generate Technical Design with embo Hybrid Analysis
 
 Create a technical design informed by past architectural decisions (claude-mem) and current code patterns (RLM).
@@ -55,7 +62,7 @@ Record each resolved claim in the tech-design's "Current
 Architecture (RLM-verified)" section with its own source citation
 (file:line, command, date). A PRD fact that fails verification
 invalidates the dependent requirement — stop and loop back to
-`/dev:prd` rather than designing against a false premise.
+`/embo:prd` rather than designing against a false premise.
 
 ### Step 2: RLM Architecture Discovery
 
@@ -260,7 +267,7 @@ Create design document:
 ### Verification Approach
 
 Maps each functional requirement to its verification method and
-expected evidence. This section is the primary input to `/dev:test-plan`.
+expected evidence. This section is the primary input to `/embo:test-plan`.
 
 | Requirement | Method | Scope | Expected Evidence |
 |-------------|--------|-------|-------------------|
@@ -270,7 +277,7 @@ expected evidence. This section is the primary input to `/dev:test-plan`.
 
 Methods: `code-only` \| `auto-test` \| `manual-run-claude` \|
 `manual-run-user` \| `docker` \| `e2e` \| `observation`
-(canonical definitions in `/dev:test-plan`)
+(canonical definitions in `/embo:test-plan`)
 
 ## Trade-offs
 
@@ -336,12 +343,12 @@ Methods: `code-only` \| `auto-test` \| `manual-run-claude` \|
 
 **Next Steps**:
 1. Review and approve design
-2. Run `/dev:tasks` for task breakdown
+2. Run `/embo:tasks` for task breakdown
 ```
 
 ### Step 6.5: Sanitization Pass (MANDATORY)
 
-Apply the same sanitization rule as `/dev:prd` Step 5.6: scan for private data, defer to CLAUDE.md "Documentation Sanitization" if defined,
+Apply the same sanitization rule as `/embo:prd` Step 5.6: scan for private data, defer to CLAUDE.md "Documentation Sanitization" if defined,
 otherwise mask with `<descriptor>` placeholders or RFC 5737/2606 examples. Drafts may carry private values; sanitize before
 `Status: Complete`. Orthogonal to Step 1.5 (which verifies inherited PRD facts are true): 6.5 verifies they are shareable.
 
@@ -367,4 +374,4 @@ When referencing any library, framework, or external API — use the Context7 MC
 5. **🚨 MANDATORY: Ask technical clarifying questions using AskUserQuestion tool**
 6. Synthesize design incorporating user's answers + RLM + claude-mem insights
 7. Save to both systems
-8. Suggest `/dev:tasks` as next step
+8. Suggest `/embo:tasks` as next step

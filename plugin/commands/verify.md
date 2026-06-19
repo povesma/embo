@@ -3,7 +3,7 @@ description: >
   Manually-invoked check that a chosen approach will satisfy its
   acceptance criteria before implementation, by proving each
   load-bearing claim against an independent source rather than the
-  agent's own confidence. Invoke with /dev:research:verify. The agent
+  agent's own confidence. Invoke with /embo:verify. The agent
   proactively suggests it (per the RESEARCH-VERIFY rule) for any
   non-trivial task; it does not auto-run.
 ---

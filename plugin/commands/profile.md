@@ -1,3 +1,9 @@
+---
+description: >
+  Manage embo workflow profiles (quality / fast / minimal): list, show,
+  and activate the profile that configures tools, testing, and rules.
+---
+
 # Workflow Profile Management
 
 Activate, list, or deactivate workflow configuration profiles.
@@ -71,8 +77,8 @@ If no argument is provided, default to `list`.
    fast       | Speed mode — test-after, relaxed docs... | user    |
    minimal    | Bare bones — no RLM, no memory...        | user    |
 
-   Activate with: /dev:profile use <name>
-   Deactivate with: /dev:profile off
+   Activate with: /embo:profile use <name>
+   Deactivate with: /embo:profile off
    ```
 
 ### Mode: `off`

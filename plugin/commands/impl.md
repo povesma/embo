@@ -1,3 +1,10 @@
+---
+description: >
+  Implement task-list subtasks one at a time with RLM pattern discovery
+  and claude-mem context, enforcing docs-first, TDD, and per-subtask
+  evidence before marking work done.
+---
+
 # Task Implementation with embo Hybrid
 
 Implement tasks with pattern discovery (RLM) + historical context
@@ -106,7 +113,7 @@ approach. No acknowledgment required.
 Verification methods (`code-only`, `auto-test`, `manual-run-claude`,
 `manual-run-user`, `docker`, `e2e`, `observation`) and the `live` vs
 `simulated` distinction are defined in the canonical taxonomy in
-`/dev:test-plan`.
+`/embo:test-plan`.
 
 - **`[X]` (done)**: ONLY when live-tested AND the intended
   functionality demonstrably works — not just "tests pass formally."
@@ -225,7 +232,7 @@ mcp__plugin_claude-mem_mcp-search__search(
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/rlm_scripts/rlm_repl.py" status
 ```
-- If not initialized, suggest `/dev:init`
+- If not initialized, suggest `/embo:init`
 
 ### 1b. Test Plan Check
 
@@ -240,7 +247,7 @@ ls tasks/{feature-id}-{feature-name}/*-test-plan.md 2>/dev/null
   implementing.
 - **If not found** AND the feature has non-`code-only` tasks: warn
   once — _"No test plan found for this feature. Consider running
-  `/dev:test-plan` before proceeding."_ Do NOT block. User can proceed.
+  `/embo:test-plan` before proceeding."_ Do NOT block. User can proceed.
 - **If not found** AND all tasks are `code-only`: say nothing.
 
 ### 2. Load and Understand Current Task
