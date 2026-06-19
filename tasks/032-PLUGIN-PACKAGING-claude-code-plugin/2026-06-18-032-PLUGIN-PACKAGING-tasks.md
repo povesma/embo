@@ -264,25 +264,45 @@ are verified by validation, grep gates, or live run.
       Story 7.0 (docs). `claude plugin validate --strict` still passes
       [live] (2026-06-19)
 
-- [ ] 7.0 **User Story:** As any user, I want complete plugin AND manual
-  install docs, so that either install path works standalone. [5/0]
-  - [ ] 7.1 README: plugin install section (`/plugin marketplace add
+- [X] 7.0 **User Story:** As any user, I want complete plugin AND manual
+  install docs, so that either install path works standalone. [6/6]
+  - [X] 7.1 README: plugin install section (`/plugin marketplace add
     povesma/embo` + `/plugin install embo@embo`) [verify: code-only]
-  - [ ] 7.2 README: manual (standalone) install section covering the
+    → rewrote `## Install` plugin-first (Step 1 plugin, Step 2
+      claude-mem, Step 3 /embo:health); added #branch + local-path
+      tips; TL;DR + command table → /embo:* [verify: code-only]
+  - [X] 7.2 README: manual (standalone) install section covering the
     SAME component set as the plugin (per CLAUDE.md Documentation Rule)
     [verify: code-only]
-  - [ ] 7.3 README/TROUBLESHOOTING: the `fix-hooks.sh` migration step
+    → rewrote macOS/Linux manual block to copy from plugin/*, incl.
+      the bin/rlm_repl wrapper + the `~/.claude/bin` PATH step, and
+      commands → ~/.claude/commands/embo/ (gives /embo:*) [code-only]
+  - [X] 7.3 README/TROUBLESHOOTING: the `fix-hooks.sh` migration step
     for existing users adopting the plugin; manual statusline copy
     (FR-11) [verify: code-only]
-  - [ ] 7.4 README: the exact permission-allowlist entries for zero
+    → added the fix-hooks.sh migration NOTE in `## Install`; statusline
+      copy retained in manual block [code-only]
+  - [X] 7.4 README: the exact permission-allowlist entries for zero
     prompts, framed as optional (FR-8 document + graceful degrade)
     [verify: code-only]
-  - [ ] 7.5 CLAUDE.md: update command count 11→15 and any `/dev:` →
+    → Hooks §: plugin allow-rules `Bash(rlm_repl *)`,
+      `Bash(bash */hooks/embo-capture.sh *)`,
+      `Bash(bash */hooks/fix-hooks.sh *)` + "Always allow" fallback;
+      manual-install hook registration block [code-only]
+  - [X] 7.5 CLAUDE.md: update command count 11→15 and any `/dev:` →
     `/embo:` references in prose [verify: code-only]
+    → corrected to 14 (not 15 — the "15" counted the untracked
+      visual-impl prototype; plugin ships 14). Overview, architecture,
+      install flow, file-structure tree, Modify-Commands, behavioral-
+      rules ref all → plugin/ + /embo:* [code-only]
+  - [X] 7.6 README: preserve migration-note `/dev:` refs (lines naming
+    the OLD commands for removal are intentional) [verify: code-only]
+    → verified: only remaining /dev: in README are the 2 migration
+      notes (intentional) + the Docker testing section (deferred,
+      see follow-up) [code-only]
 
-- [ ] 8.0 **User Story:** As a maintainer, I want to prove a clean
-  plugin install works end to end, so that we can ship. [7/9]
-  (8.2 marker check + 8.4 fix-hooks-live still pending)
+- [X] 8.0 **User Story:** As a maintainer, I want to prove a clean
+  plugin install works end to end, so that we can ship. [9/9]
   - [X] 8.1 From the branch, run `/plugin marketplace add` (local path)
     + `/plugin install embo@embo`; commands appear as `/embo:*` [verify:
     manual-run-user]
@@ -299,11 +319,19 @@ are verified by validation, grep gates, or live run.
       FR-8; the /embo:start "Always allow" note covers it, but it ALSO
       hits /embo:init (often the first command run). → 7.x docs should
       surface this prominently.
-  - [ ] 8.2 Run a representative compound Bash command; confirm exactly
+  - [X] 8.2 Run a representative compound Bash command; confirm exactly
     ONE `[embo-capture]` marker (not two) and correct exit code [verify:
     manual-run-claude]
-    → PENDING: needs a deliberate check under live double-registration
-      (manual ~/.claude + plugin both registered). Not yet evidenced.
+    → observed live UNDER double-registration (this session has both
+      the manual ~/.claude approve-compound AND the plugin's
+      registered): `git log --oneline -20`, `git status`, and grep
+      pipelines each produced EXACTLY ONE `[embo-capture]` marker
+      (truncated / filtered view), correct exit=0, no doubled or
+      malformed `embo-capture ... embo-capture` command. The feared
+      undocumented double-fire conflict did NOT manifest as breakage —
+      one marker, clean exit. (fix-hooks.sh still recommended to remove
+      the stale entry; this confirms the interim state is not broken.)
+      [live] (2026-06-19)
   - [X] 8.3 Confirm RLM `status` works via the plugin and state writes
     to the project's `.claude/rlm_state/` [verify: manual-run-claude]
     → user ran `/embo:init` on a real Drupal project: RLM indexed 299
@@ -311,9 +339,16 @@ are verified by validation, grep gates, or live run.
       `/embo:start` produced a full session summary. RLM ran via the
       `rlm_repl` wrapper with no expansion prompt; state project-local
       [live] (2026-06-19)
-  - [ ] 8.4 Seed a stale `~/.claude` hook entry, run `fix-hooks.sh`, and
+  - [X] 8.4 Seed a stale `~/.claude` hook entry, run `fix-hooks.sh`, and
     confirm it detects + (with consent) removes the duplicate [verify:
     manual-run-user]
+    → ran the REAL `bash fix-hooks.sh --fix` CLI (not sourced test fns)
+      on a synthetic SETTINGS_FILES with a duplicate: detected "1
+      duplicated embo handler", listed both paths, prompted, consent y
+      → removed the tilde entry, wrote .bak, exit 2. After: 1
+      approve-compound + 0 tilde refs; .bak holds both. Tested via
+      synthetic file — did NOT touch the user's real
+      ~/.claude/settings.json [live] (2026-06-19)
   - [X] 8.5 FIX (surfaced by 8.1): replace inline
     `${CLAUDE_PLUGIN_ROOT:-...}/rlm_scripts/rlm_repl.py` with a
     `plugin/bin/rlm_repl` wrapper invoked as a bare command; rewrite 13
@@ -353,3 +388,12 @@ are verified by validation, grep gates, or live run.
   `test-e2e-{planner,generator,healer}`) into `agents/`, preserving
   Playwright-fork attribution (PRD FR-7).
 - Submit embo to the Anthropic community plugin directory.
+- Rework the README **Docker testing section** (currently describes the
+  old cp-install model: `cp -r .claude/commands/dev`, reads
+  `health.md` from that path, `/dev:*` invocations). Should use
+  `/plugin install` or `claude --plugin-dir`. Needs design + a live
+  Docker test, so deferred from 032's doc story.
+- Fix `/embo:health` Check 3: it writes/reads a `/tmp` probe to test
+  the PostToolUse hook, but the claude-mem hook indexes PROJECT files,
+  so the probe can falsely report "hook misconfigured". Probe a
+  project-local file instead (surfaced 2026-06-19).
