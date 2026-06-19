@@ -281,18 +281,71 @@ are verified by validation, grep gates, or live run.
     `/embo:` references in prose [verify: code-only]
 
 - [ ] 8.0 **User Story:** As a maintainer, I want to prove a clean
-  plugin install works end to end, so that we can ship. [4/0]
-  - [ ] 8.1 From the branch, run `/plugin marketplace add` (local path)
+  plugin install works end to end, so that we can ship. [7/9]
+  (8.2 marker check + 8.4 fix-hooks-live still pending)
+  - [X] 8.1 From the branch, run `/plugin marketplace add` (local path)
     + `/plugin install embo@embo`; commands appear as `/embo:*` [verify:
     manual-run-user]
+    → user ran `/plugin marketplace add /Users/.../embo` → "Successfully
+      added marketplace: embo"; `/plugin install embo@embo` → "✓
+      Installed embo"; `/reload-plugins` → "6 plugins · 14 skills · 20
+      agents · 11 hooks". All 14 /embo:* commands appear in the skill
+      list WITH descriptions (5.7 frontmatter renders). /embo:init
+      resolved to the plugin command. [live] (2026-06-19)
+    → FINDING (live): first RLM command in /embo:init triggered an
+      approval dialog ("Contains expansion / Do you want to proceed?")
+      — the ${CLAUDE_PLUGIN_ROOT:-...} form is flagged for approval and
+      does not match the literal allowed-tools pattern. Expected per
+      FR-8; the /embo:start "Always allow" note covers it, but it ALSO
+      hits /embo:init (often the first command run). → 7.x docs should
+      surface this prominently.
   - [ ] 8.2 Run a representative compound Bash command; confirm exactly
     ONE `[embo-capture]` marker (not two) and correct exit code [verify:
     manual-run-claude]
-  - [ ] 8.3 Confirm RLM `status` works via the plugin and state writes
+    → PENDING: needs a deliberate check under live double-registration
+      (manual ~/.claude + plugin both registered). Not yet evidenced.
+  - [X] 8.3 Confirm RLM `status` works via the plugin and state writes
     to the project's `.claude/rlm_state/` [verify: manual-run-claude]
+    → user ran `/embo:init` on a real Drupal project: RLM indexed 299
+      files (17,026-file vendor tree excluded via .rlmignore), then
+      `/embo:start` produced a full session summary. RLM ran via the
+      `rlm_repl` wrapper with no expansion prompt; state project-local
+      [live] (2026-06-19)
   - [ ] 8.4 Seed a stale `~/.claude` hook entry, run `fix-hooks.sh`, and
     confirm it detects + (with consent) removes the duplicate [verify:
     manual-run-user]
+  - [X] 8.5 FIX (surfaced by 8.1): replace inline
+    `${CLAUDE_PLUGIN_ROOT:-...}/rlm_scripts/rlm_repl.py` with a
+    `plugin/bin/rlm_repl` wrapper invoked as a bare command; rewrite 13
+    RLM refs + `start.md` allowed-tools to `Bash(rlm_repl *)` (reverses
+    FR-5 inline form — see tech-design FR-5 REVISION) [verify:
+    auto-test]
+    → wrapper resolves rlm_repl.py via symlink-followed $0, keeps state
+      project-local; verified via symlink-on-PATH from /tmp.
+      `/embo:init` now completes (previously halted on expansion
+      prompt). `claude plugin validate --strict` still passes [live]
+      (2026-06-19)
+  - [X] 8.6 FIX (surfaced by 8.1): `chmod +x` all shipped hook scripts +
+    `bin/rlm_repl` + `rlm_repl.py` — the plugin failed with exit 126
+    because moved `embo-capture.sh` lost its executable bit (git mv
+    preserved the non-exec mode; `approve-compound.sh` invokes it
+    directly) [verify: manual-run-claude]
+    → set +x on approve-compound.sh, embo-capture.sh,
+      behavioral-reminder.sh, context-guard.sh, fix-hooks.sh,
+      bin/rlm_repl, rlm_scripts/rlm_repl.py; capture wrapper works
+      again (no 126); .test.sh left non-exec [live] (2026-06-19)
+  - [X] 8.7 REVERSAL (supersedes 5.3/6.2 flatten): empirically tested
+    whether nested command dirs work by restoring
+    `commands/research/{examine,verify}.md` and reinstalling. Result:
+    they register as `/embo:research:examine` / `/embo:research:verify`
+    (typeable nested namespace) — so the `research/` subdir is KEPT,
+    not flattened. Restored the subdir; fixed self-refs in
+    examine.md/verify.md/start.md back to `/embo:research:*`. Updates
+    tech-design FR-4 + External Facts (nested IS supported, both prior
+    "flatten" positions retracted) [verify: manual-run-user]
+    → live reinstall skill list shows `embo:research:examine` +
+      `embo:research:verify`; `claude plugin validate --strict` passes
+      [live] (2026-06-19)
 
 ## Follow-up Tasks (out of scope for 032)
 

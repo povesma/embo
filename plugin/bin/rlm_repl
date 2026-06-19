@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# rlm_repl — wrapper that runs the bundled RLM REPL as a plain command.
+#
+# Why: Claude Code flags any Bash command containing ${...}/$(...)
+# expansion for an approval prompt (a lexical gate the allowlist cannot
+# suppress). Invoking the script via an inline
+# "${CLAUDE_PLUGIN_ROOT}/rlm_scripts/rlm_repl.py" therefore prompts on
+# every call. This wrapper, shipped in the plugin's bin/ (added to the
+# Bash tool PATH while the plugin is enabled), lets commands call a bare
+# `rlm_repl ...` — no expansion in the command string, so no prompt, and
+# a simple `Bash(rlm_repl *)` allow rule matches.
+#
+# The wrapper resolves rlm_repl.py relative to its OWN location, so it
+# works wherever the plugin is installed. RLM state stays project-local:
+# rlm_repl.py writes to ./.claude/rlm_state/ relative to the caller's
+# CWD, which this wrapper does not change.
+
+# Resolve this script's real directory, following symlinks (PATH entries
+# and plugin installs may be symlinked).
+src="${BASH_SOURCE[0]}"
+while [ -h "$src" ]; do
+  dir="$(cd -P "$(dirname "$src")" >/dev/null 2>&1 && pwd)"
+  src="$(readlink "$src")"
+  case "$src" in /*) ;; *) src="$dir/$src" ;; esac
+done
+bin_dir="$(cd -P "$(dirname "$src")" >/dev/null 2>&1 && pwd)"
+
+# bin/ sits at the plugin root; rlm_scripts/ is its sibling.
+repl="$bin_dir/../rlm_scripts/rlm_repl.py"
+
+exec python3 "$repl" "$@"
