@@ -20,7 +20,7 @@ For each incomplete task `[ ]`:
 
 **Use RLM to verify implementation**:
 ```bash
-python3 ~/.claude/rlm_scripts/rlm_repl.py exec <<'PY'
+python3 "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/rlm_scripts/rlm_repl.py" exec <<'PY'
 # Search for files related to task
 # Example: task is "Add OAuth2 handler"
 search_terms = ['oauth2', 'handler']

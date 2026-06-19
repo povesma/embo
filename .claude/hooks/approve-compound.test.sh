@@ -83,6 +83,26 @@ assert_eq "prefix no match"    "no"  "$(matches_rule 'lsof' 'Bash(ls *)')"
 assert_eq "ignore non-Bash"    "no"  "$(matches_rule 'ls' 'Read(./x)')"
 assert_eq "prefix * bare"      "yes" "$(matches_rule 'git' 'Bash(git *)')"
 
+# ---- 032 capture-wrapper default path resolution ----
+# default_capture_cmd -> the wrapper command when EMBO_CAPTURE_CMD is
+# unset. Prefers a plugin install (${CLAUDE_PLUGIN_ROOT}/hooks/...) and
+# falls back to the manual install (~/.claude/hooks/...). Both forms must
+# still contain the stable `embo-capture.sh` token the guard keys off.
+
+# Plugin install: CLAUDE_PLUGIN_ROOT set, EMBO_CAPTURE_CMD unset.
+PLUGIN_DEFAULT="$(CLAUDE_PLUGIN_ROOT=/x/plugin; unset EMBO_CAPTURE_CMD; default_capture_cmd)"
+assert_eq "default uses plugin root" "/x/plugin/hooks/embo-capture.sh" "$PLUGIN_DEFAULT"
+
+# Manual install: neither var set -> fall back under $HOME/.claude.
+MANUAL_DEFAULT="$(unset CLAUDE_PLUGIN_ROOT; unset EMBO_CAPTURE_CMD; default_capture_cmd)"
+assert_eq "default falls back to home" "$HOME/.claude/hooks/embo-capture.sh" "$MANUAL_DEFAULT"
+
+# Both forms carry the stable token (guard/allow-rule depend on it).
+assert_eq "plugin default has token" "yes" \
+  "$(printf '%s' "$PLUGIN_DEFAULT" | grep -q 'embo-capture.sh' && echo yes || echo no)"
+assert_eq "manual default has token" "yes" \
+  "$(printf '%s' "$MANUAL_DEFAULT" | grep -q 'embo-capture.sh' && echo yes || echo no)"
+
 # ---- 2.1 merged-layer loading ----
 # load_rules <kind> <project_dir>  -> rules of that kind (allow|deny),
 # one per line, merged across the 4 settings layers. Uses HOME and the

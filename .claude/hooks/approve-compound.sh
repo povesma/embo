@@ -213,10 +213,17 @@ decide() {
 
 # --- 028 capture wrapper integration ---
 
-# The command the rewrite invokes. Defaults to the installed wrapper
-# path; overridable in tests. The re-entrancy guard and the allow-rule
-# both key off the stable `embo-capture.sh` token in this string.
-EMBO_CAPTURE_CMD="${EMBO_CAPTURE_CMD:-~/.claude/hooks/embo-capture.sh}"
+# The command the rewrite invokes. Defaults to the bundled wrapper path;
+# overridable in tests. The re-entrancy guard and the allow-rule both key
+# off the stable `embo-capture.sh` token in this string.
+#
+# Resolution: a plugin install exposes ${CLAUDE_PLUGIN_ROOT}; a manual
+# install does not, so fall back under $HOME/.claude. $HOME is used (not
+# a literal ~) so it expands here, inside the parameter expansion.
+default_capture_cmd() {
+  printf '%s/hooks/embo-capture.sh' "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}"
+}
+EMBO_CAPTURE_CMD="${EMBO_CAPTURE_CMD:-$(default_capture_cmd)}"
 
 # Heads whose output is interactive or streaming: wrapping would buffer
 # (hang) or hide live output. Left unwrapped. Extend as needed.

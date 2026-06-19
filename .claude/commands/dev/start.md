@@ -372,8 +372,19 @@ task, resolve the behaviour issue, then resume.
 
 ```bash
 # Check RLM status
-python3 ~/.claude/rlm_scripts/rlm_repl.py status
+python3 "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/rlm_scripts/rlm_repl.py" status
 ```
+
+**Plugin-install note (one-time):** plugin users run embo's scripts from
+`${CLAUDE_PLUGIN_ROOT}`, which the `allowed-tools` patterns (written for
+the manual `~/.claude` install) do not auto-approve. The first time
+Claude Code prompts for any of these, choose **"Always allow"** so the
+prompt does not recur:
+- `python3 .../rlm_scripts/rlm_repl.py *` — RLM analysis
+- `bash .../hooks/embo-capture.sh *` — output capture wrapper
+- `bash .../hooks/fix-hooks.sh *` — hook-registration doctor
+
+Manual installs already match the bundled patterns and are unaffected.
 
 **If not initialized**: Suggest running `/dev:init` first
 

@@ -23,7 +23,7 @@ then render the combined summary at the end.**
 **(Skip if profile `tools.rlm` is `false` — mark as "skipped")**
 
 ```bash
-python3 ~/.claude/rlm_scripts/rlm_repl.py status
+python3 "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/rlm_scripts/rlm_repl.py" status
 ```
 
 | Outcome | `rlm_result` |

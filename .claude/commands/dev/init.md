@@ -40,7 +40,7 @@ if `tools.memory_backend` is `none`.
 Check that both systems are available (skip checks for disabled tools):
 ```bash
 # Check RLM
-python3 ~/.claude/rlm_scripts/rlm_repl.py --help
+python3 "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/rlm_scripts/rlm_repl.py" --help
 
 # Check claude-mem (via search tool availability)
 # MCP tools should be accessible
@@ -60,7 +60,7 @@ project_name=$(basename $(git rev-parse --show-toplevel 2>/dev/null) || basename
 ### Step 3: Initialize RLM
 
 ```bash
-python3 ~/.claude/rlm_scripts/rlm_repl.py init-repo .
+python3 "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/rlm_scripts/rlm_repl.py" init-repo .
 ```
 
 This will:
@@ -159,7 +159,7 @@ Read the file — the PostToolUse hook captures it automatically.
 
 ```bash
 # Check RLM status
-python3 ~/.claude/rlm_scripts/rlm_repl.py status
+python3 "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/rlm_scripts/rlm_repl.py" status
 
 # Check claude-mem observations
 mcp__plugin_claude-mem_mcp-search__search(
