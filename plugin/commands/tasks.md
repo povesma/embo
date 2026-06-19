@@ -1,3 +1,10 @@
+---
+description: >
+  Break an approved technical design into a step-by-step task list with
+  user-story parents, verifiable subtasks, and per-subtask verification
+  tags. Pauses for confirmation before expanding sub-tasks.
+---
+
 # Generate Task List with embo Hybrid
 
 **🔑 KISS Principle: Keep It Stupid Simple**
@@ -119,7 +126,7 @@ independently verified and tested.
    - If found: read the Story Coverage table. Match subtasks by
      description and assign the method from the table.
    - If not found: infer from the task's nature using the assignment
-     rules in `/dev:test-plan` (e.g. `.md`/config changes →
+     rules in `/embo:test-plan` (e.g. `.md`/config changes →
      `code-only`, logic changes → `auto-test`, CLI output checks →
      `manual-run-claude`, user confirms → `manual-run-user`).
 
@@ -130,7 +137,7 @@ Parent story lines (1.0, 2.0, …) do NOT get tags.
 Verification methods (`code-only`, `auto-test`, `manual-run-claude`,
 `manual-run-user`, `docker`, `e2e`, `observation`) and the `live` vs
 `simulated` distinction are defined in the canonical taxonomy in
-`/dev:test-plan`.
+`/embo:test-plan`.
 
 ### Step 8: Identify Relevant Files
 
@@ -236,4 +243,4 @@ implement the feature.
    automatically. No explicit save call needed.
 3. DO NOT start implementing the task list
 4. Use RLM complexity data + claude-mem velocity for realistic estimates
-5. Suggest `/dev:impl` as next step
+5. Suggest `/embo:impl` as next step

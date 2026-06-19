@@ -1,3 +1,9 @@
+---
+description: >
+  Generate a test plan from a technical design's verification table,
+  defining per-story coverage and the canonical verification methods.
+---
+
 # Generate Test Plan from Technical Design
 
 Create a test plan document that maps each user story and functional
@@ -7,14 +13,14 @@ in the task list.
 
 ## When to Use
 
-- After `/dev:tech-design` is approved
-- Before running `/dev:tasks` (so tags come from the plan, not guesswork)
+- After `/embo:tech-design` is approved
+- Before running `/embo:tasks` (so tags come from the plan, not guesswork)
 - When revisiting test coverage after scope changes
 
 ## Pipeline Position
 
 ```
-/dev:prd → /dev:tech-design → /dev:test-plan → /dev:tasks → /dev:impl
+/embo:prd → /embo:tech-design → /embo:test-plan → /embo:tasks → /embo:impl
 ```
 
 This step is **optional but strongly recommended** for any feature with
@@ -37,7 +43,7 @@ Read:
 - PRD: `tasks/{id}-{name}/*-prd.md`
   Focus on: User Stories and Acceptance Criteria
 
-If neither exists, stop and suggest running `/dev:tech-design` first.
+If neither exists, stop and suggest running `/embo:tech-design` first.
 
 ### Step 2: Generate Story Coverage Table
 
@@ -86,7 +92,7 @@ Subtasks mapped: {M}
 
 Intentional gaps: {K}
 
-Next step: /dev:tasks  (will read this plan for [verify:] tags)
+Next step: /embo:tasks  (will read this plan for [verify:] tags)
 ```
 
 ## Output Format
@@ -120,7 +126,7 @@ Next step: /dev:tasks  (will read this plan for [verify:] tags)
 
 ## Verification Method Taxonomy
 
-(canonical reference — do not modify here, edit `/dev:test-plan`)
+(canonical reference — do not modify here, edit `/embo:test-plan`)
 
 | Method | When to use |
 |--------|-------------|
@@ -165,7 +171,7 @@ before closing the task.
 
 ## Assignment Rules (when no test plan exists)
 
-When `/dev:tasks` generates tasks without a test plan, infer method
+When `/embo:tasks` generates tasks without a test plan, infer method
 from the task's nature:
 
 | Task characteristics | Assign |
@@ -184,5 +190,5 @@ from the task's nature:
 2. Generate Story Coverage table per story
 3. List intentional gaps honestly
 4. Write output file and read it back
-5. Report summary and suggest `/dev:tasks`
+5. Report summary and suggest `/embo:tasks`
 6. DO NOT start generating tasks — wait for user

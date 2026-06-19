@@ -10,7 +10,7 @@ Start a coding session with comprehensive context from both RLM code analysis an
 ## When to Use
 
 - **Beginning of each coding session**
-- After `/dev:init` has been run
+- After `/embo:init` has been run
 - When you need full project context
 - Resuming work after a break
 
@@ -264,11 +264,11 @@ independent check before you commit. Escalate by weight:
   **not-widely-used** one — check **Context7 MCP** for current docs
   instead of relying on memory. Cheap, always-on; do it by reflex.
 - **A real decision, or a doc you're unsure of** (which option? is this
-  PRD/tech-design sound?) — proactively **suggest** `/dev:research:examine`:
+  PRD/tech-design sound?) — proactively **suggest** `/embo:examine`:
   it runs two independent clean-context passes and reconciles them into
   a recommendation.
 - **A chosen approach that's risky or complex, before implementing it**
-  — proactively **suggest** `/dev:research:verify`: it proves each
+  — proactively **suggest** `/embo:verify`: it proves each
   acceptance criterion against an independent source.
 
 You **suggest** examine/verify for any non-trivial task and let the user
@@ -329,7 +329,7 @@ conclusions.
 After completing what the user asked for in the current message,
 stop. Do not chain into follow-up actions (commit, push, deploy,
 re-index, cleanup) unless the current message asks for them. Prior
-requests do not carry forward. (During `/dev:impl`, the continuation
+requests do not carry forward. (During `/embo:impl`, the continuation
 menu in the ONE-SUBTASK protocol governs instead.)
 
 <!-- RULE:BEHAVIOUR-FIRST -->
@@ -386,7 +386,7 @@ prompt does not recur:
 
 Manual installs already match the bundled patterns and are unaffected.
 
-**If not initialized**: Suggest running `/dev:init` first
+**If not initialized**: Suggest running `/embo:init` first
 
 **Capture**:
 - Project path
@@ -514,8 +514,8 @@ Based on:
 
 ## 🎯 Quick Actions
 
-- **Start recommended task**: `/dev:impl`
-- **Create new feature**: `/dev:prd`
+- **Start recommended task**: `/embo:impl`
+- **Create new feature**: `/embo:prd`
 - **Search past work**: Ask me about anything (claude-mem enabled)
 - **Review codebase**: Ask specific questions (RLM will analyze)
 
@@ -562,7 +562,7 @@ Depending on what's available, provide appropriate detail:
    - Make it easy to start working
 
 3. **Error Handling**:
-   - If RLM not initialized: suggest `/dev:init`
+   - If RLM not initialized: suggest `/embo:init`
    - If claude-mem empty: that's OK, use RLM only
    - If no tasks found: suggest creating one
 
@@ -619,12 +619,12 @@ When referencing any library, framework, or external API — use the Context7 MC
 
 ## Docs-First Principle
 
-The normal flow is: PRD → tech-design → tasks → `/dev:impl`.
+The normal flow is: PRD → tech-design → tasks → `/embo:impl`.
 Docs should exist and be consistent with what's being built before any
 implementation starts.
 
 When the user asks to implement something after the session starts:
-- **Docs exist and are consistent** → suggest `/dev:impl`
+- **Docs exist and are consistent** → suggest `/embo:impl`
 - **Docs missing or inconsistent** → stop, flag the gap, offer to
   create docs (PRD / tech-design / tasks) before implementing
 - **Research, POC, or exploration** (e.g. during PRD/tech-design) →

@@ -1,3 +1,9 @@
+---
+description: >
+  Initialize the embo system for a repository: index the codebase with
+  RLM and verify claude-mem is available. Run once per project.
+---
+
 # Initialize embo Hybrid System
 
 Bootstrap both RLM file indexing and claude-mem semantic memory for a project. This is the foundation for quality-first development workflow.
@@ -207,12 +213,12 @@ verbatim, if present.
 
 **Start your first session**:
 ```
-/dev:start
+/embo:start
 ```
 
 **Or create a new feature**:
 ```
-/dev:prd
+/embo:prd
 ```
 
 **Or search existing work**:
@@ -281,7 +287,7 @@ Search: "authentication" or "database schema" or "API design"
 - ✅ Project tagged: "app-astudio"
 
 ## Next Steps
-/dev:start
+/embo:start
 ```
 
 ## Final Instructions
@@ -294,4 +300,4 @@ Search: "authentication" or "database schema" or "API design"
 6. Report comprehensive summary
 7. DO NOT start implementing anything
 8. DO NOT read entire source code files
-9. Suggest `/dev:start` as next step
+9. Suggest `/embo:start` as next step
