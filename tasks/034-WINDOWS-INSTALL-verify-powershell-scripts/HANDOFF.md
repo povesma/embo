@@ -35,6 +35,27 @@ The Windows equivalents:
     `-Yes` (with `-Force`, accept all).
   - Edits settings.json with native `ConvertFrom-Json -AsHashtable` /
     `ConvertTo-Json -Depth 100` — NO jq used by the script itself.
+  - **MISSING — add in this task: `-StatuslineOnly` parity.** The bash
+    side gained a statusline path that `install.ps1` does NOT yet have.
+    On bash, the logic lives in `plugin/bin/statusline-setup` (callable
+    as a bare command because Claude Code puts `plugin/bin/` on PATH),
+    and three entry points delegate to it: the `/embo:statusline`
+    command (`bash statusline-setup`), `install.sh --statusline-only`,
+    and the no-clone cache path
+    `bash ~/.claude/plugins/cache/embo/embo/*/bin/statusline-setup`.
+    It copies `statusline.sh` to the stable `~/.claude/statusline.sh`,
+    sets `statusLine` to that path, SELF-REPAIRS a stale/blank embo entry
+    (command matches `statusline.sh`, including the broken
+    `${CLAUDE_PLUGIN_ROOT}` form) but leaves a custom statusLine alone.
+    Windows needs the equivalent. Options: (a) a `bin/statusline-setup`
+    PowerShell sibling invoked the same way; or (b) an `-StatuslineOnly`
+    switch on `install.ps1` mirroring `--statusline-only`. The
+    `/embo:statusline` command itself is cross-platform already (it runs
+    `statusline-setup` on PATH) IF a Windows `bin/` entry exists that
+    PATH can resolve — confirm how Claude Code resolves `plugin/bin/`
+    entries on Windows (extension/shebang handling). statusline.sh itself
+    is bash and needs bash to RENDER (Git for Windows), independent of
+    how it is wired.
 - **`uninstall.ps1`** — PowerShell parity with `uninstall.sh`. Removes a
   manual install of EITHER era (current `/embo:*` and pre-plugin
   `/dev:*`), strips only embo-specific settings.json entries (3 hooks,
@@ -104,7 +125,15 @@ invoking, the same way install.test.sh overrides `HOME`.
    generic permissions KEPT, backup created.
 4. **Round-trip** — `uninstall.ps1` on the standalone install from step
    2 cleans back to kept profiles + generic permissions.
-5. Consider writing `install.ps1.test.ps1` (Pester or plain) as the
+5. **Statusline-only** (once `-StatuslineOnly`/`bin/statusline-setup`
+   exists for Windows) — into a temp profile with NO statusLine: assert
+   `statusline.sh` copied to `~\.claude\statusline.sh` and `statusLine`
+   set to `~/.claude/statusline.sh`; did NOT do a full standalone install
+   (no `commands\embo`). Then self-repair: seed a stale embo entry
+   (`${CLAUDE_PLUGIN_ROOT}/statusline.sh`) and assert it is rewritten to
+   the stable path; seed a custom entry (`~/my-bar.ps1`) and assert it is
+   left untouched. Mirrors install.test.sh scenarios 4 / 4b / 4c.
+6. Consider writing `install.ps1.test.ps1` (Pester or plain) as the
    Windows analogue of `install.test.sh`, so this is repeatable.
 
 ## Files
@@ -112,13 +141,21 @@ invoking, the same way install.test.sh overrides `HOME`.
 - `install.ps1`, `uninstall.ps1` (repo root) — the scripts to verify.
 - `install.sh`, `uninstall.sh`, `install.test.sh` (repo root) — the
   VERIFIED bash reference; the .ps1 must produce the same end state.
-- `docs/REFERENCE.md` §Windows — user-facing docs (already updated;
-  re-check accuracy after fixing the scripts).
+  `install.test.sh` is now at 54 assertions and includes the statusline
+  scenarios to mirror.
+- `plugin/bin/statusline-setup`, `plugin/commands/statusline.md` — the
+  bash statusline path (verified end-to-end on the shipped plugin) that
+  Windows must match.
+- `docs/REFERENCE.md` §Windows + §Statusline — user-facing docs (already
+  updated for bash; re-check accuracy after the Windows scripts land).
 
 ## Done when
 
 - Both `.ps1` scripts run on Windows (pwsh 7) and produce a profile tree
   + settings.json byte-equivalent in MEANING to the bash versions.
+- The Windows statusline path (`-StatuslineOnly` and/or a `bin/`
+  equivalent) exists, self-repairs a stale entry, and `/embo:statusline`
+  works on Windows.
 - A repeatable Windows test exists and passes.
 - `install.test.sh`-style verification is documented as passing.
 - Mark `[X]` only after a real Windows run, not after reading the code.
