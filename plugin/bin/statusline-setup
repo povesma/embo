@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# statusline-setup — enable the embo status line. Lives in plugin/bin/, so
+# Claude Code adds it to the Bash PATH while the plugin is enabled and it
+# is callable as a bare `statusline-setup` (no ${CLAUDE_PLUGIN_ROOT},
+# which does NOT resolve in command/agent Bash — only in hooks/MCP/LSP).
+# Same reasoning as the rlm_repl wrapper.
+#
+# This is the single implementation behind /embo:statusline,
+# `install.sh --statusline-only`, and the no-clone cache invocation
+# (bash ~/.claude/plugins/cache/embo/embo/*/bin/statusline-setup).
+#
+# Why it is needed: a plugin cannot register a main statusLine. Claude
+# Code reads statusLine only from the user's settings.json, and
+# ${CLAUDE_PLUGIN_ROOT} renders blank there, so a plugin-shipped entry
+# shows nothing. The user enables it once with this script, which copies
+# statusline.sh to the stable ~/.claude/statusline.sh and points
+# settings.json there. The statusline-refresh SessionStart hook keeps the
+# copy current after later plugin updates.
+#
+# Self-repair: overwrites an existing statusLine ONLY when it is embo's own
+# (command references statusline.sh — covers the stale ${CLAUDE_PLUGIN_ROOT}
+# form that renders blank). A custom third-party statusLine is left alone.
+
+set -euo pipefail
+
+TARGET="$HOME/.claude"
+
+# Resolve the bundled statusline.sh, following symlinks (PATH entries and
+# plugin installs may be symlinked). bin/ sits at the plugin root, so
+# statusline.sh is its sibling: ../statusline.sh relative to this script.
+src="${BASH_SOURCE[0]}"
+while [ -h "$src" ]; do
+    dir="$(cd -P "$(dirname "$src")" >/dev/null 2>&1 && pwd)"
+    src="$(readlink "$src")"
+    case "$src" in /*) ;; *) src="$dir/$src" ;; esac
+done
+bin_dir="$(cd -P "$(dirname "$src")" >/dev/null 2>&1 && pwd)"
+SL_SRC="$bin_dir/../statusline.sh"
+
+if [ ! -f "$SL_SRC" ]; then
+    echo "ERROR: statusline.sh not found at $SL_SRC" >&2
+    exit 1
+fi
+if ! command -v jq >/dev/null 2>&1; then
+    echo "ERROR: jq is required to edit settings.json. Install jq, then re-run." >&2
+    exit 1
+fi
+
+mkdir -p "$TARGET"
+cp "$SL_SRC" "$TARGET/statusline.sh"
+chmod +x "$TARGET/statusline.sh"
+echo "  statusline: copied to $TARGET/statusline.sh"
+
+SETTINGS="$TARGET/settings.json"
+[ -f "$SETTINGS" ] || echo '{}' > "$SETTINGS"
+
+# Overwrite only when absent or embo's own (command references statusline.sh).
+EXISTING_SL="$(jq -r '.statusLine.command // ""' "$SETTINGS" 2>/dev/null)"
+if [ -z "$EXISTING_SL" ] || case "$EXISTING_SL" in *statusline.sh*) true ;; *) false ;; esac; then
+    jq '.statusLine = {"type": "command", "command": "~/.claude/statusline.sh"}' \
+        "$SETTINGS" > /tmp/_embo_statusline.tmp \
+        && mv /tmp/_embo_statusline.tmp "$SETTINGS"
+    echo "  settings.json: statusLine set to ~/.claude/statusline.sh"
+else
+    echo "  settings.json: a custom statusLine is configured — leaving as is"
+    echo "    (it does not reference embo's statusline.sh; run /embo:statusline to change)"
+fi
+
+echo ""
+echo "Status line enabled. Restart Claude Code to see it."
