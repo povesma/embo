@@ -82,60 +82,25 @@ REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 SRC="$REPO_DIR/plugin"
 TARGET="$HOME/.claude"
 
-# resolve_statusline -> echo the path to the bundled statusline.sh.
-# Works from a clone (REPO_DIR/plugin/statusline.sh) AND from the plugin
-# cache, where install.sh and statusline.sh are siblings under the
-# version dir (REPO_DIR/statusline.sh). Echoes nothing if not found.
-resolve_statusline() {
-    if [ -f "$SRC/statusline.sh" ]; then
-        echo "$SRC/statusline.sh"
-    elif [ -f "$REPO_DIR/statusline.sh" ]; then
-        echo "$REPO_DIR/statusline.sh"
-    fi
-}
-
 # ---------------------------------------------------------------------------
-# Statusline-only mode: enable just the status line, then exit.
-# A plugin cannot register a statusLine, so a plugin user runs this once.
-# Copies statusline.sh to the stable ~/.claude/statusline.sh (NOT the
-# versioned plugin cache path, which rots on update) and points
-# settings.json there. The statusline-refresh SessionStart hook keeps the
-# copy current after later plugin updates.
+# Statusline-only mode: delegate to plugin/bin/statusline-setup, the single
+# implementation also used by /embo:statusline and the no-clone cache
+# invocation. (A plugin cannot register a statusLine, so a user enables it
+# once; the helper copies statusline.sh to the stable ~/.claude path and
+# registers it, self-repairing a stale embo entry.)
 # ---------------------------------------------------------------------------
 if [ "$STATUSLINE_ONLY" = "1" ]; then
-    SL_SRC="$(resolve_statusline)"
-    if [ -z "$SL_SRC" ]; then
-        echo "ERROR: statusline.sh not found next to install.sh or in plugin/." >&2
-        exit 1
-    fi
-    if ! command -v jq >/dev/null 2>&1; then
-        echo "ERROR: jq is required to edit settings.json. Install jq, then re-run." >&2
-        exit 1
-    fi
-    cp "$SL_SRC" "$TARGET/statusline.sh"
-    chmod +x "$TARGET/statusline.sh"
-    echo "  statusline: copied to $TARGET/statusline.sh"
-
-    SETTINGS="$TARGET/settings.json"
-    [ -f "$SETTINGS" ] || echo '{}' > "$SETTINGS"
-    # Overwrite ONLY when there is no statusLine, or the existing one is
-    # embo's own (its command references statusline.sh — this covers the
-    # stale ${CLAUDE_PLUGIN_ROOT}/statusline.sh entry, which renders blank,
-    # and the stable ~/.claude/statusline.sh). A genuinely custom
-    # third-party statusLine is left untouched.
-    EXISTING_SL="$(jq -r '.statusLine.command // ""' "$SETTINGS" 2>/dev/null)"
-    if [ -z "$EXISTING_SL" ] || case "$EXISTING_SL" in *statusline.sh*) true ;; *) false ;; esac; then
-        jq '.statusLine = {"type": "command", "command": "~/.claude/statusline.sh"}' \
-            "$SETTINGS" > /tmp/_embo_settings.tmp \
-            && mv /tmp/_embo_settings.tmp "$SETTINGS"
-        echo "  settings.json: statusLine set to ~/.claude/statusline.sh"
+    # The setup helper ships at plugin/bin/statusline-setup. From a clone
+    # that is $SRC/bin/statusline-setup; from the plugin cache, $REPO_DIR
+    # is already the version dir so it is $REPO_DIR/bin/statusline-setup.
+    if [ -f "$SRC/bin/statusline-setup" ]; then
+        exec bash "$SRC/bin/statusline-setup"
+    elif [ -f "$REPO_DIR/bin/statusline-setup" ]; then
+        exec bash "$REPO_DIR/bin/statusline-setup"
     else
-        echo "  settings.json: a custom statusLine is configured — leaving as is"
-        echo "    (it does not reference embo's statusline.sh; run /statusline-setup to change)"
+        echo "ERROR: bin/statusline-setup not found." >&2
+        exit 1
     fi
-    echo ""
-    echo "Status line enabled. Restart Claude Code to see it."
-    exit 0
 fi
 
 # Pick the platform package manager for the optional jq install.
@@ -237,14 +202,15 @@ if [ "$STANDALONE" = "1" ]; then
 
     echo "Standalone install: syncing from $SRC/ to $TARGET/"
 
-    # 1. RLM script + the bin/ wrapper that runs it as a plain `rlm_repl`.
-    #    The wrapper resolves rlm_repl.py as ../rlm_scripts/rlm_repl.py
-    #    relative to itself, so bin/ and rlm_scripts/ must be siblings.
+    # 1. RLM script + all bin/ wrappers (rlm_repl, statusline-setup).
+    #    Each wrapper resolves its target relative to itself (rlm_repl ->
+    #    ../rlm_scripts/rlm_repl.py, statusline-setup -> ../statusline.sh),
+    #    so bin/ must sit beside rlm_scripts/ and statusline.sh.
     mkdir -p "$TARGET/rlm_scripts" "$TARGET/bin"
     cp "$SRC/rlm_scripts/rlm_repl.py" "$TARGET/rlm_scripts/"
-    cp "$SRC/bin/rlm_repl" "$TARGET/bin/"
-    chmod +x "$TARGET/rlm_scripts/rlm_repl.py" "$TARGET/bin/rlm_repl"
-    echo "  rlm: rlm_repl.py + bin/rlm_repl wrapper"
+    cp "$SRC/bin/"* "$TARGET/bin/"
+    chmod +x "$TARGET/rlm_scripts/rlm_repl.py" "$TARGET/bin/"*
+    echo "  rlm + bin: rlm_repl.py, bin/rlm_repl, bin/statusline-setup"
 
     # 2. Agents
     mkdir -p "$TARGET/agents"
