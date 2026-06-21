@@ -1,6 +1,6 @@
 {
   "name": "embo",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Spec-driven development workflow for Claude Code: RLM code analysis, claude-mem memory, and capture/approve hooks",
   "author": {
     "name": "Dmytro Povesma"
