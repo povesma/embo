@@ -105,6 +105,16 @@ This registers all `/embo:*` commands, agents, and hooks. Read
 
 Must report RLM, claude-mem, and the capture hook as operational.
 
+### Step 4 — Enable the status line (optional, inside Claude Code)
+
+```text
+/embo:statusline
+```
+
+A plugin cannot register a status line itself, so this one command sets
+it up (path, git branch, model, context %, claude-mem freshness, time).
+Restart Claude Code to see it. Details: [Reference §Statusline](docs/REFERENCE.md#statusline).
+
 ### First session (inside Claude Code, in any of your code repos)
 
 ```text
