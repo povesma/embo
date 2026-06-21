@@ -131,6 +131,7 @@ HOME="$SANDBOX/std" bash "$INSTALL" --standalone --force --yes >/dev/null 2>&1
 assert "2: standalone install exits 0" "$?"
 
 assert "2: rlm_repl wrapper present"   "$(exists "$H2/bin/rlm_repl"; echo $?)"
+assert "2: statusline-setup wrapper present" "$(exists "$H2/bin/statusline-setup"; echo $?)"
 assert "2: rlm_repl.py sibling present" "$(exists "$H2/rlm_scripts/rlm_repl.py"; echo $?)"
 assert "2: commands in embo/ namespace" "$(exists "$H2/commands/embo/start.md"; echo $?)"
 assert "2: research subdir present"    "$(exists "$H2/commands/embo/research"; echo $?)"
@@ -158,6 +159,7 @@ HOME="$SANDBOX/std" bash "$UNINSTALL" --force --yes >/dev/null 2>&1
 assert "3: round-trip uninstall exits 0" "$?"
 assert "3: embo commands removed"      "$(absent "$H2/commands/embo"; echo $?)"
 assert "3: rlm_repl wrapper removed"   "$(absent "$H2/bin/rlm_repl"; echo $?)"
+assert "3: statusline-setup wrapper removed" "$(absent "$H2/bin/statusline-setup"; echo $?)"
 assert "3: statusline removed"         "$(absent "$H2/statusline.sh"; echo $?)"
 assert "3: profiles kept"              "$(exists "$H2/profiles/quality.yaml"; echo $?)"
 assert "3: no embo hook registrations remain" \
