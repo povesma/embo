@@ -51,6 +51,12 @@ to install jq, bun, and uv. Bun is *meant* to be auto-installed by
 claude-mem but often is not, which is why this step installs it directly.
 Add the printed `PATH` lines to your shell profile when done.
 
+> [!NOTE]
+> **On Windows**, use the PowerShell equivalent (requires PowerShell 7 —
+> `pwsh`): `pwsh -ExecutionPolicy Bypass -File .\install.ps1`. Same two
+> modes (`-Standalone` for a manual install). See
+> [Reference §Windows](docs/REFERENCE.md#windows) for details.
+
 ### Step 1 — Install embo (inside Claude Code)
 
 ```text
