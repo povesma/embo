@@ -77,12 +77,45 @@ python3 --version          # 3.8+
 
 ### Windows
 
-Required: Python 3.8–3.12, Git (includes bash), Claude Code. Recommended:
-jq (statusline), Node.js (claude-mem). Optional: gh.
+Required: Python 3.8–3.12, Git (includes bash), Node.js 20+, Claude
+Code. Recommended: jq (hooks), bun + uv (claude-mem). Optional: gh.
 
 > **Hooks and statusline require bash.** Git for Windows provides it.
 > Without bash, a `.sh` hook registered in `settings.json` silently
 > drops prompts (the command list shows but typed text disappears).
+
+> **PowerShell 7+ required for the scripts below.** `install.ps1` /
+> `uninstall.ps1` use `ConvertFrom-Json -AsHashtable`, which Windows
+> PowerShell 5.1 does not have. Run them with `pwsh`
+> (`winget install Microsoft.PowerShell`), not the built-in
+> `powershell` 5.1.
+
+The Windows scripts mirror the macOS/Linux ones: default mode installs
+dependencies, `-Standalone` additionally copies embo into `~/.claude/`.
+
+```powershell
+git clone https://github.com/povesma/embo $env:USERPROFILE\embo
+cd $env:USERPROFILE\embo
+
+# Dependencies only (use this with the plugin install):
+pwsh -ExecutionPolicy Bypass -File .\install.ps1
+
+# Or a standalone (no-plugin) manual install:
+pwsh -ExecutionPolicy Bypass -File .\install.ps1 -Standalone
+
+# Remove a standalone install (covers the pre-plugin /dev:* layout too):
+pwsh -ExecutionPolicy Bypass -File .\uninstall.ps1
+```
+
+`install.ps1` checks Python/Node (reporting the `winget` command if
+missing), installs jq via `winget` and bun/uv via their official
+installers, all on consent. `-Standalone` copies the plugin tree into
+`~/.claude/` under the `/embo:*` namespace and registers the three real
+hooks — but skips hook registration if bash is absent (a `.sh` hook with
+no bash silently drops prompts).
+
+<details>
+<summary>Manual PowerShell steps (if you prefer not to run the script)</summary>
 
 ```powershell
 winget install Python.Python.3.12   # 3.13+ breaks ChromaDB
@@ -105,6 +138,7 @@ if (Get-Command bash -ErrorAction SilentlyContinue) {
 }
 python --version
 ```
+</details>
 
 Windows notes: use `python` / `py -3` instead of `python3`; backslash
 paths; add `~/.claude/bin` to PATH.
