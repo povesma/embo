@@ -166,6 +166,65 @@ assert "3: rlm_repl permission removed" \
   "$(jq_true '[.permissions.allow[]?] | any(. == "Bash(rlm_repl *)") | not' "$S2"; echo $?)"
 
 # ===========================================================================
+# Scenario 4 — install.sh --statusline-only enables just the status line
+# ===========================================================================
+# Run from a clone layout (REPO_DIR/plugin/statusline.sh) into a fresh HOME.
+H4="$SANDBOX/sl/.claude"
+mkdir -p "$H4"
+HOME="$SANDBOX/sl" bash "$INSTALL" --statusline-only --force --yes >/dev/null 2>&1
+assert "4: statusline-only exits 0" "$?"
+assert "4: statusline.sh copied to ~/.claude"  "$(exists "$H4/statusline.sh"; echo $?)"
+S4="$H4/settings.json"
+assert "4: statusLine points at stable path (not cache, not PLUGIN_ROOT)" \
+  "$(jq_true '.statusLine.command == "~/.claude/statusline.sh"' "$S4"; echo $?)"
+# It must NOT do a full standalone install (no commands/agents).
+assert "4: did NOT install commands"   "$(absent "$H4/commands/embo"; echo $?)"
+assert "4: did NOT install agents"     "$(absent "$H4/agents"; echo $?)"
+
+# 4b. Self-repair: a stale embo entry (broken ${CLAUDE_PLUGIN_ROOT} form)
+#     must be OVERWRITTEN to the stable path.
+printf '{"statusLine":{"type":"command","command":"${CLAUDE_PLUGIN_ROOT}/statusline.sh"}}\n' > "$S4"
+HOME="$SANDBOX/sl" bash "$INSTALL" --statusline-only --force --yes >/dev/null 2>&1
+assert "4b: stale embo statusLine repaired to stable path" \
+  "$(jq_true '.statusLine.command == "~/.claude/statusline.sh"' "$S4"; echo $?)"
+
+# 4c. A genuinely custom statusLine must be LEFT ALONE.
+printf '{"statusLine":{"type":"command","command":"~/my-custom-bar.sh"}}\n' > "$S4"
+HOME="$SANDBOX/sl" bash "$INSTALL" --statusline-only --force --yes >/dev/null 2>&1
+assert "4c: custom statusLine left untouched" \
+  "$(jq_true '.statusLine.command == "~/my-custom-bar.sh"' "$S4"; echo $?)"
+
+# ===========================================================================
+# Scenario 5 — statusline-refresh.sh re-copies a stale copy, leaves current
+# ===========================================================================
+REFRESH="$REPO/plugin/hooks/statusline-refresh.sh"
+H5="$SANDBOX/refresh/.claude"
+mkdir -p "$H5"
+FAKE_PLUGIN="$SANDBOX/fake-plugin"
+mkdir -p "$FAKE_PLUGIN"
+printf 'echo NEW-VERSION\n' > "$FAKE_PLUGIN/statusline.sh"
+
+# 5a. No installed copy yet -> hook must NOT create one (opt-in only).
+HOME="$SANDBOX/refresh" CLAUDE_PLUGIN_ROOT="$FAKE_PLUGIN" bash "$REFRESH" >/dev/null 2>&1
+assert "5a: refresh exits 0 with no copy present" "$?"
+assert "5a: hook did NOT create a copy (opt-in only)" "$(absent "$H5/statusline.sh"; echo $?)"
+
+# 5b. Stale installed copy -> hook refreshes it to match the bundled one.
+printf 'echo OLD-VERSION\n' > "$H5/statusline.sh"
+HOME="$SANDBOX/refresh" CLAUDE_PLUGIN_ROOT="$FAKE_PLUGIN" bash "$REFRESH" >/dev/null 2>&1
+assert "5b: refresh exits 0 on stale copy" "$?"
+assert "5b: stale copy was refreshed to bundled content" \
+  "$(cmp -s "$FAKE_PLUGIN/statusline.sh" "$H5/statusline.sh"; echo $?)"
+
+# 5c. Current copy -> hook leaves it untouched (idempotent, no needless write).
+cp "$FAKE_PLUGIN/statusline.sh" "$H5/statusline.sh"
+BEFORE="$(cat "$H5/statusline.sh")"
+HOME="$SANDBOX/refresh" CLAUDE_PLUGIN_ROOT="$FAKE_PLUGIN" bash "$REFRESH" >/dev/null 2>&1
+assert "5c: refresh exits 0 on current copy" "$?"
+assert "5c: current copy unchanged" \
+  "$([ "$BEFORE" = "$(cat "$H5/statusline.sh")" ]; echo $?)"
+
+# ===========================================================================
 echo ""
 echo "install/uninstall integration tests: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
