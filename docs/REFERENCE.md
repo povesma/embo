@@ -251,14 +251,26 @@ red >30; `mem:idle` (worker up, DB empty), `mem:DOWN` (unreachable),
 `mem:NOCURL` (no `curl`). Freshness check is loopback-only
 (`127.0.0.1:37777`, 2 s timeout) so a hung worker can't stall it.
 
-Plugins cannot set the main statusline, so install it manually. Copy
-`plugin/statusline.sh` to `~/.claude/statusline.sh`, then either ask
-Claude ("use the existing script at ~/.claude/statusline.sh" — the
-built-in `statusline-setup` agent wires it), or add manually:
+A Claude Code plugin cannot register the main statusline (it is read
+only from the user's `settings.json`, and `${CLAUDE_PLUGIN_ROOT}` does
+not resolve in a `statusLine` command), so enabling it is a one-time
+user step. Three equivalent ways, all running the same bundled helper:
 
-```json
-{ "statusLine": { "type": "command", "command": "~/.claude/statusline.sh" } }
-```
+- **Plugin users** — run `/embo:statusline` inside Claude Code, or from
+  a terminal without it:
+  ```bash
+  bash ~/.claude/plugins/cache/embo/embo/*/bin/statusline-setup
+  ```
+- **Standalone / clone users** — `bash install.sh --statusline-only`.
+
+The helper copies `statusline.sh` to the stable `~/.claude/statusline.sh`
+and sets `statusLine` to point there. It repairs a stale embo entry
+(including a blank `${CLAUDE_PLUGIN_ROOT}` one) but leaves a custom
+statusline untouched. The `statusline-refresh` SessionStart hook keeps
+the copy current after later plugin updates. Restart Claude Code to see
+it. (Manual fallback: copy the script yourself and add
+`{ "statusLine": { "type": "command", "command": "~/.claude/statusline.sh" } }`
+to `settings.json`.)
 
 Restart Claude Code after editing `settings.json`.
 
