@@ -10,39 +10,55 @@
 # in its default mode to get them, then install the plugins.
 #
 # Modes:
-#   bash install.sh               Install/verify dependencies only
-#                                 (Python, Node, jq, bun, uv). Use this
-#                                 with the plugin install.
-#   bash install.sh --standalone  Dependencies, THEN copy embo into
-#                                 ~/.claude/ as a manual (no-plugin)
-#                                 install. For developers who clone and
-#                                 tweak embo. Do NOT combine standalone
-#                                 with the plugin — they register the same
-#                                 hooks and commands and would collide.
-#                                 Remove a standalone install with
-#                                 uninstall.sh.
+#   bash install.sh                   Install/verify dependencies only
+#                                     (Python, Node, jq, bun, uv). Use
+#                                     this with the plugin install.
+#   bash install.sh --standalone      Dependencies, THEN copy embo into
+#                                     ~/.claude/ as a manual (no-plugin)
+#                                     install. For developers who clone
+#                                     and tweak embo. Do NOT combine with
+#                                     the plugin — they register the same
+#                                     hooks and commands and would
+#                                     collide. Remove with uninstall.sh.
+#   bash install.sh --statusline-only Enable ONLY the status line. A
+#                                     plugin cannot ship a statusLine
+#                                     (Claude Code reads it only from the
+#                                     user's settings.json, and
+#                                     ${CLAUDE_PLUGIN_ROOT} does not
+#                                     resolve there), so a plugin user
+#                                     runs this once to copy statusline.sh
+#                                     to ~/.claude/ and register it. Runs
+#                                     from a clone OR straight from the
+#                                     plugin cache:
+#                                       bash ~/.claude/plugins/cache/embo/embo/*/install.sh --statusline-only
+#                                     The statusline-refresh SessionStart
+#                                     hook keeps the copy current after
+#                                     plugin updates.
 #
-# Flags: --standalone, --force/-f (non-interactive, default 'no'),
-#        --yes/-y (with --force: auto-accept all prompts).
+# Flags: --standalone, --statusline-only, --force/-f (non-interactive,
+#        default 'no'), --yes/-y (with --force: auto-accept all prompts).
 
 set -euo pipefail
 
 STANDALONE=0
+STATUSLINE_ONLY=0
 FORCE=0
 YES=0
 for arg in "$@"; do
     case "$arg" in
         --standalone) STANDALONE=1 ;;
+        --statusline-only) STATUSLINE_ONLY=1 ;;
         --force|-f) FORCE=1 ;;
         --yes|-y) YES=1 ;;
         -h|--help)
-            echo "Usage: install.sh [--standalone] [--force] [--yes]"
-            echo "  (no flag)     install/verify dependencies only"
-            echo "  --standalone  also copy embo into ~/.claude/ (manual install)"
-            echo "  --force       non-interactive; skip prompts (default: no)"
-            echo "  --yes         with --force, auto-accept all prompts"
+            echo "Usage: install.sh [--standalone | --statusline-only] [--force] [--yes]"
+            echo "  (no flag)          install/verify dependencies only"
+            echo "  --standalone       also copy embo into ~/.claude/ (manual install)"
+            echo "  --statusline-only  enable just the status line (for plugin users)"
+            echo "  --force            non-interactive; skip prompts (default: no)"
+            echo "  --yes              with --force, auto-accept all prompts"
             exit 0 ;;
-        *) echo "Usage: install.sh [--standalone] [--force] [--yes]"; exit 1 ;;
+        *) echo "Usage: install.sh [--standalone | --statusline-only] [--force] [--yes]"; exit 1 ;;
     esac
 done
 
@@ -65,6 +81,62 @@ confirm() {
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 SRC="$REPO_DIR/plugin"
 TARGET="$HOME/.claude"
+
+# resolve_statusline -> echo the path to the bundled statusline.sh.
+# Works from a clone (REPO_DIR/plugin/statusline.sh) AND from the plugin
+# cache, where install.sh and statusline.sh are siblings under the
+# version dir (REPO_DIR/statusline.sh). Echoes nothing if not found.
+resolve_statusline() {
+    if [ -f "$SRC/statusline.sh" ]; then
+        echo "$SRC/statusline.sh"
+    elif [ -f "$REPO_DIR/statusline.sh" ]; then
+        echo "$REPO_DIR/statusline.sh"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Statusline-only mode: enable just the status line, then exit.
+# A plugin cannot register a statusLine, so a plugin user runs this once.
+# Copies statusline.sh to the stable ~/.claude/statusline.sh (NOT the
+# versioned plugin cache path, which rots on update) and points
+# settings.json there. The statusline-refresh SessionStart hook keeps the
+# copy current after later plugin updates.
+# ---------------------------------------------------------------------------
+if [ "$STATUSLINE_ONLY" = "1" ]; then
+    SL_SRC="$(resolve_statusline)"
+    if [ -z "$SL_SRC" ]; then
+        echo "ERROR: statusline.sh not found next to install.sh or in plugin/." >&2
+        exit 1
+    fi
+    if ! command -v jq >/dev/null 2>&1; then
+        echo "ERROR: jq is required to edit settings.json. Install jq, then re-run." >&2
+        exit 1
+    fi
+    cp "$SL_SRC" "$TARGET/statusline.sh"
+    chmod +x "$TARGET/statusline.sh"
+    echo "  statusline: copied to $TARGET/statusline.sh"
+
+    SETTINGS="$TARGET/settings.json"
+    [ -f "$SETTINGS" ] || echo '{}' > "$SETTINGS"
+    # Overwrite ONLY when there is no statusLine, or the existing one is
+    # embo's own (its command references statusline.sh — this covers the
+    # stale ${CLAUDE_PLUGIN_ROOT}/statusline.sh entry, which renders blank,
+    # and the stable ~/.claude/statusline.sh). A genuinely custom
+    # third-party statusLine is left untouched.
+    EXISTING_SL="$(jq -r '.statusLine.command // ""' "$SETTINGS" 2>/dev/null)"
+    if [ -z "$EXISTING_SL" ] || case "$EXISTING_SL" in *statusline.sh*) true ;; *) false ;; esac; then
+        jq '.statusLine = {"type": "command", "command": "~/.claude/statusline.sh"}' \
+            "$SETTINGS" > /tmp/_embo_settings.tmp \
+            && mv /tmp/_embo_settings.tmp "$SETTINGS"
+        echo "  settings.json: statusLine set to ~/.claude/statusline.sh"
+    else
+        echo "  settings.json: a custom statusLine is configured — leaving as is"
+        echo "    (it does not reference embo's statusline.sh; run /statusline-setup to change)"
+    fi
+    echo ""
+    echo "Status line enabled. Restart Claude Code to see it."
+    exit 0
+fi
 
 # Pick the platform package manager for the optional jq install.
 PKG_INSTALL=""

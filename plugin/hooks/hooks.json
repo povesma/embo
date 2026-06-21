@@ -1,6 +1,16 @@
 {
-  "description": "embo workflow hooks: context guard + behavioral reminders on prompt, compound-Bash auto-approve + output capture on tool use",
+  "description": "embo workflow hooks: context guard + behavioral reminders on prompt, compound-Bash auto-approve + output capture on tool use, statusline refresh on session start",
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/statusline-refresh.sh\""
+          }
+        ]
+      }
+    ],
     "UserPromptSubmit": [
       {
         "hooks": [
