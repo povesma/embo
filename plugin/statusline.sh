@@ -113,6 +113,37 @@ cmem_segment() {
     printf "%b%s%b" "$cmem_color" "mem:${elapsed_min}m" "$RESET"
 }
 
+# --- Subscription rate-limit segment (5-hour + 7-day windows) ---
+# rate_limits appears only for Claude.ai subscribers (Pro/Max), and only
+# AFTER the first API response in a session; each window can be absent.
+# Degrade silently: emit nothing when no data is present.
+RL_GREEN_MAX=70
+RL_YELLOW_MAX=90
+usage_one() {
+    # usage_one <label> <used_percentage-or-empty> -> colored "label:NN%" or nothing
+    local label="$1" pct="$2"
+    [ -z "$pct" ] || [ "$pct" = "null" ] && return
+    pct=${pct%.*}                       # floor to integer
+    local color
+    if   [ "$pct" -lt "$RL_GREEN_MAX" ];  then color="$GREEN"
+    elif [ "$pct" -lt "$RL_YELLOW_MAX" ]; then color="$YELLOW"
+    else color="$RED"
+    fi
+    printf "%b%s:%s%%%b" "$color" "$label" "$pct" "$RESET"
+}
+usage_segment() {
+    local five seven out
+    five=$(echo "$input"  | jq -r '.rate_limits.five_hour.used_percentage // empty' 2>/dev/null || true)
+    seven=$(echo "$input" | jq -r '.rate_limits.seven_day.used_percentage // empty' 2>/dev/null || true)
+    out=""
+    local s5 s7
+    s5=$(usage_one "5h" "$five")
+    s7=$(usage_one "7d" "$seven")
+    out="$s5"
+    [ -n "$s7" ] && { [ -n "$out" ] && out="$out $s7" || out="$s7"; }
+    printf "%s" "$out"
+}
+
 # --- Assemble segments ---
 parts=()
 parts+=("$(printf "${CYAN}%s${RESET}" "$cwd_display")")
@@ -124,6 +155,8 @@ fi
 parts+=("$(printf "${MAGENTA}%s${RESET}" "$model")")
 parts+=("$(printf "${YELLOW}%s/%s \$%s${RESET}" "$used_short" "$ctx_short" "$(printf '%.3f' "$cost")")")
 parts+=("$(printf "${BRIGHT_WHITE}ctx %s%%${RESET}" "$used_pct")")
+usage_part="$(usage_segment)"
+[ -n "$usage_part" ] && parts+=("$usage_part")
 parts+=("$(cmem_segment)")
 parts+=("$(printf "${WHITE}%s${RESET}" "$current_time")")
 
