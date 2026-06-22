@@ -386,7 +386,7 @@ are verified by validation, grep gates, or live run.
 
 - Bundle the 5 test subagents (`test-backend`, `test-review`,
   `test-e2e-{planner,generator,healer}`) into `agents/`, preserving
-  Playwright-fork attribution (PRD FR-7).
+  Playwright-fork attribution (PRD FR-7). → seeded as **task 033**.
 - Submit embo to the Anthropic community plugin directory.
 - Rework the README **Docker testing section** (currently describes the
   old cp-install model: `cp -r .claude/commands/dev`, reads
@@ -397,3 +397,32 @@ are verified by validation, grep gates, or live run.
   the PostToolUse hook, but the claude-mem hook indexes PROJECT files,
   so the probe can falsely report "hook misconfigured". Probe a
   project-local file instead (surfaced 2026-06-19).
+- Promote the `visual-impl` + `visual-qa-reviewer` prototype into the
+  plugin (`/embo:visual-impl`), once it graduates from PROTOTYPE status
+  (left as dogfood-only in 032; surfaced 2026-06-21).
+
+### Session 2026-06-21/22 — install, statusline, docs (on this branch)
+
+Beyond the original 032 scope, this branch also shipped:
+
+- **[X]** Two-mode `install.sh` (deps installer by default;
+  `--standalone` manual install) + `uninstall.sh` covering the
+  `/embo:*` and pre-plugin `/dev:*` layouts. Verified by
+  `install.test.sh` (integration tests against a throwaway HOME).
+- **[X]** Statusline for plugin users: `plugin/bin/statusline-setup`
+  (PATH-callable), the `/embo:statusline` command, `install.sh
+  --statusline-only`, and the `statusline-refresh` SessionStart hook.
+  Verified end-to-end on the shipped plugin (0.1.2); self-repairs a
+  stale/blank `${CLAUDE_PLUGIN_ROOT}` statusLine entry.
+- **[X]** Docs: paste-safe code blocks, Step 0 dependencies, migration
+  rewritten to uninstall-first, `docs/REFERENCE.md` split,
+  `/embo:statusline` documented.
+- **[X]** Plugin version bumped 0.1.0 → 0.1.2 (each shippable change
+  needs a bump for `/plugin update` to fire).
+- **[~]** Windows PowerShell parity (`install.ps1`, `uninstall.ps1`) —
+  written, UNVERIFIED (no PowerShell on the dev machine). The
+  `-StatuslineOnly` mode is not yet in `install.ps1`. → **task 034**.
+- New gap captured: third-party plugins have auto-update off by
+  default, so users get no new-version signal. → **task 035**.
+- POC only (not merged): a 5-hour/7-day subscription-usage statusline
+  segment, on branch `statusline-usage`.
