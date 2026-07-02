@@ -438,7 +438,16 @@ directed; if Glob is unavailable, skip the step.
   matched files at the project root only.
 - Tasks: use the **Glob tool** (not Bash, not `find`) with pattern
   `tasks/**/*-tasks.md`. Discard matches whose path contains
-  `/archive/`. Read the surviving active task files.
+  `/archive/`. For each surviving file:
+  - Read it.
+  - Count `[X]` markers vs all task markers (`[ ]`, `[~]`, `[X]`).
+  - If ≥80% are `[X]` (mostly complete): use only the file's header
+    block (title, status line, story titles) and lines containing
+    `[ ]` or `[~]`. Discard completed subtask bodies and their
+    evidence notes from context.
+  - Otherwise: use the full file content.
+  - When the user selects this task for active work, re-read the
+    full file.
 - Git: run these two commands exactly as shown. Do not change
   flags, count, or `HEAD` reference; they are pre-approved at
   these exact prefixes.

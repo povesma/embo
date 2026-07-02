@@ -150,6 +150,22 @@ Verification methods (`code-only`, `auto-test`, `manual-run-claude`,
     → <summary> [simulated: <reason>] (<date>)
 ```
 
+**Compact summary rule**: `<summary>` must be one clause stating the
+outcome or decision. Add a second clause only if something unexpected
+occurred. Omit: how the work was done, intermediate states that were
+superseded (TDD red phases, bug-found states fixed before [X] was
+marked), and tool invocation details. The evidence line is a permanent
+record, not a session log.
+
+Bad:  `→ wrote tests first (TDD red: 3 failed), then implemented,
+      then ran again: 3 passed, 0 failed [live] (2026-07-02)`
+Good: `→ 3 passed, 0 failed [live] (2026-07-02)`
+
+Bad:  `→ found a naming conflict in foo.py, renamed to bar.py,
+      re-ran, now all pass [live] (2026-07-02)`
+Good: `→ renamed foo→bar (naming conflict); 5 passed, 0 failed
+      [live] (2026-07-02)`
+
 Examples:
 ```
 - [X] 2.1 Add correction capture [verify: auto-test]
@@ -262,23 +278,26 @@ ls tasks/{feature-id}-{feature-name}/*-test-plan.md 2>/dev/null
 **Skip this entire step if profile `tools.rlm` is `false`.**
 
 **3a. Find relevant existing code:**
+
+Use the **Glob tool** (not Bash, not `find`) with patterns derived from
+the task keywords — e.g. `**/*ModelPicker*`, `**/stores/jobs*`. Then use
+`rlm_repl exec` with `grep` to locate symbols by name:
+
 ```bash
 rlm_repl exec <<'PY'
-keywords = ['feature_term', 'related_concept']  # fill with terms from the task description
-
-relevant = []
-for kw in keywords:
-    relevant += find_symbol(kw, type='function')
-    relevant += find_files_by_pattern(f'**/*{kw}*')
-for f in list(set(relevant))[:5]:
-    relevant += get_related_files(f)
-paths = write_file_chunks(list(set(relevant))[:20], strategy='file')
-import json; print(json.dumps(paths))
+import json
+results = grep(r'def feature_term|class FeatureTerm', max_matches=10)
+print(json.dumps([r['snippet'][:200] for r in results]))
 PY
 ```
 
+Available exec helpers: `grep(pattern, max_matches, window)`,
+`peek(start, end)`, `chunk_indices(size, overlap)`, `write_chunks(out_dir)`.
+No other helpers exist — do not call `find_files_by_pattern`,
+`find_symbol`, `write_file_chunks`, or `get_related_files`.
+
 **3b. Analyze patterns using rlm-subcall:**
-- For each relevant file chunk, invoke rlm-subcall with:
+- For each relevant file found in 3a, invoke rlm-subcall with:
   - Query: "Analyze for: (1) architectural patterns, (2) coding
     conventions, (3) how [feature] is currently handled,
     (4) testing approach"
@@ -286,15 +305,9 @@ PY
   testing patterns, dependency injection approach
 
 **3c. Find existing tests:**
-```bash
-rlm_repl exec <<'PY'
-test_files = find_files_by_pattern('**/*test*') + find_files_by_pattern('**/*.spec.*')
-relevant_stems = {f.split('/')[-1].split('.')[0] for f in relevant}
-related = [t for t in test_files if any(s in t for s in relevant_stems)]
-paths = write_file_chunks(related[:10], strategy='file')
-import json; print(json.dumps(paths))
-PY
-```
+
+Use the **Glob tool** with patterns `**/*.test.*`, `**/*.spec.*`,
+`**/*test*`. Filter results by name similarity to the files found in 3a.
 
 ### 4. Synthesize Implementation Plan
 
