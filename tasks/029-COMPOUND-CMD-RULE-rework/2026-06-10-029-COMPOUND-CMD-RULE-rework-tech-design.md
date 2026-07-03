@@ -118,6 +118,15 @@ Moved rules become `<!-- RULE:... -->` blocks in the target file.
 `~/.claude/CLAUDE.md` edits are in-place (personal, uncommitted);
 before-state and applied table recorded in the task file.
 
+> **Follow-up reconciliation (2026-06-19, task 032).** Rows 6
+> (CLEAR-OPTIONS) and 9 (RESPONSE-STYLE) left the turn-ending
+> ambiguous: RESPONSE-STYLE was over-corrected into a trailing inline
+> "X or Y?" — the pattern CLEAR-OPTIONS forbids — seen repeatedly.
+> Fix (rule text in `start.md`, not "try harder"): RESPONSE-STYLE now
+> says close every turn with a structured next-step and points at
+> CLEAR-OPTIONS, which gained a one-line "closing move" clause + a
+> fallback (review / wrap up / tell me what to do). No hook yet.
+
 ### FR-4: Install docs (README)
 
 Hook registration, wrapper copy, allow-rule (exact string from

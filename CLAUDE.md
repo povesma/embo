@@ -4,13 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Repository Is
 
-embo is an **installation package** for Claude Code that combines:
+embo is a **Claude Code plugin** that combines:
 - **RLM**: Analyzes large codebases via persistent Python REPL
 - **Claude-Mem** (MANDATORY): Semantic memory of past decisions
-- **10 Commands**: Complete development workflow
-- **5 Test Subagents**: Isolated testing agents invoked via Task tool
+- **14 Commands**: Complete development workflow (`/embo:*`, incl.
+  `/embo:research:examine` / `/embo:research:verify`)
+- **Test Subagents**: Isolated testing agents invoked via Task tool
+  (shipped separately — see task 033)
 
-Users install to `~/.claude/` to use across all their projects.
+Users install via `/plugin install embo@embo` (a manual `~/.claude/`
+install is documented as a fallback). All shipped components live
+under `plugin/`; the manifests are `.claude-plugin/marketplace.json`
+(repo root) and `plugin/.claude-plugin/plugin.json`.
 
 ## Architecture
 
@@ -42,19 +47,24 @@ Users install to `~/.claude/` to use across all their projects.
    - All agents use YAML input/output contracts and degrade gracefully without
      claude-mem or RLM
 
-4. **Commands** (`.claude/commands/dev/`)
-   - 11 commands in flat structure
+4. **Commands** (`plugin/commands/`)
+   - 14 commands: 12 flat (`/embo:<name>`) + `research/` subdir
+     (`/embo:research:examine`, `/embo:research:verify`)
    - Each integrates RLM + claude-mem via Bash and MCP tools
+   - Commands invoke RLM as a bare `rlm_repl` (the `plugin/bin/`
+     wrapper) — never inline `${CLAUDE_PLUGIN_ROOT}/...rlm_repl.py`,
+     which Claude Code flags for an approval prompt
 
 ### Installation Flow
 
-```bash
-# Users copy FROM this repo TO their system:
-cp .claude/rlm_scripts/rlm_repl.py ~/.claude/rlm_scripts/
-cp .claude/agents/rlm-subcall.md ~/.claude/agents/
-cp .claude/agents/test-*.md ~/.claude/agents/     # test subagents
-cp -r .claude/commands/dev ~/.claude/commands/
+```text
+# Inside Claude Code (recommended):
+/plugin marketplace add povesma/embo
+/plugin install embo@embo
 ```
+
+Manual (no-plugin) fallback copies `plugin/*` into `~/.claude/` —
+see README §macOS / Linux Installation.
 
 ## Claude-Mem Integration (MANDATORY)
 
@@ -94,7 +104,9 @@ python3 ~/.claude/rlm_scripts/rlm_repl.py status
 ```
 
 ### Modify Commands
-Edit `.claude/commands/dev/<name>.md` directly - changes apply immediately.
+Edit `plugin/commands/<name>.md` directly. With the plugin installed
+from a local marketplace, run `/plugin marketplace update embo` +
+`/reload-plugins` to pick up changes.
 
 ### Add Language Support
 Edit `rlm_repl.py` → `LANGUAGE_MAP` dict.
@@ -102,32 +114,37 @@ Edit `rlm_repl.py` → `LANGUAGE_MAP` dict.
 ## File Structure
 
 ```
-.claude/
+.claude-plugin/marketplace.json  # marketplace entry, source: ./plugin
+plugin/                          # THE PLUGIN ROOT (${CLAUDE_PLUGIN_ROOT})
+├── .claude-plugin/plugin.json   # manifest (name:"embo")
+├── bin/rlm_repl                 # PATH wrapper → runs rlm_scripts/rlm_repl.py
 ├── agents/
-│   ├── rlm-subcall.md          # RLM chunk analysis subagent (Haiku)
-│   ├── test-backend.md         # Backend test writer (Haiku)
-│   ├── test-review.md          # Adversarial gap analyzer (Sonnet)
-│   ├── test-e2e-planner.md     # E2E planner, Playwright fork (Sonnet)
-│   ├── test-e2e-generator.md   # E2E generator, Playwright fork (Sonnet)
-│   └── test-e2e-healer.md      # E2E healer, Playwright fork (Sonnet)
-├── commands/dev/               # 11 command definitions (flat)
-├── commands-archive/dev/      # deprecated dev tree (reference only)
-├── profiles/                   # workflow configuration profiles
-│   ├── quality.yaml, fast.yaml, minimal.yaml
+│   ├── rlm-subcall.md           # RLM chunk analysis subagent (Haiku)
+│   ├── examine-advisor.md       # /embo:research:examine agent
+│   ├── approach-validator.md    # /embo:research:verify agent
+│   └── visual-qa-reviewer.md
+├── commands/                    # 14 commands; research/ → nested ns
+│   └── research/                # examine.md, verify.md
+├── profiles/                    # quality.yaml, fast.yaml, minimal.yaml
 ├── hooks/
-│   ├── context-guard.sh        # Context window warning hook
-│   ├── behavioral-reminder.sh  # Behavioral rule reminder hook
-│   ├── approve-compound.sh     # Auto-approve compound Bash + rewrite
-│   │                             # through capture wrapper (+ tests)
-│   └── embo-capture.sh         # Output capture wrapper (+ tests)
-├── rlm_scripts/rlm_repl.py     # REPL: init-repo supports
-│                                 # .rlmignore + --exclude/--include/
-│                                 # --exclude-from/--no-rlmignore
-└── statusline.sh               # Status line script (copy to ~/.claude/)
+│   ├── hooks.json               # registers the 3 event handlers
+│   ├── context-guard.sh         # Context window warning hook
+│   ├── behavioral-reminder.sh   # Behavioral rule reminder hook
+│   ├── approve-compound.sh      # Auto-approve compound Bash + rewrite
+│   ├── embo-capture.sh          # Output capture wrapper (helper, not
+│   │                              # a registered hook)
+│   └── fix-hooks.sh             # migration doctor (+ tests for each)
+├── rlm_scripts/rlm_repl.py      # REPL (.rlmignore + --exclude/...)
+└── statusline.sh                # Status line (manual install only)
 
-README.md                       # User guide
-TROUBLESHOOTING.md              # Common errors
+# repo-level (NOT shipped in the plugin):
+.claude/                         # the repo's OWN dogfood config + rlm_state
+commands-archive/dev/            # deprecated tree (reference only)
+README.md  TROUBLESHOOTING.md    # user docs
 ```
+
+Note: the 5 test subagents (`test-backend`, `test-review`,
+`test-e2e-*`) are documented but ship separately — task 033.
 
 ## Documentation Rules
 
@@ -142,7 +159,7 @@ TROUBLESHOOTING.md              # Common errors
 - **CLAUDE.md is NOT a deliverable**: This file is for developing this
   repo only. Users have their own CLAUDE.md. All behavioral rules for
   the workflow must live in the command files we ship
-  (`.claude/commands/dev/`), not here.
+  (`plugin/commands/`), not here.
 
 ## Emoji Usage
 
