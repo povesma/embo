@@ -31,6 +31,12 @@
   script grep). The `/embo:git` skill edits, README, and version bump are
   Markdown/config → `code-only`. Live end-to-end behaviour needs a real
   session → `manual-run-claude`.
+- **Known limitation (surfaced by dogfooding, 2026-07-03):** `embo-deliver`
+  always starts its cycle with stage + commit, so it cannot deliver an
+  already-committed branch (no push-only / "deliver existing commits" mode).
+  When work is already committed, use `/embo:git pr` or plain push instead.
+  Follow-up candidate: add a `mode: push-existing` (skip stage+commit, just
+  push + optional PR/merge) if this proves common.
 - Hard constraint: the executor must NEVER contain `git add -A`,
   `git add .`, or `git commit -a`. It stages with `git add -- <file>...`.
 - The executor must be invoked as a bare command (no `${...}`, `$(...)`,
