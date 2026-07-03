@@ -32,10 +32,10 @@
 
 ## Tasks
 
-- [ ] 1.0 **User Story:** As a developer running `/embo:impl`, I want
+- [X] 1.0 **User Story:** As a developer running `/embo:impl`, I want
   evidence notes to be compact from the moment they are written, so
   that task files do not accumulate process narration during
-  implementation. [0/2]
+  implementation. [2/2]
   - [X] 1.1 Insert compact summary rule block into `impl.md` after
     line 151 (after the closing ` ``` ` of the evidence format block),
     using the exact text from tech-design §Component 1
@@ -44,17 +44,11 @@
     confirm the bad/good examples are adjacent to the format they
     constrain and no formatting is broken [verify: manual-run-claude]
       → compact summary rule at impl.md:153–167, adjacent to format
-        template; examples block unaffected; sanitization section follows
-        cleanly [live] (2026-07-02)
+        template; sanitization section follows cleanly [live] (2026-07-02)
 
-- [X] 1.0 **User Story:** As a developer running `/embo:impl`, I want
-  evidence notes to be compact from the moment they are written, so
-  that task files do not accumulate process narration during
-  implementation. [2/2]
-
-- [ ] 2.0 **User Story:** As a developer starting a session, I want
+- [X] 2.0 **User Story:** As a developer starting a session, I want
   `/embo:start` to skip completed subtask bodies for mostly-done task
-  files, so that startup context cost scales with remaining work. [0/2]
+  files, so that startup context cost scales with remaining work. [2/2]
   - [X] 2.1 Replace `start.md` lines 439–441 (unconditional task file
     read) with the two-path completeness-gated instruction from
     tech-design §Component 2 [verify: code-only]
@@ -64,29 +58,31 @@
       → 032 shown as "complete" with no subtask bodies; 036 shown
         with open stories only [live] (2026-07-02)
 
-- [X] 2.0 **User Story:** As a developer starting a session, I want
-  `/embo:start` to skip completed subtask bodies for mostly-done task
-  files, so that startup context cost scales with remaining work. [2/2]
-
 - [ ] 3.0 **User Story:** As a developer ending a session, I want
   `/embo:wrapup` to compact task files, surface uncommitted work, and
   optionally save a session observation, so that the next session
   starts lean. [0/5]
-  - [ ] 3.1 Create `plugin/commands/wrapup.md` with YAML frontmatter
-    and the four-step process from tech-design §Component 3 (identify
-    touched files, compact with confirmation, surface uncommitted work,
-    optional claude-mem observation) [verify: code-only]
-  - [ ] 3.2 Verify the compaction step in `wrapup.md`: run
+  - [X] 3.1 Create `plugin/commands/wrapup.md` with YAML frontmatter
+    and three-step process: identify touched task files, compact with
+    confirmation, surface uncommitted work. claude-mem observation step
+    dropped — save tools are server-beta only, unavailable on worker
+    runtime [verify: code-only]
+  - [X] 3.2 Verify the compaction step in `wrapup.md`: run
     `/embo:wrapup` on a task file that has verbose `[X]` evidence;
     confirm the diff summary is shown and the file is only written
     after confirmation [verify: manual-run-claude]
-  - [ ] 3.3 Verify the uncommitted-work step: run `/embo:wrapup` with
+      → diff summary shown (114→100 lines); confirmation asked; file
+        written only after "Yes" [live] (2026-07-02)
+  - [X] 3.3 Verify the uncommitted-work step: run `/embo:wrapup` with
     a dirty working tree (a modified file); confirm modified files are
     listed and the commit/skip choice is presented
     [verify: manual-run-claude]
-  - [ ] 3.4 Verify the safety constraint: run `/embo:wrapup` and
+      → tasks file listed; commit/skip choice presented [live] (2026-07-02)
+  - [X] 3.4 Verify the safety constraint: run `/embo:wrapup` and
     confirm it does not offer to compact `[ ]` or `[~]` subtasks, and
     does not touch PRD/tech-design files [verify: manual-run-claude]
+      → only [X] subtasks compacted; open stories untouched; no
+        PRD/tech-design offered [live] (2026-07-02)
   - [ ] 3.5 Verify the no-modified-files path: run `/embo:wrapup` in
     a session where no task files were touched; confirm it reports
     "no task files modified" and skips to the uncommitted-work step
