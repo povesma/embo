@@ -1,0 +1,19 @@
+{
+  "name": "embo",
+  "version": "0.1.3",
+  "description": "Spec-driven development workflow for Claude Code: RLM code analysis, claude-mem memory, and capture/approve hooks",
+  "author": {
+    "name": "Dmytro Povesma"
+  },
+  "homepage": "https://github.com/povesma/embo",
+  "repository": "https://github.com/povesma/embo",
+  "license": "MIT",
+  "keywords": [
+    "workflow",
+    "spec-driven",
+    "rlm",
+    "claude-mem",
+    "code-analysis",
+    "hooks"
+  ]
+}

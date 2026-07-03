@@ -1,0 +1,155 @@
+#!/usr/bin/env bash
+# embo-deliver — one-shot git delivery executor.
+#
+# Runs stage -> commit -> push -> (open PR) -> (merge) from a plan file.
+# It makes NO decisions: branch, mode, files, and message all come from
+# the plan. The /embo:git `deliver` mode builds the plan, shows it to the
+# user as the single approval, then invokes this bare command.
+#
+# Why a bare command: Claude Code adds plugin bin/ to the Bash tool PATH,
+# so this runs as `embo-deliver --plan <path>` with no ${...} expansion.
+# An allow rule `Bash(embo-deliver *)` lets the compound-approve hook
+# auto-approve it; the git/gh commands here are child processes the hook
+# never sees, so the whole cycle runs after one approval. See
+# tasks/038-RAPID-DELIVER-one-shot-git/.
+#
+# STRICT: never `git add -A`, `git add .`, or `git commit -a`. Files are
+# staged by explicit name only. No destructive operations.
+#
+# Exit codes:
+#   0  full cycle succeeded
+#   2  plan invalid/missing (no git ran)
+#   3  PR/merge requested but `gh` not installed (committed+pushed)
+#   4  push failed (committed locally)
+#   5  gh pr create failed (committed+pushed)
+#   6  gh pr merge failed/blocked (PR opened)
+
+set -uo pipefail
+
+PLAN=""
+DRYRUN=0
+
+usage() {
+  printf 'usage: embo-deliver --plan <path> [--dry-run]\n' >&2
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --plan) PLAN="${2:-}"; shift 2 ;;
+    --plan=*) PLAN="${1#--plan=}"; shift ;;
+    --dry-run) DRYRUN=1; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) printf 'embo-deliver: unknown argument: %s\n' "$1" >&2; usage; exit 2 ;;
+  esac
+done
+
+fail() { printf 'embo-deliver: %s\n' "$1" >&2; exit "$2"; }
+
+[ -n "$PLAN" ] || { usage; exit 2; }
+[ -f "$PLAN" ] || fail "plan file not found: $PLAN" 2
+
+# --- parse the plan file --------------------------------------------------
+# Line-oriented: `key: value` lines, then a trailing `message:` block whose
+# body runs to EOF. `file:` may repeat. No command substitution needed.
+
+BRANCH=""
+MODE=""
+BASE=""
+FILES=()
+MESSAGE=""
+in_message=0
+
+while IFS= read -r line || [ -n "$line" ]; do
+  if [ "$in_message" -eq 1 ]; then
+    if [ -z "$MESSAGE" ]; then
+      MESSAGE="$line"
+    else
+      MESSAGE="$MESSAGE
+$line"
+    fi
+    continue
+  fi
+  case "$line" in
+    branch:*) BRANCH="${line#branch:}"; BRANCH="${BRANCH# }" ;;
+    mode:*)   MODE="${line#mode:}";     MODE="${MODE# }" ;;
+    base:*)   BASE="${line#base:}";     BASE="${BASE# }" ;;
+    file:*)   f="${line#file:}"; f="${f# }"; [ -n "$f" ] && FILES+=("$f") ;;
+    message:) in_message=1 ;;
+    *) : ;;  # ignore blank/unknown lines outside the message block
+  esac
+done < "$PLAN"
+
+# --- validate -------------------------------------------------------------
+
+[ -n "$BRANCH" ] || fail "plan missing 'branch'" 2
+[ -n "$MODE" ]   || fail "plan missing 'mode'" 2
+[ "$in_message" -eq 1 ] && [ -n "$MESSAGE" ] || fail "plan missing 'message'" 2
+[ "${#FILES[@]}" -gt 0 ] || fail "plan lists no files" 2
+
+case "$MODE" in
+  push|pr|pr-merge) ;;
+  *) fail "unknown mode: $MODE (want push|pr|pr-merge)" 2 ;;
+esac
+
+case "$MODE" in
+  pr|pr-merge) [ -n "$BASE" ] || fail "mode $MODE needs 'base'" 2 ;;
+esac
+
+# --- run helper: dry-run prints, real run executes ------------------------
+
+run() {
+  if [ "$DRYRUN" -eq 1 ]; then
+    printf 'DRYRUN:'; printf ' %q' "$@"; printf '\n'
+    return 0
+  fi
+  "$@"
+}
+
+# --- stage + commit -------------------------------------------------------
+
+run git add -- "${FILES[@]}" \
+  || fail "git add failed" 4
+
+if [ "$DRYRUN" -eq 1 ]; then
+  printf 'DRYRUN: git commit -m <message>\n'
+else
+  git commit -m "$MESSAGE" || fail "git commit failed" 4
+fi
+
+# --- push -----------------------------------------------------------------
+
+has_upstream=0
+if [ "$DRYRUN" -eq 0 ]; then
+  git rev-parse --abbrev-ref '@{u}' >/dev/null 2>&1 && has_upstream=1
+fi
+
+if [ "$has_upstream" -eq 1 ]; then
+  run git push \
+    || fail "committed locally, push failed" 4
+else
+  run git push -u origin "$BRANCH" \
+    || fail "committed locally, push failed" 4
+fi
+
+STEPS="committed, pushed to $BRANCH"
+
+# --- PR / merge -----------------------------------------------------------
+
+if [ "$MODE" = "pr" ] || [ "$MODE" = "pr-merge" ]; then
+  command -v gh >/dev/null 2>&1 \
+    || fail "$STEPS; gh not installed, open PR manually" 3
+
+  run gh pr create --base "$BASE" --head "$BRANCH" \
+      --title "$MESSAGE" --fill \
+    || fail "$STEPS; PR not created" 5
+  STEPS="$STEPS, PR opened"
+
+  if [ "$MODE" = "pr-merge" ]; then
+    run gh pr merge --squash \
+      || fail "$STEPS; merge blocked, merge manually" 6
+    STEPS="$STEPS, merged"
+  fi
+fi
+
+printf 'embo-deliver: %s\n' "$STEPS"
+exit 0

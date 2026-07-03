@@ -1,0 +1,16 @@
+{
+  "name": "embo",
+  "version": "0.1.0",
+  "description": "embo plugin marketplace: spec-driven development workflow for Claude Code",
+  "owner": {
+    "name": "Dmytro Povesma"
+  },
+  "plugins": [
+    {
+      "name": "embo",
+      "description": "Spec-driven development workflow: RLM code analysis, claude-mem memory, 15 commands, and capture/approve hooks",
+      "source": "./plugin",
+      "category": "development"
+    }
+  ]
+}
