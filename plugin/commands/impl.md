@@ -214,6 +214,18 @@ the *shape* of the observation, not the literal output. No working-state excepti
   per `[verify:]` type, TDD order, docs-first, and the safety rules
   (a mode-3 run NEVER authorizes destructive or shared-state
   actions without their own approval).
+- **Delivering to the repo:** when the run pauses and there is work to
+  deliver, offer two paths — rapid is the default:
+  1. **Rapid** (`/embo:git deliver`) — one commit of the needed files,
+     one plan approval, straight to the branch. The default for most
+     changes.
+  2. **Full commit** (`/embo:git commit`/`pr`) — split into commits with
+     polished messages. For human-reviewed or genuinely large/mixed work.
+
+  Choose full only when the change needs the careful treatment (multiple
+  logical commits, human review, mixed concerns); otherwise rapid. Both
+  keep the plan/commit approval as the single gate — never deliver
+  without it.
 
 ## Process
 

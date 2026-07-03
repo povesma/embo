@@ -1,10 +1,16 @@
 ---
 description: >
-  Generate git commit messages and PR descriptions, or manage commit style.
-  Use when the user wants to commit changes, push a branch, open a pull
-  request, or change their commit convention. Examples: "commit my changes",
-  "create a PR", "push and open a PR", "what commit style am I using".
-argument-hint: "[commit|pr|style]"
+  Generate git commit messages and PR descriptions, manage commit style, or
+  rapidly deliver a change in one approval. Use when the user wants to commit
+  changes, push a branch, open a pull request, or change their commit
+  convention. `deliver` is the default delivery path: one commit of the
+  needed files, pushed to the branch after ONE plan approval. Use the
+  `commit`/`pr` modes instead only when the change needs the careful
+  treatment — splitting into several commits, polished messages for human
+  review, or genuinely large/mixed work. Examples: "deliver this", "push
+  this fix", "just ship it", "commit my changes", "create a PR", "what
+  commit style am I using".
+argument-hint: "[commit|pr|style|deliver]"
 ---
 
 # Git Commit & PR Description Generator
@@ -27,6 +33,7 @@ changes and branch history. Manage commit style via the active profile.
 | `/embo:git commit` | Generate commit message for staged changes |
 | `/embo:git pr` | Generate PR description for current branch |
 | `/embo:git style` | List available styles; switch active style |
+| `/embo:git deliver` | One-shot delivery: stage + commit + push (+ PR + merge) after a single plan approval |
 
 If no argument is provided, show the interactive menu.
 
@@ -332,6 +339,114 @@ If `gh` is not available, print the description with instruction: "gh CLI not fo
 
 ---
 
+### Mode: `deliver`
+
+One-shot delivery: build a plan, get **one** approval, then run the whole
+stage → commit → push → (open PR) → (merge) cycle with no further prompts.
+**This is the default way to deliver code.** Use it whenever a change goes
+to the repo as a single commit — regardless of size. Fall back to
+`commit`/`pr` only when the change genuinely needs several commits, polished
+messages for human review, or grouping of mixed concerns.
+
+The cycle is executed by `plugin/bin/embo-deliver`, a bare command on the
+Bash PATH. It makes no decisions — this skill builds the plan; the script
+only executes it. Full contract:
+`tasks/038-RAPID-DELIVER-one-shot-git/`.
+
+**Prerequisite (one-time opt-in):** the user must add
+`"Bash(embo-deliver *)"` to their `permissions.allow`. Without it the
+script call prompts once (no worse than today); with it the single plan
+approval below is the only interaction. If a `deliver` run triggers a
+harness prompt for `embo-deliver`, tell the user to add that allow rule —
+do not work around it.
+
+#### Step 1: Build the delivery plan
+
+From the current development situation, determine:
+
+- **branch** — the target branch (default: the current branch).
+- **mode** — one of:
+  - `push` — stage + commit + push. Default for a feature branch you own.
+  - `pr` — push + open a PR. Use when the target is a protected base or the
+    change needs review.
+  - `pr-merge` — push + open a PR + merge it. Only when the user asked to
+    land the change in one go (hotfix); merge is never implicit.
+- **base** — required for `pr`/`pr-merge`: the branch the PR merges into
+  (default: `main`, or `master` if the repo has no `main`).
+- **files** — the explicit set of files to commit, by name. Determine them
+  from the work just done. **Never** stage `-A`/`.`; list every file
+  deliberately. Files not part of this change are excluded.
+- **message** — generate per the active `git.commit_style` (Step 0),
+  exactly as in `commit` mode.
+
+Inspect the working tree first (`git status --short`) so the file list is
+accurate and unrelated dirty files are not swept in.
+
+#### Step 2: Write the plan file
+
+Write the plan to a **uniquely-named** file
+`tmp/git-<timestamp>.txt` (e.g. `tmp/git-20260703-150210.txt`). Never
+reuse a fixed name and never delete it — each delivery leaves its own
+record. `tmp/` is gitignored and an allowed write target, so this needs no
+prompt.
+
+Format (line-oriented; `message:` must be last, its body runs to EOF):
+
+```
+branch: <target-branch>
+mode: push | pr | pr-merge
+base: <base-branch>            # only for pr / pr-merge
+file: <path>                   # one line per file, explicit names
+file: <path>
+message:
+<commit message, verbatim, may span multiple lines>
+```
+
+#### Step 3: Single approval (the one gate)
+
+Show the plan file's content, then present ONE `AskUserQuestion`. The shown
+plan MUST make all of these visible:
+
+- the **exact files** to be committed, by name (so the user can catch a
+  file that does not belong);
+- the **full commit message**, verbatim;
+- the **target branch** and the **mode** in plain words;
+- for `pr-merge`: the **base branch** and an explicit note that **merge is
+  irreversible**.
+
+```
+question: "Deliver this change?"
+header: "Rapid deliver"
+options:
+  - label: "Deliver"
+    description: "Run the whole cycle now: <mode summary> to <branch>"
+  - label: "Cancel"
+    description: "Do nothing; stage/commit/push/merge none of it"
+```
+
+#### Step 4: Execute or cancel
+
+- **Deliver** → run the bare command:
+
+  ```bash
+  embo-deliver --plan tmp/git-<timestamp>.txt
+  ```
+
+  Invoke it as a plain command exactly like this — no `${...}`, no
+  `$(...)`, no redirects — or the compound-approve hook cannot
+  auto-approve it. Relay the script's per-step result to the user
+  (it reports which steps completed; a non-zero exit means it stopped at a
+  failed step and did not undo prior steps).
+
+- **Cancel** → stop. Nothing is staged, committed, pushed, or merged. The
+  plan file remains as a record of the cancelled intent.
+
+Do NOT add a second confirmation — the plan approval in Step 3 is the
+single gate (mirrors the `commit`/`pr` design: one approval point, no
+double-prompt).
+
+---
+
 ### Mode: `style`
 
 #### Step 1: Read active style
@@ -416,6 +531,7 @@ Hand-written, not extracted mechanically from the CHANGELOG.
 2. For `commit`: check staged diff → generate message → print message → run `git commit` (harness gate = user approval)
 3. For `pr`: determine base branch → read commits + diff → generate description → print description → run `gh pr create` (harness gate = user approval)
 4. For `style`: show styles → optionally write updated style to active profile
+5. For `deliver`: build plan → write `tmp/git-<timestamp>.txt` → show plan + one AskUserQuestion → on Deliver run bare `embo-deliver --plan <path>` (single approval = the plan gate; requires the `Bash(embo-deliver *)` opt-in)
 5. **No skill-level confirmation gates for non-destructive commands** (`git commit`, `git push`, `git add`, `gh pr create`). The Claude Code harness permission prompt is the single approval point. See Step 5 in commit mode for the design rationale and fallback instructions.
 6. **DO use skill-level confirmation (AskUserQuestion) for destructive commands** (`git push --force`, `git reset`, `git rebase`) — explain what will happen and why before running. The harness prompt shows the command but not the context.
 7. **Never use `git add -A` or `git add .`** — always stage files explicitly by name; briefly justify each file before staging

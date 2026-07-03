@@ -239,12 +239,42 @@ of resetting to zero every morning.
 | Planning | `/embo:tasks` | Break tech-design into TDD-ready subtasks |
 | Planning | `/embo:check` | Audit task completion status |
 | Development | `/embo:impl` | Implement subtasks one at a time, evidence-gated |
-| Development | `/embo:git` | Generate commit messages and PR descriptions |
+| Development | `/embo:git` | Commit/PR messages, styles, and one-shot `deliver` |
 | Research | `/embo:research:examine` | Independent two-pass critique of a decision or doc → reconciled recommendation |
 | Research | `/embo:research:verify` | Prove a chosen approach meets its acceptance criteria before building |
 | Config | `/embo:profile` | Switch workflow profile (quality / fast / minimal / research) |
 
 Full per-command reference under [Reference](#reference).
+
+### Rapid delivery: `/embo:git deliver`
+
+For a small change or hotfix, `/embo:git deliver` runs the whole
+stage → commit → push → (open PR) → (merge) cycle after **one** approval,
+instead of a separate prompt per git command.
+
+How it works: the command builds a delivery plan (exact files, commit
+message, target branch, mode), writes it to a uniquely-named
+`tmp/git-<timestamp>.txt` (kept as a record, never reused), and shows it to
+you for a single Deliver/Cancel approval. On Deliver it runs the bundled
+`embo-deliver` executable, which performs the cycle. Files are always
+staged by explicit name — never `git add -A` or `git commit -a` — so a plan
+you approve can never sweep in an unrelated file.
+
+**One-time opt-in (required for zero further prompts).** The delivery runs
+unattended only after you allow the executable. Add this to your
+`~/.claude/settings.json` (or project `.claude/settings.json`)
+`permissions.allow` list:
+
+```json
+"Bash(embo-deliver *)"
+```
+
+Security note: this authorizes `embo-deliver` to run its git writes without
+a per-command prompt **after** you approve the plan. The plan approval
+remains the single gate — nothing is committed, pushed, or merged before
+it. Without this rule the feature still works, but the `embo-deliver` call
+prompts once (no worse than committing manually). Merge (`pr-merge` mode)
+only happens when the approved plan explicitly includes it.
 
 ## Test subagents
 
