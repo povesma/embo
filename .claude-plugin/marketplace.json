@@ -8,7 +8,7 @@
   "plugins": [
     {
       "name": "embo",
-      "description": "Spec-driven development workflow: RLM code analysis, claude-mem memory, 15 commands, and capture/approve hooks",
+      "description": "Spec-driven development workflow: RLM code analysis, claude-mem memory, 16 commands, and capture/approve hooks",
       "source": "./plugin",
       "category": "development"
     }
