@@ -31,12 +31,6 @@
   script grep). The `/embo:git` skill edits, README, and version bump are
   Markdown/config → `code-only`. Live end-to-end behaviour needs a real
   session → `manual-run-claude`.
-- **Known limitation (surfaced by dogfooding, 2026-07-03):** `embo-deliver`
-  always starts its cycle with stage + commit, so it cannot deliver an
-  already-committed branch (no push-only / "deliver existing commits" mode).
-  When work is already committed, use `/embo:git pr` or plain push instead.
-  Follow-up candidate: add a `mode: push-existing` (skip stage+commit, just
-  push + optional PR/merge) if this proves common.
 - Hard constraint: the executor must NEVER contain `git add -A`,
   `git add .`, or `git commit -a`. It stages with `git add -- <file>...`.
 - The executor must be invoked as a bare command (no `${...}`, `$(...)`,
@@ -149,6 +143,10 @@
     confirm ONE approval, then the whole cycle runs with no per-command
     prompt; the plan file remains after; a Cancel run leaves `git status`
     unchanged [verify: manual-run-claude]
+      → PARTIAL (2026-07-09, embo repo, 039 delivery): ONE approval →
+        stage+commit+push ran with no per-command prompt, exit 0; plan
+        file retained (tmp/git-20260709-174815.txt). Cancel case still
+        unexercised — keep open until verified.
 
 - [X] 5.0 **User Story:** As an embo user, I want the feature documented and
   shipped — the manual allow-rule opt-in, `/embo:git deliver` usage, and a
@@ -185,4 +183,124 @@
         chosen by handling need not size; replaced the "small change" gate
   - [ ] 6.3 Verify in a real `/embo:impl` run: after finishing work, CC
     offers rapid delivery as the default path without being asked
+    [verify: manual-run-claude]
+
+- [ ] 7.0 **User Story:** As a developer, I want `deliver` to land my
+  change where it actually takes effect, to run from any working
+  directory, and to deliver a branch whose work is already committed, so
+  that a one-approval delivery does not silently stop on a personal
+  feature branch, fail on path resolution, or refuse an
+  already-committed branch. (Three defects surfaced by dogfooding,
+  2026-07-04, on the TechnoTongue repo; a fourth, 7.5, on the infra
+  repo 2026-07-07; a fifth, 7.6, on this repo 2026-07-09.) [5/6]
+  - [X] 7.1 **P1 — target/mode intent.** In `plugin/commands/git.md`
+    Step 1, add a "determine the target" instruction ahead of branch/mode:
+    `deliver` must first identify **where the change needs to land to take
+    effect**. If the surrounding context names a deploy/build/CI branch
+    (dev, staging, a release branch) that the change must reach, that
+    branch is the target and the mode is `pr`/`pr-merge` with the correct
+    base (or a direct push to it) — NOT a personal feature branch via
+    `push`. When the target is ambiguous between the current branch and a
+    deploy branch, surface it in the plan for the user, do not silently
+    default to the current branch. [verify: code-only]
+      → git.md Step 1 leads with "determine where the change must land
+        to take effect"; deploy-branch guidance + ambiguity-surfacing
+        present (verified in working diff; obs #25825) (2026-07-06)
+  - [X] 7.2 **P2 — CWD path resolution.** In `plugin/bin/embo-deliver`,
+    `cd` to the repository root (`git rev-parse --show-toplevel`) before
+    any git operation, so `file:` paths resolve against the repo root
+    regardless of the caller's CWD. Fail with a clear message + exit 2 if
+    not inside a git repo. [verify: auto-test]
+      - Regression test in `plugin/bin/embo-deliver.test.sh`: a `--dry-run`
+        from a subdirectory with repo-root-relative `file:` paths must
+        stage them correctly (no `frontend/frontend/` doubling).
+      → cd to `git rev-parse --show-toplevel` before git ops; plan path
+        made absolute first; exit 2 outside a repo; subdir regression
+        tests in §7.2 pass — 49/49 re-verified this session
+        (2026-07-09; impl 2026-07-06, obs #25824/#25826)
+  - [X] 7.3 **P4 — deliver an already-committed branch (auto-detect,
+    loud).** In `plugin/bin/embo-deliver`, when the listed `file:` set has
+    nothing to stage (all paths already committed, working tree clean for
+    them), SKIP the commit instead of failing, and print a clear warning:
+    `WARNING: nothing to stage; delivering the existing commit for
+    <files>`. Then proceed with push (if the branch is not yet pushed) →
+    PR → optional merge. The file list is still required (so an accidental
+    empty plan is still rejected) — the change is that "all files already
+    committed" is a valid, warned state, not an error. Rationale for loud:
+    the accident case (user forgot to save an edit) must be visible, not
+    silent — see the WITHSTAND-CRITICISM discussion 2026-07-04.
+    [verify: auto-test]
+      - Regression tests in `plugin/bin/embo-deliver.test.sh`:
+        (a) a plan whose files are all already committed → run succeeds,
+        emits the WARNING, does not create an empty commit;
+        (b) a plan with a genuinely-staged change → commits as before, no
+        warning; (c) an empty file list → still fails exit 2.
+      → committed flag + loud WARNING + context-aware push/fail
+        messages; regression cases (a)/(b)/(c) in §7.3 pass — 49/49
+        re-verified this session (2026-07-09; impl 2026-07-06,
+        obs #25823/#25826)
+  - [ ] 7.4 Verify P1 live: a `deliver` run whose context names a deploy
+    branch proposes that branch as the target (pr/pr-merge), not the
+    current feature branch. [verify: manual-run-claude]
+  - [X] 7.6 **P6 — upstream-mismatch push failure** (found 2026-07-09
+    delivering 038 itself from a worktree created with
+    `git worktree add -b <branch> ... origin/main`, which auto-sets
+    upstream to origin/main). The `has_upstream` check only tests that
+    AN upstream exists and then runs plain `git push`, which git
+    refuses when the upstream name differs from the branch name
+    (push.default=simple). Fix: also compare the upstream ref to
+    `origin/<branch>`; on mismatch (or no upstream) push explicitly
+    with `git push -u origin <branch>`. Commit succeeded, push failed
+    exit 4, honest partial state — recovery was one manual push.
+    [verify: auto-test]
+      - Regression test: repo with a branch whose upstream is set to a
+        DIFFERENT remote branch → executor pushes via
+        `-u origin <branch>` instead of plain `git push`.
+      → TDD: 3 assertions RED against a local bare remote (exit 4,
+        branch never arrives), then plain-push gated on
+        upstream == origin/<branch>; mismatch pushes -u and re-points
+        the upstream; 58/58 pass (2026-07-09)
+  - [X] 7.5 **P5 — PR title overflow** (BUG-2026-07-07, infra repo:
+    2 of 3 pr-merge deliveries failed exit 5). `embo-deliver` passes
+    the ENTIRE commit message as `--title` to `gh pr create`; GitHub
+    caps titles at 256 chars, so any commit with a body fails at PR
+    creation after commit+push already succeeded. Fix per the bug
+    file: title = first line of the message, `--body` = full message,
+    drop the conflicting `--fill`. [verify: auto-test]
+      - Regression tests in `plugin/bin/embo-deliver.test.sh`:
+        (a) dry-run of a pr-mode plan with a multi-line message shows
+        `gh pr create` with only the first line as `--title` and no
+        `--fill`; (b) single-line message → title equals it.
+      - See [BUG-2026-07-07-pr-title-too-long.md](BUG-2026-07-07-pr-title-too-long.md)
+      → TDD: 3 new assertions RED against the bug (full message in
+        --title + --fill observed in dry-run), then title =
+        `${MESSAGE%%$'\n'*}`, full message → --body, --fill dropped;
+        53/53 pass (2026-07-09)
+
+- [ ] 8.0 **User Story:** As a developer, I want `deliver` to cost exactly
+  ONE interaction, so that rapid delivery is actually rapid. (Flow audit
+  2026-07-09: separate draft displays and double gates crept in.) [2/3]
+  - [X] 8.1 In `plugin/commands/git.md` Step 1: build the plan silently —
+    never present a draft message/plan before writing the plan file
+    [verify: code-only]
+      → "Build the plan silently — do NOT present a draft" paragraph
+        added to Step 1 (2026-07-09)
+  - [X] 8.2 **Write-approval-as-gate.** The plan-file Write permission
+    dialog shows the full plan content, so it IS the single approval:
+    drop the AskUserQuestion from the deliver flow (git.md Steps 2-4);
+    approve-the-write = deliver, reject = cancel, run the executor
+    immediately after the write. README: `Bash(embo-deliver *)` stays
+    the required opt-in; `Write(tmp/git-*.txt)` flips to an explicit
+    zero-click opt-in (NOT recommended) since whitelisting it removes
+    the only gate — Claude cannot detect whether the dialog appeared.
+    For `pr-merge` plans, the plan file must carry a leading
+    `# merge is irreversible` comment line so the dialog shows it
+    (parser ignores unknown lines). [verify: code-only]
+      → git.md Steps 2-4 reworked; README opt-in section rewritten;
+        leading-#-comment parser tolerance covered by regression test
+        (now load-bearing for the pr-merge warning) — 55/55 pass
+        (2026-07-09)
+  - [ ] 8.3 Verify live in a repo WITHOUT the Write allow rule: one Write
+    dialog (full plan visible) → approve → whole cycle runs unattended;
+    reject → nothing staged, no fallback to manual git
     [verify: manual-run-claude]

@@ -253,28 +253,40 @@ stage → commit → push → (open PR) → (merge) cycle after **one** approval
 instead of a separate prompt per git command.
 
 How it works: the command builds a delivery plan (exact files, commit
-message, target branch, mode), writes it to a uniquely-named
-`tmp/git-<timestamp>.txt` (kept as a record, never reused), and shows it to
-you for a single Deliver/Cancel approval. On Deliver it runs the bundled
-`embo-deliver` executable, which performs the cycle. Files are always
-staged by explicit name — never `git add -A` or `git commit -a` — so a plan
-you approve can never sweep in an unrelated file.
+message, target branch, mode) and writes it to a uniquely-named
+`tmp/git-<timestamp>.txt` (kept as a record, never reused). **The file-write
+approval dialog is the single gate**: it shows the complete plan — every
+file by name, the verbatim commit message, the target branch and mode —
+so you review the delivery right in the dialog. Approve the write and the
+bundled `embo-deliver` executable runs the whole cycle; reject it and
+nothing happens. Files are always staged by explicit name — never
+`git add -A` or `git commit -a` — so a plan you approve can never sweep in
+an unrelated file. Plans that include a merge carry a leading
+"merge is irreversible" comment, visible in the same dialog.
 
-**One-time opt-in (required for zero further prompts).** The delivery runs
-unattended only after you allow the executable. Add this to your
-`~/.claude/settings.json` (or project `.claude/settings.json`)
-`permissions.allow` list:
+**One-time opt-in (required).** Add to your `~/.claude/settings.json` (or
+project `.claude/settings.json`) `permissions.allow` list:
 
 ```json
 "Bash(embo-deliver *)"
 ```
 
-Security note: this authorizes `embo-deliver` to run its git writes without
-a per-command prompt **after** you approve the plan. The plan approval
+This authorizes the executor's git writes to run without per-command
+prompts **after** you approve the plan file. The plan-write approval
 remains the single gate — nothing is committed, pushed, or merged before
-it. Without this rule the feature still works, but the `embo-deliver` call
-prompts once (no worse than committing manually). Merge (`pr-merge` mode)
-only happens when the approved plan explicitly includes it.
+it. A delivery then costs exactly **one** interaction. Merge (`pr-merge`
+mode) only happens when the approved plan explicitly includes it.
+
+**Zero-click opt-in (NOT recommended).** Additionally allowing
+
+```json
+"Write(tmp/git-*.txt)"
+```
+
+makes the plan write silent — deliveries then run with **no approval at
+all** after you ask for one. Only add this if you consciously want
+unattended delivery; there is no way for the agent to warn you at
+delivery time that the gate is gone.
 
 ## Test subagents
 
