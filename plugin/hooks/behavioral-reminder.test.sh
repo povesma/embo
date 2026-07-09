@@ -42,6 +42,18 @@ assert_contains "baseline lists RESEARCH-VERIFY" \
 assert_contains "baseline lists DECIDE-OR-ASK" \
   "DECIDE-OR-ASK" "$OUT"
 
+# The closing-choice checklist is extracted verbatim from
+# commands/start.md (single source of truth) and appended to the
+# baseline on every prompt.
+assert_contains "checklist header injected" \
+  "CLOSING-CHOICE checklist" "$OUT"
+assert_contains "checklist carries the kinds" \
+  "combinable" "$OUT"
+assert_contains "checklist mandates AskUserQuestion" \
+  "AskUserQuestion" "$OUT"
+assert_contains "checklist keeps decide-first test" \
+  "obvious best answer" "$OUT"
+
 # A git-related prompt additionally triggers the DEV-GIT reminder.
 GITOUT="$(run_hook '"please git commit my changes"')"
 assert_contains "git prompt triggers DEV-GIT reminder" \
