@@ -332,5 +332,41 @@ run_dry "$PR_COMMENT"
 assert_exit "comment line: plan still parses, exit 0" 0 "$RC"
 assert_contains "comment line: merge step present" "gh pr merge --squash" "$OUT"
 
+# --- 7.6: upstream pointing at a DIFFERENT branch -> push -u origin <b> ---
+# P6 (found 2026-07-09): `git worktree add -b <b> ... origin/main` leaves
+# the branch tracking origin/main; a plain `git push` then fails on the
+# name mismatch. The executor must only plain-push when the upstream IS
+# origin/<branch>, and otherwise push explicitly with -u. Local bare repo
+# as the remote — a real push, no network.
+
+BARE76="$WORK/bare76.git"
+git init -q --bare "$BARE76"
+REPO76="$WORK/repo76"
+mkdir -p "$REPO76"
+git -C "$REPO76" init -q -b main
+git -C "$REPO76" config user.email t@t.t
+git -C "$REPO76" config user.name t
+printf 'x\n' > "$REPO76/a.py"
+git -C "$REPO76" add a.py
+git -C "$REPO76" commit -qm init
+git -C "$REPO76" remote add origin "$BARE76"
+git -C "$REPO76" push -qu origin main
+git -C "$REPO76" checkout -q -b b
+git -C "$REPO76" branch -q -u origin/main b   # the mismatch under test
+printf 'y\n' > "$REPO76/a.py"
+PLAN76="$(write_plan up76.txt 'branch: b
+mode: push
+file: a.py
+message:
+fix: bump')"
+OUT76="$(cd "$REPO76" && bash "$BIN" --plan "$PLAN76" 2>&1)"
+RC76=$?
+assert_exit "P6: mismatched upstream -> delivery succeeds, exit 0" 0 "$RC76"
+B_ON_REMOTE=0
+git -C "$BARE76" rev-parse --verify -q refs/heads/b >/dev/null && B_ON_REMOTE=1
+assert_exit "P6: branch b arrived on the remote" 1 "$B_ON_REMOTE"
+UP76="$(git -C "$REPO76" rev-parse --abbrev-ref 'b@{u}' 2>/dev/null)"
+assert_contains "P6: upstream re-pointed to origin/b" "origin/b" "$UP76"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

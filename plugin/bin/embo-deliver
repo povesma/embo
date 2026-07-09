@@ -146,9 +146,15 @@ fi
 
 # --- push -----------------------------------------------------------------
 
+# Plain-push ONLY when the upstream is origin/<branch>. An upstream
+# pointing elsewhere (e.g. `git worktree add -b <b> ... origin/main`
+# auto-tracks origin/main) makes plain `git push` fail on the name
+# mismatch — push explicitly with -u instead, which also re-points the
+# upstream (P6, found 2026-07-09).
 has_upstream=0
 if [ "$DRYRUN" -eq 0 ]; then
-  git rev-parse --abbrev-ref '@{u}' >/dev/null 2>&1 && has_upstream=1
+  upstream="$(git rev-parse --abbrev-ref '@{u}' 2>/dev/null || true)"
+  [ "$upstream" = "origin/$BRANCH" ] && has_upstream=1
 fi
 
 if [ "$committed" -eq 1 ]; then

@@ -192,7 +192,7 @@
   feature branch, fail on path resolution, or refuse an
   already-committed branch. (Three defects surfaced by dogfooding,
   2026-07-04, on the TechnoTongue repo; a fourth, 7.5, on the infra
-  repo 2026-07-07.) [4/5]
+  repo 2026-07-07; a fifth, 7.6, on this repo 2026-07-09.) [5/6]
   - [X] 7.1 **P1 — target/mode intent.** In `plugin/commands/git.md`
     Step 1, add a "determine the target" instruction ahead of branch/mode:
     `deliver` must first identify **where the change needs to land to take
@@ -242,6 +242,24 @@
   - [ ] 7.4 Verify P1 live: a `deliver` run whose context names a deploy
     branch proposes that branch as the target (pr/pr-merge), not the
     current feature branch. [verify: manual-run-claude]
+  - [X] 7.6 **P6 — upstream-mismatch push failure** (found 2026-07-09
+    delivering 038 itself from a worktree created with
+    `git worktree add -b <branch> ... origin/main`, which auto-sets
+    upstream to origin/main). The `has_upstream` check only tests that
+    AN upstream exists and then runs plain `git push`, which git
+    refuses when the upstream name differs from the branch name
+    (push.default=simple). Fix: also compare the upstream ref to
+    `origin/<branch>`; on mismatch (or no upstream) push explicitly
+    with `git push -u origin <branch>`. Commit succeeded, push failed
+    exit 4, honest partial state — recovery was one manual push.
+    [verify: auto-test]
+      - Regression test: repo with a branch whose upstream is set to a
+        DIFFERENT remote branch → executor pushes via
+        `-u origin <branch>` instead of plain `git push`.
+      → TDD: 3 assertions RED against a local bare remote (exit 4,
+        branch never arrives), then plain-push gated on
+        upstream == origin/<branch>; mismatch pushes -u and re-points
+        the upstream; 58/58 pass (2026-07-09)
   - [X] 7.5 **P5 — PR title overflow** (BUG-2026-07-07, infra repo:
     2 of 3 pr-merge deliveries failed exit 5). `embo-deliver` passes
     the ENTIRE commit message as `--title` to `gh pr create`; GitHub
