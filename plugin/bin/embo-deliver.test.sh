@@ -189,7 +189,7 @@ assert_contains "pr-merge mode: gh pr merge --squash" "gh pr merge --squash" "$O
 # environment, which would test the harness, not the feature. Live failure
 # behaviour is checked end-to-end at subtask 4.5.
 
-assert_contains "push guarded with exit 4" 'push failed" 4' "$CODE"
+assert_contains "push guarded with exit 4" 'push_fail_msg" 4' "$CODE"
 assert_contains "gh-absent guarded with exit 3" 'gh not installed' "$CODE"
 assert_contains "pr create guarded with exit 5" 'PR not created" 5' "$CODE"
 assert_contains "merge guarded with exit 6" 'merge blocked' "$CODE"
@@ -198,6 +198,139 @@ assert_contains "merge guarded with exit 6" 'merge blocked' "$CODE"
 
 assert_not_contains "code has no 'git reset'" "git reset" "$CODE"
 assert_not_contains "code has no 'git revert'" "git revert" "$CODE"
+
+# --- 7.2: paths resolve against repo root regardless of caller CWD ------
+# Build a throwaway repo with a file in a subdir; invoke the executor FROM
+# the subdir with a repo-root-relative path. It must stage that path
+# against the repo root (no subdir/subdir doubling), proving the cd to
+# `git rev-parse --show-toplevel` works. We use --dry-run so nothing is
+# pushed; the git add itself is real (dry-run only stubs push/gh, not add).
+
+REPO="$WORK/repo72"
+mkdir -p "$REPO/frontend/src"
+git -C "$REPO" init -q
+git -C "$REPO" config user.email t@t.t
+git -C "$REPO" config user.name t
+printf 'x\n' > "$REPO/frontend/src/a.ts"
+git -C "$REPO" add -A
+git -C "$REPO" commit -qm init
+
+PLAN_CWD="$(write_plan cwd.txt 'branch: b
+mode: push
+file: frontend/src/a.ts
+message:
+chore: touch')"
+printf 'y\n' > "$REPO/frontend/src/a.ts"   # a real change to stage
+OUT_CWD="$(cd "$REPO/frontend" && bash "$BIN" --dry-run --plan "$PLAN_CWD" 2>&1)"
+RC_CWD=$?
+assert_exit "P2: dry-run from subdir exits 0" 0 "$RC_CWD"
+assert_contains "P2: stages repo-root path" "frontend/src/a.ts" "$OUT_CWD"
+assert_not_contains "P2: no doubled subdir prefix" "frontend/frontend" "$OUT_CWD"
+
+# not-a-git-repo -> exit 2
+NOREPO="$WORK/notrepo"
+mkdir -p "$NOREPO"
+PLAN_NR="$(write_plan nr.txt 'branch: b
+mode: push
+file: a.py
+message:
+x')"
+RC_NR=0
+(cd "$NOREPO" && bash "$BIN" --dry-run --plan "$PLAN_NR") >/dev/null 2>&1 || RC_NR=$?
+assert_exit "P2: outside a git repo -> exit 2" 2 "$RC_NR"
+
+# --- 7.3: already-committed files -> skip commit, warn loudly (P4) -------
+# Real (non-dry) run against a throwaway repo with NO remote. The files are
+# already committed and the working tree is clean for them, so the executor
+# must skip the commit, print the WARNING, and NOT create a second commit.
+# Push then fails (no remote) at exit 4 — expected; we assert on the commit
+# count and the warning, which happen before the push.
+
+REPO2="$WORK/repo73"
+mkdir -p "$REPO2"
+git -C "$REPO2" init -q
+git -C "$REPO2" config user.email t@t.t
+git -C "$REPO2" config user.name t
+printf 'v1\n' > "$REPO2/a.py"
+git -C "$REPO2" add -A
+git -C "$REPO2" commit -qm "feat: a"
+COUNT_BEFORE="$(git -C "$REPO2" rev-list --count HEAD)"
+
+PLAN_AC="$(write_plan already.txt 'branch: b
+mode: push
+file: a.py
+message:
+feat: a (again)')"
+OUT_AC="$(cd "$REPO2" && bash "$BIN" --plan "$PLAN_AC" 2>&1)"
+RC_AC=$?
+COUNT_AFTER="$(git -C "$REPO2" rev-list --count HEAD)"
+assert_contains "P4: warns loudly when nothing to stage" "nothing to stage" "$OUT_AC"
+assert_exit "P4: commit count unchanged (no empty commit)" "$COUNT_BEFORE" "$COUNT_AFTER"
+assert_exit "P4: push fails with no remote -> exit 4" 4 "$RC_AC"
+assert_contains "P4: failure msg reflects no new commit" "nothing committed, push failed" "$OUT_AC"
+
+# (b) a genuinely-staged change commits and does NOT warn
+REPO3="$WORK/repo73b"
+mkdir -p "$REPO3"
+git -C "$REPO3" init -q
+git -C "$REPO3" config user.email t@t.t
+git -C "$REPO3" config user.name t
+printf 'v1\n' > "$REPO3/a.py"
+git -C "$REPO3" add -A
+git -C "$REPO3" commit -qm "feat: a"
+printf 'v2\n' > "$REPO3/a.py"    # real change
+CNT3_BEFORE="$(git -C "$REPO3" rev-list --count HEAD)"
+PLAN_ST="$(write_plan staged.txt 'branch: b
+mode: push
+file: a.py
+message:
+feat: bump')"
+OUT_ST="$(cd "$REPO3" && bash "$BIN" --plan "$PLAN_ST" 2>&1)"
+CNT3_AFTER="$(git -C "$REPO3" rev-list --count HEAD)"
+assert_not_contains "P4: real change does NOT warn" "nothing to stage" "$OUT_ST"
+assert_exit "P4: real change creates one commit" "$((CNT3_BEFORE + 1))" "$CNT3_AFTER"
+
+# --- 7.5: PR title is the message SUBJECT, not the whole message (P5) ----
+# BUG-2026-07-07: the full multi-line message was passed as --title, which
+# overflows GitHub's 256-char title cap for any commit with a body. The
+# title must be the first line only; the full message goes to --body; the
+# conflicting --fill flag must be gone. Dry-run prints %q-quoted args, so
+# a space in the subject renders as '\ '.
+
+PR_MULTI="$(write_plan pr-multi.txt 'branch: feature/x
+mode: pr
+base: main
+file: a.py
+message:
+feat: short subject
+Long body line one.
+Long body line two.')"
+run_dry "$PR_MULTI"
+assert_exit "P5: multi-line pr plan exits 0" 0 "$RC"
+assert_contains "P5: title is subject only, body follows" \
+  "--title feat:\\ short\\ subject --body" "$OUT"
+assert_not_contains "P5: no --fill flag" "--fill" "$OUT"
+
+# (b) single-line message: title equals the message
+run_dry "$VALID_PR"
+assert_contains "P5: single-line title equals message" \
+  "--title fix:\\ thing --body" "$OUT"
+
+# --- 8.2: leading # comment lines are ignored by the parser --------------
+# pr-merge plans are REQUIRED to carry a leading "# ... irreversible"
+# comment (shown to the user in the Write approval dialog), so comment
+# tolerance is load-bearing, not incidental.
+
+PR_COMMENT="$(write_plan pr-comment.txt '# pr-merge: PR will be MERGED into main — irreversible
+branch: feature/x
+mode: pr-merge
+base: main
+file: a.py
+message:
+fix: thing')"
+run_dry "$PR_COMMENT"
+assert_exit "comment line: plan still parses, exit 0" 0 "$RC"
+assert_contains "comment line: merge step present" "gh pr merge --squash" "$OUT"
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

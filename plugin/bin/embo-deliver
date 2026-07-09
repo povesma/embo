@@ -16,11 +16,16 @@
 # STRICT: never `git add -A`, `git add .`, or `git commit -a`. Files are
 # staged by explicit name only. No destructive operations.
 #
+# When every listed file is already committed (nothing new to stage), the
+# commit is skipped with a loud WARNING and the existing commit is
+# delivered (push + optional PR/merge). This lets `deliver` land an
+# already-committed branch without inventing an empty commit.
+#
 # Exit codes:
 #   0  full cycle succeeded
-#   2  plan invalid/missing (no git ran)
+#   2  plan invalid/missing, or not inside a git repo (no git changes made)
 #   3  PR/merge requested but `gh` not installed (committed+pushed)
-#   4  push failed (committed locally)
+#   4  push failed (commit made locally, or existing commit if none staged)
 #   5  gh pr create failed (committed+pushed)
 #   6  gh pr merge failed/blocked (PR opened)
 
@@ -47,6 +52,21 @@ fail() { printf 'embo-deliver: %s\n' "$1" >&2; exit "$2"; }
 
 [ -n "$PLAN" ] || { usage; exit 2; }
 [ -f "$PLAN" ] || fail "plan file not found: $PLAN" 2
+
+# Resolve the plan path before we change directory (it may be relative to
+# the caller's CWD).
+case "$PLAN" in
+  /*) : ;;
+  *)  PLAN="$PWD/$PLAN" ;;
+esac
+
+# Run all git operations from the repository root so that `file:` paths are
+# resolved against the repo root regardless of the caller's working
+# directory (a caller in a subdir like frontend/ would otherwise double the
+# prefix, e.g. frontend/frontend/...).
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" \
+  || fail "not inside a git repository" 2
+cd "$REPO_ROOT" || fail "cannot cd to repo root: $REPO_ROOT" 2
 
 # --- parse the plan file --------------------------------------------------
 # Line-oriented: `key: value` lines, then a trailing `message:` block whose
@@ -110,8 +130,16 @@ run() {
 run git add -- "${FILES[@]}" \
   || fail "git add failed" 4
 
+# Commit only if the add produced a staged change. When every listed file
+# is already committed (nothing to stage), skip the commit and deliver the
+# existing commit — but say so LOUDLY, so the accident case (a file the
+# user meant to edit but did not) is visible rather than silent.
+committed=1
 if [ "$DRYRUN" -eq 1 ]; then
-  printf 'DRYRUN: git commit -m <message>\n'
+  printf 'DRYRUN: git commit -m <message> (skipped if nothing staged)\n'
+elif git diff --cached --quiet; then
+  printf 'embo-deliver: WARNING: nothing to stage; delivering the existing commit for %s\n' "${FILES[*]}" >&2
+  committed=0
 else
   git commit -m "$MESSAGE" || fail "git commit failed" 4
 fi
@@ -123,15 +151,25 @@ if [ "$DRYRUN" -eq 0 ]; then
   git rev-parse --abbrev-ref '@{u}' >/dev/null 2>&1 && has_upstream=1
 fi
 
-if [ "$has_upstream" -eq 1 ]; then
-  run git push \
-    || fail "committed locally, push failed" 4
+if [ "$committed" -eq 1 ]; then
+  push_fail_msg="committed locally, push failed"
 else
-  run git push -u origin "$BRANCH" \
-    || fail "committed locally, push failed" 4
+  push_fail_msg="nothing committed, push failed"
 fi
 
-STEPS="committed, pushed to $BRANCH"
+if [ "$has_upstream" -eq 1 ]; then
+  run git push \
+    || fail "$push_fail_msg" 4
+else
+  run git push -u origin "$BRANCH" \
+    || fail "$push_fail_msg" 4
+fi
+
+if [ "$committed" -eq 1 ]; then
+  STEPS="committed, pushed to $BRANCH"
+else
+  STEPS="pushed existing commit to $BRANCH"
+fi
 
 # --- PR / merge -----------------------------------------------------------
 
@@ -139,8 +177,13 @@ if [ "$MODE" = "pr" ] || [ "$MODE" = "pr-merge" ]; then
   command -v gh >/dev/null 2>&1 \
     || fail "$STEPS; gh not installed, open PR manually" 3
 
+  # PR title is the message SUBJECT only (GitHub caps titles at 256
+  # chars; the full message would overflow for any commit with a body —
+  # BUG-2026-07-07). The body carries the whole message; repeating the
+  # subject there is harmless.
+  PR_TITLE="${MESSAGE%%$'\n'*}"
   run gh pr create --base "$BASE" --head "$BRANCH" \
-      --title "$MESSAGE" --fill \
+      --title "$PR_TITLE" --body "$MESSAGE" \
     || fail "$STEPS; PR not created" 5
   STEPS="$STEPS, PR opened"
 
