@@ -362,37 +362,76 @@ do not work around it.
 
 #### Step 1: Build the delivery plan
 
+**First, determine where the change must land to take effect.** Do not
+reflexively default to the current branch. Read the surrounding context:
+if it names a deploy / build / CI branch (e.g. `dev`, `staging`, a release
+branch) that the change must reach for a build, deploy, or E2E run to
+happen, THAT branch is the destination — reaching it means `pr` or
+`pr-merge` with the correct `base` (or a direct push to it if that is the
+repo's workflow), NOT leaving the commit on a personal feature branch via
+`push`. A `push` to a feature branch that nothing builds from looks like
+success but delivers nothing. When the destination is genuinely ambiguous
+between the current branch and a deploy branch, surface the choice in the
+plan (Step 3) — do not silently pick the current branch.
+
 From the current development situation, determine:
 
-- **branch** — the target branch (default: the current branch).
+- **branch** — the branch the change is delivered ON. For `push`, this is
+  where the commit lands. For `pr`/`pr-merge`, this is the head branch the
+  PR is opened FROM. Default to the current branch ONLY when no deploy
+  branch is implicated (see above).
 - **mode** — one of:
-  - `push` — stage + commit + push. Default for a feature branch you own.
-  - `pr` — push + open a PR. Use when the target is a protected base or the
-    change needs review.
-  - `pr-merge` — push + open a PR + merge it. Only when the user asked to
-    land the change in one go (hotfix); merge is never implicit.
+  - `push` — stage + commit + push. For a feature branch you own that
+    nothing deploys from directly.
+  - `pr` — push + open a PR into `base`. Use when the change must reach a
+    protected or deploy branch (`dev`/`staging`/`main`), or needs review.
+  - `pr-merge` — push + open a PR + merge it into `base`. Use when the user
+    asked to land the change on the deploy branch in one go; merge is never
+    implicit.
 - **base** — required for `pr`/`pr-merge`: the branch the PR merges into
   (default: `main`, or `master` if the repo has no `main`).
-- **files** — the explicit set of files to commit, by name. Determine them
-  from the work just done. **Never** stage `-A`/`.`; list every file
-  deliberately. Files not part of this change are excluded.
+- **files** — the explicit set of files that make up this change, by name.
+  Determine them from the work just done. **Never** stage `-A`/`.`; list
+  every file deliberately. Files not part of this change are excluded. List
+  the change's files even when the work is **already committed** and you
+  only need to push + PR it to a deploy branch: the executor detects that
+  nothing is left to stage, skips the commit with a loud warning, and
+  delivers the existing commit. Do NOT invent an empty file list or re-list
+  files to "satisfy" the executor — always name the change's real files.
 - **message** — generate per the active `git.commit_style` (Step 0),
   exactly as in `commit` mode.
 
 Inspect the working tree first (`git status --short`) so the file list is
 accurate and unrelated dirty files are not swept in.
 
-#### Step 2: Write the plan file
+**Build the plan silently — do NOT present a draft.** Never show the
+commit message or plan for review before writing the file; go straight
+from Step 1 to Step 2. The plan-file Write dialog (Step 2) is the only
+presentation and the only approval. A separate "here is my draft" turn
+adds a second interaction, which defeats the point of `deliver` (the
+whole flow costs the user exactly ONE approval).
+
+#### Step 2: Write the plan file — this IS the approval gate
 
 Write the plan to a **uniquely-named** file
 `tmp/git-<timestamp>.txt` (e.g. `tmp/git-20260703-150210.txt`). Never
 reuse a fixed name and never delete it — each delivery leaves its own
-record. `tmp/` is gitignored and an allowed write target, so this needs no
-prompt.
+record. `tmp/` is gitignored.
 
-Format (line-oriented; `message:` must be last, its body runs to EOF):
+**The Write permission dialog is the single approval.** It shows the
+full plan file content — branch, mode, base, every file by name, the
+verbatim commit message — so the user reviews the delivery in the
+dialog itself. Approving the write authorizes the whole delivery;
+rejecting it cancels the delivery. Do not show the plan in chat before
+or after writing, and do not ask any follow-up question — either would
+add a second interaction to a flow whose point is exactly one.
+
+Format (line-oriented; `message:` must be last, its body runs to EOF;
+`#` lines are ignored by the executor):
 
 ```
+# pr-merge: PR will be MERGED into <base> — irreversible   <- REQUIRED
+#                                          comment for pr-merge plans
 branch: <target-branch>
 mode: push | pr | pr-merge
 base: <base-branch>            # only for pr / pr-merge
@@ -402,31 +441,18 @@ message:
 <commit message, verbatim, may span multiple lines>
 ```
 
-#### Step 3: Single approval (the one gate)
+For `pr-merge` plans the leading irreversibility comment is mandatory —
+it is how the dialog warns the user that approval includes a merge.
 
-Show the plan file's content, then present ONE `AskUserQuestion`. The shown
-plan MUST make all of these visible:
+**Zero-gate warning:** if the environment allowlists
+`Write(tmp/git-*.txt)`, the write is silent and the delivery runs with
+NO human gate (you cannot detect whether a dialog appeared). That rule
+is a deliberate zero-click opt-in documented in the README; never
+suggest adding it as a convenience.
 
-- the **exact files** to be committed, by name (so the user can catch a
-  file that does not belong);
-- the **full commit message**, verbatim;
-- the **target branch** and the **mode** in plain words;
-- for `pr-merge`: the **base branch** and an explicit note that **merge is
-  irreversible**.
+#### Step 3: Execute (write approved) or stop (write rejected)
 
-```
-question: "Deliver this change?"
-header: "Rapid deliver"
-options:
-  - label: "Deliver"
-    description: "Run the whole cycle now: <mode summary> to <branch>"
-  - label: "Cancel"
-    description: "Do nothing; stage/commit/push/merge none of it"
-```
-
-#### Step 4: Execute or cancel
-
-- **Deliver** → run the bare command:
+- **Write approved** → immediately run the bare command:
 
   ```bash
   embo-deliver --plan tmp/git-<timestamp>.txt
@@ -438,12 +464,13 @@ options:
   (it reports which steps completed; a non-zero exit means it stopped at a
   failed step and did not undo prior steps).
 
-- **Cancel** → stop. Nothing is staged, committed, pushed, or merged. The
-  plan file remains as a record of the cancelled intent.
+- **Write rejected** → the delivery is cancelled. Nothing is staged,
+  committed, pushed, or merged. Do NOT fall back to running git
+  commands manually — a rejected plan means the user declined the
+  delivery, not the method.
 
-Do NOT add a second confirmation — the plan approval in Step 3 is the
-single gate (mirrors the `commit`/`pr` design: one approval point, no
-double-prompt).
+Do NOT add a confirmation question anywhere in this flow — the plan-file
+Write approval in Step 2 is the single gate.
 
 ---
 
