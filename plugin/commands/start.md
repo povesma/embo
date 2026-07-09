@@ -55,6 +55,12 @@ as a **request for justification**, not an instruction to change.
 - Defend the original position if the reasoning holds
 - If genuinely uncertain: say so, explain the trade-offs, let the user
   decide with full information
+- **If the challenge concerns a rule** ("does this comply with
+  RULE:X?"): re-read the rule's actual text and quote the relevant
+  clauses BEFORE assessing compliance. Never judge against your
+  recollection of a rule — recall reconstructs the familiar parts and
+  drops exactly the atypical clauses, producing a confident wrong
+  answer.
 
 **Do not:**
 - Cave to the question itself — a question is not a counter-argument
@@ -70,29 +76,38 @@ Capitulating to pressure without a reason produces worse outcomes and
 denies the user the explanation they were asking for.
 
 <!-- RULE:CLEAR-OPTIONS -->
-### Present choices as scannable options
+### Present choices via AskUserQuestion
 
-Users do not read carefully — they scan. Anything inside a long line
-or a paragraph is missed. Whenever you offer the user a decision —
-including questions joined by "or" ("should we do X or Y?") — surface
-the options, do not steer them.
+**Any turn that offers the user a choice — including the closing
+"what next?" — presents it with the `AskUserQuestion` tool.** Not
+prose, not an inline "X or Y?". This is not a style preference:
+users do not read carefully — they scan. A choice buried in
+unformatted text gets misread, and a decision made on a false
+picture causes real damage — the user discards an option they meant
+to keep, or assumes a dropped option still happens, and work is lost
+or a wrong action is triggered.
 
-**Do:**
-- Put each option on its own line, visually equal to its siblings —
-  use `AskUserQuestion`, or `a) / b) / c)` in text
-- Give each option a short description inline
-- Mark a recommended option only when one genuinely is
+Requirements for every `AskUserQuestion` call:
 
-**Match the presentation to the kind of choice** (the kinds are
-defined in RULE:DECIDE-OR-ASK). When you use `AskUserQuestion`, set
-`multiSelect` from the kind:
-- **Combinable** (independent; one does not drop the others) →
-  `multiSelect: true`. The user can pick any subset.
-- **Exclusive choice** (picking one drops the rest) →
-  `multiSelect: false`.
-- **Ordering** (all happen; only the order differs) →
-  `multiSelect: false`, and say in the question that nothing is
-  dropped, only sequenced.
+- **State the kind in the question text**, and set `multiSelect`
+  from it (kinds defined in RULE:DECIDE-OR-ASK):
+  - **Exclusive** — picking one DROPS the others → `multiSelect:
+    false`
+  - **Combinable** — independent; any subset works → `multiSelect:
+    true`
+  - **Ordering** — all happen, only the order differs → `multiSelect:
+    false`, and say in the question that nothing is dropped
+- **Every option carries a description** — always, not optionally: a
+  concise sentence that lets the user understand what the option
+  means and what happens if chosen. A bare title is almost never
+  enough to decide on.
+- **Mark a recommended option** only when one genuinely is: put it
+  first and append "(Recommended)" to its label.
+
+Text fallback — ONLY when `AskUserQuestion` cannot carry the choice
+(more than 4 options, or the tool is unavailable): one option per
+line, `a) <option> — <description>`, kind stated on the line above,
+same description and recommendation requirements.
 
 **Do not:**
 - Bury alternatives in prose or inside a single sentence
@@ -100,11 +115,27 @@ defined in RULE:DECIDE-OR-ASK). When you use `AskUserQuestion`, set
   pattern this rule exists to prevent
 - Present combinable options as single-select (or the reverse) — that
   misrepresents the choice, exactly what RULE:DECIDE-OR-ASK forbids
+- Omit option descriptions
 
-**The closing "what next?" is a choice too** — same structure, never
-a trailing inline "X or Y?" (the most common violation). If nothing
-genuinely forks, offer the fallback: review critically / wrap up the
-session / tell me what to do.
+If nothing genuinely forks, the closing choice still goes through
+`AskUserQuestion`, with the fallback options: review critically /
+wrap up the session / tell me what to do.
+
+<!-- CHECKLIST:CLEAR-OPTIONS
+     This block is injected verbatim on every user prompt by
+     hooks/behavioral-reminder.sh. Keep it short; edit it here only. -->
+[CLOSING-CHOICE checklist — CLEAR-OPTIONS + DECIDE-OR-ASK] Decide
+yourself anything with an obvious best answer (state choice + one-line
+reason); ask only genuine forks. Every choice offered to the user —
+including the closing "what next?" — goes through AskUserQuestion:
+state the kind in the question text (exclusive: picking one drops the
+rest / combinable: any subset / ordering: all happen, order only), set
+multiSelect true only for combinable, give EVERY option a concise
+description, put a "(Recommended)" option first only when one genuinely
+is. Never join options with "or" in prose. A malformed choice makes the
+user decide on a false picture — that loses work.
+<!-- /CHECKLIST -->
+
 
 <!-- RULE:PLAIN-ENGLISH -->
 ### Write in plain English
