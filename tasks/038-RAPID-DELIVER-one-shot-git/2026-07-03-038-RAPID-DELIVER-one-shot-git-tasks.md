@@ -147,6 +147,11 @@
         stage+commit+push ran with no per-command prompt, exit 0; plan
         file retained (tmp/git-20260709-174815.txt). Cancel case still
         unexercised — keep open until verified.
+      → 2026-07-10: found `.claude/settings.local.json` had `Write(tmp/**)`
+        allowlisted, which zero-gated ALL plan-file writes in this repo
+        (broader than the skill's assumed `tmp/git-*.txt`) — removed, so
+        the Write dialog now actually appears here. Cancel case still
+        needs a live run to exercise.
 
 - [X] 5.0 **User Story:** As an embo user, I want the feature documented and
   shipped — the manual allow-rule opt-in, `/embo:git deliver` usage, and a
@@ -242,6 +247,17 @@
   - [ ] 7.4 Verify P1 live: a `deliver` run whose context names a deploy
     branch proposes that branch as the target (pr/pr-merge), not the
     current feature branch. [verify: manual-run-claude]
+      → 2026-07-10: wording needs a fix before this is verifiable as
+        written — "deploy branch" and "current feature branch" are not
+        mutually exclusive; a feature branch itself is routinely a
+        deploy target (preview/sandbox environments build from it
+        directly), in which case `push` to the current branch IS
+        correct P1 behaviour, not a defect. Re-scope to: (a) a run where
+        the deploy target is a DIFFERENT named branch (dev/staging/
+        release) than the current branch → proposes pr/pr-merge to that
+        branch; (b) a run where the current feature branch itself is
+        the deploy target → proposes push to it, not an unwanted pr to
+        some other branch. Still open; needs a live scenario for each.
   - [X] 7.6 **P6 — upstream-mismatch push failure** (found 2026-07-09
     delivering 038 itself from a worktree created with
     `git worktree add -b <branch> ... origin/main`, which auto-sets
