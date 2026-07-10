@@ -150,8 +150,13 @@
       → 2026-07-10: found `.claude/settings.local.json` had `Write(tmp/**)`
         allowlisted, which zero-gated ALL plan-file writes in this repo
         (broader than the skill's assumed `tmp/git-*.txt`) — removed, so
-        the Write dialog now actually appears here. Cancel case still
-        needs a live run to exercise.
+        the Write dialog now actually appears here. With the gate
+        restored: wrote tmp/git-20260710-160000.txt, user confirmed the
+        Write dialog appeared and was approved, then
+        `embo-deliver --plan ...` ran stage+commit+push to main with no
+        further per-command prompt, exit 0 (commit 5d7f5c3). Approval
+        path now fully verified live. Cancel case still needs a live run
+        to exercise — keep open for that alone.
 
 - [X] 5.0 **User Story:** As an embo user, I want the feature documented and
   shipped — the manual allow-rule opt-in, `/embo:git deliver` usage, and a
@@ -320,3 +325,11 @@
     dialog (full plan visible) → approve → whole cycle runs unattended;
     reject → nothing staged, no fallback to manual git
     [verify: manual-run-claude]
+      → PARTIAL (2026-07-10, embo repo): removed the local `Write(tmp/**)`
+        allow rule that had been zero-gating this repo, then wrote
+        tmp/git-20260710-160000.txt — user confirmed the Write dialog
+        appeared showing the plan and was approved — then
+        `embo-deliver --plan ...` ran the whole cycle (stage+commit+push
+        to main, commit 5d7f5c3) unattended, exit 0. Approve path
+        verified live. Reject path (deny the Write, confirm nothing
+        staged) still unexercised — keep open until verified.
