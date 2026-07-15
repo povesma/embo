@@ -1,8 +1,7 @@
 ---
 description: >
   End-of-session command: compact completed subtask evidence in task
-  files touched this session, surface uncommitted work, and optionally
-  save a session observation to claude-mem.
+  files touched this session and surface uncommitted work.
 ---
 
 # /embo:wrapup — End-of-Session Wrap-Up
@@ -44,7 +43,7 @@ git diff --stat HEAD
 ```
 
 If non-empty, list the files and ask via `AskUserQuestion`: commit now
-(invoke `/embo:git commit`), skip, or note it in the session observation.
+(invoke `/embo:git commit`) or leave uncommitted.
 
 ### 4. Report
 

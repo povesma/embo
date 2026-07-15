@@ -114,9 +114,27 @@ with Figma named as the primary design source.
   - [~] 1.1 Switch browser automation from Playwright MCP to CLI in the
     source command (`open`, `eval`, `resize`, `screenshot`;
     `toHaveScreenshot` diff). Figma kept on MCP. [verify: manual-run-claude]
-  - [~] 1.2 Add prerequisites preflight: Figma-MCP presence check,
-    `playwright-cli --version || npm install -g …` install-if-absent +
-    functional re-check, dev-server note. [verify: manual-run-claude]
+  - [X] 1.2 Prerequisites preflight: Figma-MCP presence check,
+    Playwright-CLI install-if-absent + functional re-check, reachable-
+    URL note. [verify: manual-run-claude]
+      → DEFECT found + fixed during verification (2026-07-15): the
+        shipped preflight installed the WRONG package —
+        `npm install -g @playwright/test playwright-cli`. The unscoped
+        `playwright-cli` package is DEPRECATED and ships no working
+        binary (verified: install succeeded, `playwright-cli` still
+        command-not-found). The correct package is **`@playwright/cli`**
+        (scoped, official MS maintainers, provides the `playwright-cli`
+        binary). Root cause: I took the package name from a Context7
+        *library listing* (`/microsoft/playwright-cli`) and shipped it
+        without running the install — RULE:RESEARCH-VERIFY /
+        RULE:ASSUME-BROKEN miss. Fixed both copies to `@playwright/cli`,
+        VERIFIED live: `npm install -g @playwright/cli` →
+        `playwright-cli --version` = 0.1.17. Preflight also now probes
+        for an existing install (PATH + `npx --no-install`) before
+        installing, per user request. This fix NOT yet committed.
+      → FOLLOW-UP: extend the probe to more managers (pnpm/yarn/bun/
+        brew/local .bin) so a non-npm-global install isn't false-
+        negatived into a redundant global install.
   - [~] 1.3 Copy `visual-impl.md` → `plugin/commands/` (→
     `/embo:visual-impl`) and `visual-qa-reviewer.md` →
     `plugin/agents/`. [verify: code-only]
