@@ -134,12 +134,37 @@ it (or report the blocker); do not proceed on a broken tool.
   Connect was unavailable so fidelity is reduced (no real-component
   mapping).
 
-**2. Playwright CLI** — install if absent, then verify it runs:
+**2. Playwright CLI** — the `playwright-cli` binary is provided by the
+**`@playwright/cli`** package (scoped, official). Do NOT install the
+unscoped `playwright-cli` package — it is deprecated and ships no
+working binary.
+
+First check whether it is already present by any install method (avoid
+a redundant global install):
 
 ```bash
-playwright-cli --version || npm install -g @playwright/test playwright-cli
 playwright-cli --version
 ```
+
+If that prints a version, you are done. If it reports not-found, also
+check a project-local install before installing globally:
+
+```bash
+npx --no-install playwright-cli --version
+```
+
+Only if BOTH report not-found, install it, then verify:
+
+```bash
+npm install -g @playwright/cli
+playwright-cli --version
+```
+
+The final `--version` must print a version (invoke via `npx
+playwright-cli` if you installed it project-locally). If it still
+fails, report the error and stop — the render/measure steps cannot run
+without it. Installing browsers may also be needed once:
+`npx playwright install`.
 
 The second `--version` must print a version. If it still fails, report
 the error and stop — the render/measure steps cannot run without it.
