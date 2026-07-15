@@ -242,6 +242,7 @@ of resetting to zero every morning.
 | Development | `/embo:git` | Commit/PR messages, styles, and one-shot `deliver` |
 | Research | `/embo:research:examine` | Independent two-pass critique of a decision or doc → reconciled recommendation |
 | Research | `/embo:research:verify` | Prove a chosen approach meets its acceptance criteria before building |
+| Design | `/embo:visual-impl` | Implement a Figma node to code, gated by a numeric diff + independent visual-QA judge (**experimental**) |
 | Config | `/embo:profile` | Switch workflow profile (quality / fast / minimal / research) |
 
 Full per-command reference under [Reference](#reference).
