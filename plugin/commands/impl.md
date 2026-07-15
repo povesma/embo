@@ -361,8 +361,7 @@ are the durable record of what was tested and how.
 
 - Mark sub-task as complete per Task Completion Rules above
 - Update "Relevant Files" section in task file
-- If parent task completed, save to claude-mem and update
-  ai-docs/ if present
+- If parent task completed, update ai-docs/ if present
 
 ## Context7
 
