@@ -2,6 +2,22 @@
 
 All notable changes to the embo plugin are documented here.
 
+## [0.2.0] - unreleased
+
+Version bumped; git tag + GitHub Release held until the visual-impl
+loop has at least one verified end-to-end run.
+
+### Added
+
+- `/embo:visual-impl` (**experimental**) — a design-to-code loop that
+  implements a Figma node and gates the build against the design with a
+  numeric diff plus an independent `visual-qa-reviewer` agent (also
+  new). Browser automation uses the **Playwright CLI** (token-efficient,
+  scripted); Figma extraction stays on the Figma MCP. The target is any
+  reachable URL (local dev server, hosted preview, staging, or sandbox),
+  not only localhost. Labeled experimental — argument and output
+  contract may change until promoted to stable.
+
 ## [0.1.5] - 2026-07-10
 
 ### Added
