@@ -76,6 +76,17 @@ with Figma named as the primary design source.
    GitHub Release until at least one real end-to-end run (task 1.x/2.x)
    passes.
 
+9. **Error always stops; only clean absence degrades (2026-07-15).**
+   Challenged: "if a tool is not operational we should stop and fix it,
+   never continue; exceptions are real, not automatic." Correct. The
+   fix distinguishes a *broken/erroring tool or missing required input*
+   (→ STOP + report, no auto-fallback, exception only from the user)
+   from an *optional input that is legitimately, cleanly absent* — e.g.
+   Code Connect, which most projects never author, or no documented
+   token system. Only the latter degrades, and every degraded path is
+   stated in the output so the user can object. "Degrade gracefully" as
+   originally worded was too loose — it could read as swallow-the-error.
+
 5. **Ship status: EXPERIMENTAL (decided 2026-07-15).** No end-to-end
    runs of the CLI-switched version exist on record (claude-mem search
    confirms only edit observations; the one June anecdote predates the
@@ -125,12 +136,19 @@ with Figma named as the primary design source.
     the latest push. (Design correction, RULE:BEHAVIOUR-FIRST — the
     prototype wrongly hardcoded localhost.) [verify: manual-run-claude]
       → coded 2026-07-15 in both plugin + .claude copies
-  - [ ] 2.2 Graceful-degrade when Code Connect / token export is
-    unavailable (already noted in command Notes — verify it actually
-    degrades, not just documented). [verify: manual-run-claude]
-  - [ ] 2.3 Clean stop when the Figma MCP is absent (preflight #1 says
-    stop — verify it actually does, with a clear message).
+  - [~] 2.2 Degrade policy specified (decision 9): **error always stops,
+    only clean absence degrades**. A tool that errors or a required input
+    missing → halt + report, no auto-fallback, no self-granted exception.
+    Preflight #1 splits Figma-MCP *required* tools (stop) from *optional*
+    Code Connect (proceed, note reduced fidelity). Defined degrade paths:
+    Code Connect absent → direct markup; token export absent → MOCKUP
+    mode. Every degraded path stated in output. [verify: manual-run-claude]
+      → coded 2026-07-15 (both copies synced)
+  - [~] 2.3 Clean stop when required Figma-MCP tools are absent:
+    preflight #1 says stop with a connect-the-server message if ANY of
+    metadata/design-context/variable-defs/screenshot is missing.
     [verify: manual-run-claude]
+      → coded 2026-07-15
 
 - [X] 3.0 **User Story:** As a plugin user, I can discover this tooling.
   [2/2]
@@ -146,13 +164,14 @@ with Figma named as the primary design source.
 
 - [~] 4.0 **User Story:** As the maintainer, the change is committed and
   versioned; the tagged release waits for verification. [1/3 coded]
-  - [~] 4.1 Commit moved + edited files (plugin/ copies, .claude/
+  - [X] 4.1 Commit moved + edited files (plugin/ copies, .claude/
     sources, CLAUDE.md, README, both manifests, CHANGELOG, this doc).
     [verify: code-only]
-  - [~] 4.2 Bump version 0.1.5 → 0.2.0 in `plugin/.claude-plugin/
+      → PR #25 merged to main 2026-07-15 (commit cc91109, 10 files)
+  - [X] 4.2 Bump version 0.1.5 → 0.2.0 in `plugin/.claude-plugin/
     plugin.json` + `.claude-plugin/marketplace.json`; add a 0.2.0
     CHANGELOG entry marked unreleased. [verify: code-only]
-      → coded 2026-07-15
+      → merged in PR #25 (cc91109)
   - [ ] 4.3 Cut the git tag `v0.2.0` + GitHub Release — DEFERRED until a
     verified end-to-end run exists (decision 8). [verify: manual]
 
