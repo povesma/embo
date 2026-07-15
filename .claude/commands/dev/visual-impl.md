@@ -122,10 +122,17 @@ Refresh only when the design system changes — not every run.
 Run this preflight before Step 0. If any check fails, stop and resolve
 it (or report the blocker); do not proceed on a broken tool.
 
-**1. Figma MCP** — needs `get_metadata`, `get_design_context`,
-`get_variable_defs`, `get_screenshot`, Code Connect. Not installable
-from here: if the Figma MCP tools are absent, stop and tell the user to
-connect the Figma MCP server, then re-run.
+**1. Figma MCP** — the design source; not installable from here.
+- **Required tools** — `get_metadata`, `get_design_context`,
+  `get_variable_defs`, `get_screenshot`. If ANY of these is absent,
+  **stop** and tell the user to connect the Figma MCP server, then
+  re-run. The loop cannot produce a design baseline without them.
+- **Optional enhancement** — Code Connect (`get_code_connect_map`).
+  When present, generation assembles from the project's real code
+  components (higher fidelity). When absent, do **not** stop: proceed
+  and generate markup directly, and state in the output that Code
+  Connect was unavailable so fidelity is reduced (no real-component
+  mapping).
 
 **2. Playwright CLI** — install if absent, then verify it runs:
 
@@ -280,6 +287,21 @@ screenshot paths so the result can be re-checked without re-running.
 - This is experimental. Once it has enough end-to-end runs to trust its
   guarantees, promote it to stable (freeze the arg/output contract) and
   drop the experimental note.
-- Degrade gracefully: if Code Connect or token export is unavailable,
-  still run the core loop (baseline → render → diff → review → gate)
-  and note the reduced fidelity in the output.
+- **Error always stops; only clean absence degrades.** A tool that
+  ERRORS, or a required input that is missing, halts the run — report it
+  and stop, never fall back to a lesser path to paper over a broken
+  tool. Do not grant yourself an exception; a real exception comes from
+  the user, explicitly, not automatically. Degradation below applies
+  ONLY to an OPTIONAL input that is legitimately, non-erroneously absent
+  (the project simply never authored it). Every degraded path is stated
+  in the output so the user can object.
+  - **Code Connect absent** (project never set it up — the common case)
+    → generate markup directly instead of assembling real components
+    (preflight #1); note it in the output.
+  - **Token export absent** (no documented design system found in
+    Step 0) → run MOCKUP mode: baseline-image pixel diff instead of
+    SYSTEM-mode conformance. State that mockup mode ran and why.
+  - In every degraded run, the core loop still completes (baseline →
+    render → diff → review → gate); the output names what was reduced.
+    But if a *required* tool (Figma-MCP required set, Playwright CLI,
+    the target URL) fails or errors mid-run, stop — do not degrade.
