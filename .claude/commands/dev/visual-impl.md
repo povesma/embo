@@ -1,0 +1,285 @@
+# Visual Design Implementation (EXPERIMENTAL)
+
+**Status: experimental — usable, but the argument and output contract
+may change.** Not yet validated end-to-end enough to promise stability;
+pin a plugin version if you script around it. This command
+orchestrates a design-to-code loop that implements a Figma node and
+verifies it against the design with a numeric gate and an independent
+review agent. It drives the **Figma MCP** (design source) and the
+**Playwright CLI** (render / measure / probe), plus the
+`visual-qa-reviewer` agent.
+
+Browser automation uses the **Playwright CLI**, not the Playwright MCP:
+this command runs a scripted navigate → screenshot → resize → diff
+sequence — the token-efficient workload the CLI is built for — and never
+needs the MCP's persistent page introspection. Figma stays on MCP (no
+CLI equivalent).
+
+Origin: `~/artec/web-site/docs/ai-visual-design-fidelity.md`. The core
+thesis: keep machine vision, but surround it with (1) an extracted spec,
+(2) a real render, (3) a numeric diff against the Figma frame, (4) a
+review step SEPARATE from authoring. The same model that writes the code
+cannot be trusted to judge it.
+
+## When to Use
+
+- A designer hands you a Figma frame as ground truth and you must
+  implement it to the pixel in HTML/CSS/JS.
+- You want the build gated against the design, not against the author's
+  own opinion of the build.
+
+## Arguments
+
+```
+/dev:visual-impl <figma-node-url> <target-url>
+```
+
+- `<figma-node-url>` — a node-specific Figma URL (must contain
+  `node-id`). The command extracts `fileKey` and `nodeId` from it.
+- `<target-url>` — the URL where the built page under review is served.
+  This can be **any reachable origin**, not just localhost:
+  - a local dev server (`http://localhost:3000/pricing`),
+  - a hosted preview deploy (`https://pr-42.myapp.vercel.app/pricing`),
+  - a staging / review-app / sandbox environment.
+  The render → screenshot → diff loop only needs the URL to respond; it
+  does not care where it is hosted. **Caveat for hosted targets:** the
+  code you author must be *deployed* to that URL before the render
+  reflects it — unlike a local server, a preview deploy lags behind your
+  edits. Verify the target shows your latest change before trusting the
+  diff.
+
+If the URL has no `node-id`, stop and ask for a node-specific URL —
+the Figma tools require it.
+
+## Step 0: Is there a documented design system? (decides the whole mode)
+
+Before doing anything else, establish whether you are working against a
+**documented design system** or a **single mockup**. This changes the
+baseline, the generation method, and the verification gate.
+
+A "documented design system" is a three-layer source:
+
+```
+Tokens      → color / type / spacing primitives (e.g. an "Artec Foundation"
+              file, design-tokens export, Tailwind/CSS-var theme)
+Components  → per-component specs: Button, Breadcrumbs, Modal, Accordion,
+              Data table … each with variants, states, measurements
+Templates   → how components compose into a page (a "Patterns"/templates file)
+```
+
+**Detect it, in this order — first hit wins:**
+
+1. **User-provided** — the user named a Foundation/design-system file, a
+   templates/patterns file, or a tokens export. Use those node URLs.
+2. **In-repo** — look for a design-tokens source or component library:
+   `tokens.json`, `design-tokens.*`, a Tailwind theme with custom
+   tokens, a Storybook setup, or **Code Connect** mappings
+   (`*.figma.tsx` / `get_code_connect_map`). Use the Glob tool, not
+   Bash loops.
+3. **In Figma** — the linked file references a published library
+   (`get_variable_defs` returns named token roles like
+   `Themes/Button/button-primary`, not raw hex). That naming means a
+   system exists even if you were not handed it.
+
+**Then branch:**
+
+- **System found → SYSTEM MODE.** Build a `design-contract` (Step 0a),
+  generate by *assembling documented components* constrained to tokens,
+  and verify by **conformance** (Step 4-SYSTEM), not pixel diff. This is
+  the preferred, higher-fidelity path.
+- **No system, single mockup → MOCKUP MODE.** Fall back to the
+  baseline-image pixel-diff loop described in the original steps below.
+  State explicitly in your output that you ran in mockup mode and why
+  (no documented system found), since its guarantees are weaker.
+
+If you are unsure which mode applies, **ask the user** whether a
+documented design system exists and where — do not silently assume a
+single mockup is the whole spec. (A single node can be one frame of a
+multi-frame review board; treating it as the spec produced a meaningless
+result in early testing.)
+
+### Step 0a: Build the design-contract (SYSTEM MODE only)
+
+Extract the system **once** into a cached, machine-readable contract so
+every later run (and every page) reads the cache, not Figma live —
+otherwise the tool is too slow to use.
+
+- Tokens: `get_variable_defs` on the Foundation/token node → full
+  color / type ramp / spacing scale, by named role.
+- Components: `get_design_context` (and `get_metadata`) on each
+  component node the page uses (Button, Breadcrumbs, etc.) → variants,
+  states, measurements, and the **defined** radius/padding/states.
+- Templates: `get_metadata` on the templates node → the canonical block
+  order and which components a page of this type must contain.
+- Code Connect: `get_code_connect_map` → which Figma components map to
+  real code components (so generation can place real components).
+
+Write this to `tmp/design-contract.json` (or a project-chosen path).
+Refresh only when the design system changes — not every run.
+
+## Prerequisites — check first, install if missing
+
+Run this preflight before Step 0. If any check fails, stop and resolve
+it (or report the blocker); do not proceed on a broken tool.
+
+**1. Figma MCP** — needs `get_metadata`, `get_design_context`,
+`get_variable_defs`, `get_screenshot`, Code Connect. Not installable
+from here: if the Figma MCP tools are absent, stop and tell the user to
+connect the Figma MCP server, then re-run.
+
+**2. Playwright CLI** — install if absent, then verify it runs:
+
+```bash
+playwright-cli --version || npm install -g @playwright/test playwright-cli
+playwright-cli --version
+```
+
+The second `--version` must print a version. If it still fails, report
+the error and stop — the render/measure steps cannot run without it.
+
+**3. A reachable target URL** — some origin serving the current build
+of the code under review. This may be a local dev server OR a hosted
+preview / staging / sandbox environment. Confirm `<target-url>`
+responds before rendering (Step 3). Only start a server yourself if the
+target is local and startable; for a hosted URL, verify reachability —
+never try to start it.
+
+Storybook + addon-mcp and Uiprobe-style property audit are NOT required
+— they are later extensions. The core loop is Figma baseline → live
+render → pixel diff → separate reviewer → gate.
+
+## The Loop: Parse → Generate → Render → Measure → Correct → Gate
+
+### 1. Parse (build the spec — do NOT work from the image alone)
+
+- **SYSTEM MODE:** read the cached `design-contract.json` from Step 0a.
+  The contract IS the spec — tokens, component defs, and the template's
+  required block order. Do not re-pull from Figma if the cache is fresh.
+- **MOCKUP MODE:** `get_metadata` on the node for structure;
+  `get_design_context` for reference code + screenshot;
+  `get_variable_defs` for whatever tokens the node exposes. Map tokens
+  to the project's CSS vars / Tailwind so generation is constrained to
+  design-system values, not guessed hex/px.
+- In both modes, use **Code Connect** mappings to assemble from the
+  project's real components instead of reinventing markup.
+
+### 2. Generate (author under hard constraints)
+
+Author the implementation. Apply these generation constraints (from
+PSD2Code — they made generation deterministic, model-independent):
+
+- Integer coordinates for absolute positioning; no fractional px.
+- Element sizing derived from actual asset sizes, not parsed-JSON sizes.
+- Emit text only for nodes whose type is text.
+- Plan z-index explicitly; no overlap or out-of-bounds placement.
+- Constrain to the exported tokens; never hardcode a value a token
+  covers.
+
+### 3. Render
+
+- Ensure `<target-url>` is reachable.
+  - **Local, startable** → if the server is down and you know the start
+    command, start it and report the command you used.
+  - **Hosted (preview / staging / sandbox)** → do NOT try to start
+    anything. Confirm the URL responds; if the target deploys from your
+    branch, confirm it reflects your latest push (a preview lags your
+    edits — rendering a stale deploy makes the diff meaningless).
+  - If the URL does not respond, stop and report it — do not screenshot
+    a dead page.
+- `playwright-cli open <target-url>` (or `goto` on an open browser).
+
+### 4-SYSTEM. Verify by conformance (SYSTEM MODE — preferred)
+
+When a documented design system exists, pixel diff is the WRONG gate: a
+design system is applied across many pages, so the page will never match
+any single mockup pixel-for-pixel. Verify **conformance to the contract**
+instead, in three checks — all measured, each traceable to a named
+token / component / template entry:
+
+- **a. Token conformance** — read live CSS via `playwright-cli eval`
+  (computed styles of headings, body, buttons, surfaces). Every
+  color/size/space must resolve to a defined token. Report deviations as
+  "live `border-radius: 28px`, Button component defines `Npx`".
+- **b. Component conformance** — for each component on the page
+  (Button, Breadcrumbs, Accordion, Modal, Data table…), compare the
+  live element against its contract spec: variant, states, padding,
+  defined radius. Catch missing states (no hover/focus) and off-spec
+  values.
+- **c. Behavior conformance** — probe the interactions the system
+  specifies, live, **at each target breakpoint** (resize via
+  `playwright-cli resize <w> <h>`): sticky-on-scroll,
+  anchor-scroll-to-section,
+  accordion expand/collapse, modal focus, dropdown open. A scroll/click
+  probe PROVES behavior; a screenshot cannot. (Early testing caught a
+  tab bar that was `position: static` instead of the specified sticky —
+  only a real scroll probe revealed it.)
+- **d. Composition conformance** — compare the live block sequence
+  against the template's required block order; flag missing or
+  reordered sections (e.g. a tab bar missing two of its four tabs).
+
+Then go to step 5 (separate reviewer) with these findings. There is no
+pixel threshold in system mode; the gate is "zero high-severity
+conformance violations" plus the reviewer's verdict.
+
+### 4. Measure (MOCKUP MODE — put design and result side by side, numerically)
+
+- Baseline: `get_screenshot` on the Figma node (Figma MCP) → save path.
+- Live: `playwright-cli screenshot --filename=<path>` (full page or the
+  matching frame) → save path.
+- Numeric diff: use Playwright Test's `toHaveScreenshot({
+  maxDiffPixelRatio })` — the Playwright CLI is the `@playwright/test`
+  runner, so this is the default, first-class diff method (it writes
+  `-actual` / `-expected` / `-diff` images automatically). Record the
+  value and the threshold (default **maxDiffPixelRatio ≥ 0.01 fails**).
+  Only if no test runner is wired up, fall back to `looks-same`
+  mismatch %.
+- If the project exposes per-element CSS, capture live properties
+  (`playwright-cli eval`) for the reviewer (optional but high value).
+
+### 5. Correct (spawn the SEPARATE judge)
+
+Spawn the `visual-qa-reviewer` agent via the Agent tool. It runs in a
+clean context and did not author the code. Pass it:
+
+- `figma_baseline` (path), `live_render` (path)
+- `numeric_verdict` (metric, value, threshold)
+- `design_spec` / `live_properties` if available
+
+It returns measured findings + a PASS/FAIL verdict + ordered fixes.
+**Do not self-review in this command** — that defeats the purpose.
+
+### 6. Gate
+
+- If `verdict: FAIL` (diff ≥ threshold): apply the reviewer's ordered
+  fixes, then loop back to step 2. Cap at 3 iterations; if still
+  failing, stop and report the remaining findings for human judgement.
+- If `verdict: PASS`: report done, with the final numeric value and the
+  screenshot paths.
+
+**Merge is never approved on the model's opinion alone — only when the
+threshold passes.**
+
+## Critical distinction (do not conflate)
+
+| Question | Tool class |
+|---|---|
+| "Match the **design**?" | Design QA — Figma frame baseline (this command) |
+| "**Changed** between builds?" | Visual regression — Percy/Chromatic/Backstop |
+
+This command answers "match the design". It is NOT a regression tool;
+the baseline is the Figma frame, not a prior build.
+
+## Output
+
+Report: iterations run, final numeric verdict vs threshold, the
+reviewer's remaining findings (if any), and the saved baseline/live
+screenshot paths so the result can be re-checked without re-running.
+
+## Notes
+
+- This is experimental. Once it has enough end-to-end runs to trust its
+  guarantees, promote it to stable (freeze the arg/output contract) and
+  drop the experimental note.
+- Degrade gracefully: if Code Connect or token export is unavailable,
+  still run the core loop (baseline → render → diff → review → gate)
+  and note the reduced fidelity in the output.
