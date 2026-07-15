@@ -101,10 +101,12 @@ Step 5.
 
 ### Step 5: Phase 1 - Generate Parent Tasks
 
-Based on the tech design analysis, RLM complexity estimation, and historical
-velocity, create the file and generate the main, high-level tasks. Each parent
-task should be structured as a **user story** with clear deliverable outcomes.
-Use your judgment on how many - likely 5-10 user stories.
+Use the tech design analysis to create the file and generate the main,
+high-level tasks; use the RLM complexity estimate and historical velocity
+(Steps 2-3) only to judge how finely to break down the work — neither
+appears in the output. Each parent task should be structured as a **user
+story** with clear deliverable outcomes. Use your judgment on how many -
+likely 5-10 user stories.
 
 Present these tasks to the user **without sub-tasks yet**. Inform the user:
 "I have generated the high-level tasks. Ready to generate the sub-tasks?
@@ -233,8 +235,17 @@ This ensures the high-level plan aligns with user expectations before diving
 into details.
 
 ## Target Audience
-Assume the primary reader of the task list is a **junior developer** who will
-implement the feature.
+Assume the primary reader of the task list is **Claude Code**, which will
+implement the feature via `/embo:impl`. Write subtasks explicit and
+self-contained enough that no clarifying context is needed mid-implementation.
+
+## No Effort/Time Estimates
+
+**Never add a person-hours/days or story-points figure** to a task or a
+closing summary (e.g. "~3.5 person-days") — Claude Code implements these,
+not a person, and no data here calibrates complexity to elapsed time. RLM
+complexity + claude-mem velocity inform subtask granularity only. A
+summary line, if used, states counts only (stories, subtasks).
 
 ## Final Instructions
 1. **Create the task list file** as specified above
@@ -242,5 +253,7 @@ implement the feature.
    the PostToolUse hook captures it as a claude-mem observation
    automatically. No explicit save call needed.
 3. DO NOT start implementing the task list
-4. Use RLM complexity data + claude-mem velocity for realistic estimates
+4. Use RLM complexity data + claude-mem velocity to judge task-list
+   granularity (subtask count) — never to produce an effort/time figure
+   in the output (see "No Effort/Time Estimates" above)
 5. Suggest `/embo:impl` as next step
