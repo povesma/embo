@@ -246,16 +246,22 @@
     [verify: manual-run-claude]
     → absent; fixed a dangling ref in code-embo.build.jq [live] (2026-07-16)
 
-- [ ] 6.0 **User Story:** As an embo maintainer, I want the two known
+- [X] 6.0 **User Story:** As an embo maintainer, I want the two known
   claude-mem defects filed upstream, so that the free-text workaround and
   the version gate can eventually be retired.
-  - [ ] 6.1 Search the claude-mem GitHub for an existing issue on the
+  - [X] 6.1 Search the claude-mem GitHub for an existing issue on the
     broken `search(type=...)` custom-type filter; if none, open one with
     a minimal reproduction; record the link in the PRD's action item and
     the 3.7 code comment [verify: manual-run-user]
-  - [ ] 6.2 File a feature request for a documented mode-extension API
+    → no existing issue found (searched issues+PRs); filed
+    thedotmack/claude-mem#3279 with abstract-placeholder repro; link
+    recorded in PRD + improve.md marker [live] (2026-07-16)
+  - [X] 6.2 File a feature request for a documented mode-extension API
     (so the `code.json` patch stops being an unsupported-internals
     dependency); record the link in the tech-design [verify: manual-run-user]
+    → NOT re-filed: already exists as #1640 → canonical #2009, which is
+    CLOSED as NOT_PLANNED. Recorded in PRD upstream-action item; embo's
+    approach does not depend on it landing [live] (2026-07-16)
 
 ## Summary
 6 user stories, 35 subtasks. Stories 1-3 carry the implementation

@@ -251,11 +251,17 @@ configuring claude-mem works.
 ## Upstream action item
 
 - **Report the claude-mem search-filter bug** (asking for notes of a
-  custom category like "correction" returns nothing, though the notes
-  are saved; version 13.11.0). Search the claude-mem GitHub for an
-  existing issue; if none, open one with a minimal reproduction. Track
-  the issue link here so the `/embo:improve` workaround can be removed
-  once upstream fixes it.
+  custom category returns nothing, though the notes are saved; version
+  13.11.0). **Filed:**
+  https://github.com/thedotmack/claude-mem/issues/3279. The
+  `/embo:improve` free-text workaround can be removed once this is
+  fixed.
+- **Mode-extension API** (user modes dir + additive `observation_types`
+  merge + auto-generated `type_guidance`): already requested upstream
+  as #1640, redirected to canonical #2009, which is **CLOSED as
+  NOT_PLANNED**. Not re-filed. embo's approach does not depend on it —
+  the undocumented `CLAUDE_MEM_MODES_DIR` override already works; the
+  version gate + jq test guard against it changing.
 
 ## Next steps
 
