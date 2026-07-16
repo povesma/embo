@@ -65,9 +65,10 @@ evidence trail for the upstream bug report. Fetch full observations via
 `get_observations`, and keep only those with `type=correction`.
 
 > **Workaround marker** — the free-text fallback exists ONLY because
-> claude-mem 13.11.0's `search(type=...)` drops custom types. Track the
-> upstream issue (task 041, subtask 6.1) and remove this fallback once
-> it is fixed. Do not build new behavior on the free-text path.
+> claude-mem 13.11.0's `search(type=...)` drops custom types. Upstream
+> issue: https://github.com/thedotmack/claude-mem/issues/3279 — remove
+> this fallback once it is fixed. Do not build new behavior on the
+> free-text path.
 
 Read the local curation state (IDs already reviewed in a prior run):
 
