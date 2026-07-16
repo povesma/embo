@@ -114,21 +114,88 @@ line appears, the env var did not reach the worker process — check
 
 1. **The `type="correction"` SEARCH FILTER is broken in 13.11.0.**
    `search(type="correction")` returns nothing even though the row
-   exists — the MCP `search` tool's `type` parameter has a hardcoded
-   allowlist that drops unknown types. BUT plain-text/semantic search
-   finds the observation fine (it appears with its correction icon).
-   **Consequence for `/embo:improve`**: it must retrieve corrections via
-   free-text query (e.g. searching for correction-like content), NOT via
-   the `type=` filter. Do not build improve on the type filter.
+   exists. Root cause (confirmed against upstream source, fixed in
+   claude-mem PR #3289): on the worker runtime `type` is overloaded as a
+   *doc-type selector* accepting only `observations`/`sessions`/
+   `prompts`; any other value makes all search branches false, so
+   nothing is searched. (Not a "hardcoded allowlist" as first assumed —
+   that was the server path.) The real obs-type filter is a separate
+   `obs_type` param. **Consequence for `/embo:improve`**: it retrieves
+   corrections by a **direct SQL read** of `claude-mem.db`
+   (`WHERE type='correction' AND project=X`) via the `corrections_list`
+   lib function — NOT the MCP `search` tool. This is complete and
+   deterministic and stays correct even after #3289 merges. Filed:
+   issue #3279, fix PR #3289.
 
-2. **A correction must arrive as its own fresh top-level user prompt.**
+2. **OBSERVATIONS ARE TOOL-TRIGGERED, NOT MESSAGE-TRIGGERED (the real
+   blocker).** Confirmed 2026-07-17 from claude-mem's OWN docs
+   (`how-it-works` skill), not from guessing: *"Every Read, Edit, and
+   Bash that Claude makes turns into a compressed observation."* The
+   observer creates an observation FROM each of Claude's tool calls — it
+   does not process user messages as a primary input. **Consequence for
+   corrections:** a correction is a user *message*. If Claude's response
+   to it is pure conversation with no Read/Edit/Bash, there is NO tool
+   event for the observer to attach to, so nothing is created for that
+   turn — the correction is invisible. The 3 corrections that WERE
+   captured (29191/29205/29239) got in only because those turns were
+   immediately followed by tool work (editing the PRD/mode file), and
+   the observer folded the correction into that tool event's context.
+   This is why mid-session, conversation-only corrections ("use git
+   deliver", "why symlink?", "gh auth is not your business") were all
+   missed this session.
+
+   (An earlier draft of this finding blamed a `<request>` session-init
+   field — that was a WRONG guess from over-reading the worker log,
+   retracted after checking the docs. The real cause is the
+   tool-triggered capture model above.)
+
+   **This is architectural, not prompt-tuning.** The `correction` type
+   works and the classifier can recognize a correction *when it sees
+   one*, but the observer only "sees" turns that carry tool activity.
+
+   **DESIGNED SOLUTION (agreed 2026-07-17, not yet built — no new
+   hook).** Do NOT build a parallel observer. Instead, make corrections
+   reliably tool-adjacent by having Claude Code RESTATE the correction:
+   - **Behavioral rule (the load-bearing half):** "When the user
+     corrects how you work, restate your understanding of it as a
+     general do/don't rule in your next message, then act on it." Claude
+     acting on it produces a tool call, so the observer gets a turn to
+     attach to, with the correction restated in that turn's context.
+   - **Delivery channel — critical:** the rule must reach CLAUDE CODE,
+     not the claude-mem observer (the observer cannot change Claude's
+     behavior; if Claude never restates, there is nothing to catch).
+     Put it in `start.md` AND have `behavioral-reminder.sh` (the
+     existing `UserPromptSubmit` hook that already injects a CHECKLIST
+     from start.md every turn) inject it — so it fires in every session,
+     not only after `/embo:start`.
+   - **Observer prompt (secondary):** the already-broadened
+     `recording_focus` catches the restatement as `type=correction`. It
+     is secondary because it only catches what the behavior produces.
+   Rationale: keeps the "don't duplicate claude-mem's observer"
+   principle, needs no new hook or store, and works WITH the
+   tool-triggered model instead of fighting it.
+
+   Sub-finding (prompt tuning — necessary but NOT sufficient): the
+   initial `recording_focus` wording also framed corrections as explicit
+   redirects with no examples, so even a *visible* quiet correction
+   (a question/doubt/problem) would be under-caught. Fixed 2026-07-17:
+   broadened `recording_focus` + `type_guidance` + `skip_guidance` in
+   `code-embo.build.jq` to define a correction by function (any steering
+   of how Claude works, incl. indirect forms), list the indirect forms,
+   add few-shot examples, and capture the GENERAL do/don't rule.
+   Grounded in prior-art research (feedback taxonomy
+   evaluative/corrective/guidance/implicit; task-026 LLM-as-judge
+   notebook). Keep it — it helps once visibility is solved — but it does
+   NOT make the feature work on its own.
+
+3. **A correction must arrive as its own fresh top-level user prompt.**
    The observer only sees the user's words via `<user_request>`, which
    is populated only at the session-init boundary (a fresh prompt).
    A correction bundled mid-turn or not delivered as a new prompt is
    invisible to the observer. In practice corrections usually are fresh
    prompts, so this is acceptable.
 
-3. **Global + cross-project.** `CLAUDE_MEM_MODE` and the env var are
+4. **Global + cross-project.** `CLAUDE_MEM_MODE` and the env var are
    machine-wide; switching to `code-embo` changes capture for every repo
    on the machine (adds the correction type everywhere). This is why it
    ships as documented opt-in, not bundled plugin config.
