@@ -12,37 +12,73 @@ change proposal the user can submit upstream.
 
 ## When to Use
 
-- At the end of an `/impl` session (suggested automatically when
+- At the end of an `/embo:impl` session (suggested automatically when
   corrections were captured)
 - When you want to review accumulated feedback across sessions
 - Before submitting a GitHub issue with workflow improvements
 
 ## Process
 
-### Step 1: Query Pending Corrections
+### Step 0: Check correction capture is enabled
+
+Corrections are only saved if `/embo:enable-corrections` was run. Read
+the active claude-mem mode:
+
+```bash
+jq -r '.CLAUDE_MEM_MODE // "code"' ~/.claude-mem/settings.json
+```
+
+If it is **not** `code-embo`, correction capture was never turned on.
+Output exactly this and stop (do not say "nothing found"):
+
+> Correction capture is not turned on, so there are no corrections to
+> review. Run `/embo:enable-corrections` first, then use Claude
+> normally — corrections you give it will be saved for next time.
+
+This distinguishes "never enabled" from "enabled but nothing to
+review" (the latter is handled in Step 1).
+
+### Step 1: Query Corrections
+
+Query the correction observations. The typed filter is tried first;
+because claude-mem 13.11.0 has a broken `type=` filter for custom types
+(see the code comment referencing the upstream issue), fall back to a
+free-text query when the typed query returns nothing:
 
 ```
 mcp__plugin_claude-mem_mcp-search__search(
-  query="[TYPE: CORRECTION] [STATUS: pending]",
-  limit=50
+  query="correction", type="correction", project="<project-name>", limit=50
 )
 ```
 
-Fetch full observations via `get_observations` for all returned IDs.
+If that returns zero results, retry WITHOUT the type filter:
 
-Also query for already-curated corrections:
 ```
 mcp__plugin_claude-mem_mcp-search__search(
-  query="[TYPE: CORRECTION-STATUS]",
-  limit=100
+  query="user corrected redirected approach verification code style workflow",
+  project="<project-name>", limit=50
 )
 ```
 
-Extract curated IDs from `[ORIGINAL-ID: ...]` tags. Remove any
-correction whose ID appears in the curated set.
+Log which path returned results (typed vs free-text) — this is the
+evidence trail for the upstream bug report. Fetch full observations via
+`get_observations`, and keep only those with `type=correction`.
 
-If zero pending corrections remain, output:
-`"No pending corrections to review."` and stop.
+> **Workaround marker** — the free-text fallback exists ONLY because
+> claude-mem 13.11.0's `search(type=...)` drops custom types. Track the
+> upstream issue (task 041, subtask 6.1) and remove this fallback once
+> it is fixed. Do not build new behavior on the free-text path.
+
+Read the local curation state (IDs already reviewed in a prior run):
+
+```bash
+source "$CLAUDE_PLUGIN_ROOT/claude-mem/corrections-lib.sh"
+corrections_curation_read .claude/correction-curation.json
+```
+
+Remove any correction whose ID is in that list. If zero corrections
+remain after filtering, output `"No corrections to review."` and stop
+(this is the "enabled but nothing new" case).
 
 ### Step 2: Group by Category
 
@@ -67,10 +103,10 @@ For each category group, present to the user via AskUserQuestion:
 
 | Category | Primary target file |
 |---|---|
-| `verification` | `develop/impl.md` |
-| `code-style` | `develop/impl.md` § Code Style |
+| `verification` | `plugin/commands/impl.md` |
+| `code-style` | `plugin/commands/impl.md` § Code Style |
 | `workflow` | Varies — depends on workflow step |
-| `approach` | `develop/impl.md` § Critical Evaluation |
+| `approach` | `plugin/commands/impl.md` § Critical Evaluation |
 | `process` | May require new section or command |
 
 Read the target file during curation to provide a specific section
@@ -84,23 +120,23 @@ reference, not just the filename.
 
 ### Step 4: Mark Curated
 
-After user finishes reviewing all groups, save a curation log:
+After the user finishes reviewing all groups, persist the reviewed IDs
+to the local curation file so they do not resurface next run. There is
+no claude-mem write tool in the worker runtime (`save_memory` was
+removed), so this is a local, project-scoped file. Every reviewed
+correction — accepted OR rejected — is recorded as curated (a rejected
+one was a one-off, and must not resurface either):
 
-```
-mcp__plugin_claude-mem_mcp-search__save_memory(
-  title="Curation: {date} — {N} corrections reviewed",
-  text="[TYPE: CURATION-LOG]\n[DATE: {date}]\n[REVIEWED-IDS: {id1, id2, ...}]\n[ACCEPTED: {N}]\n[REJECTED: {M}]\n\nCorrection IDs reviewed: {list}\nAccepted groups: {summary}\nRejected groups: {summary}"
-)
+```bash
+source "$CLAUDE_PLUGIN_ROOT/claude-mem/corrections-lib.sh"
+corrections_curation_write .claude/correction-curation.json <reviewed-id>...
 ```
 
-Then for each reviewed correction, save a status observation:
-
-```
-mcp__plugin_claude-mem_mcp-search__save_memory(
-  title="Correction status: curated — {original title}",
-  text="[TYPE: CORRECTION-STATUS]\n[ORIGINAL-ID: {id}]\n[STATUS: curated]\n[DECISION: accepted|rejected]\n[CURATION-DATE: {date}]"
-)
-```
+`corrections_curation_write` merges and dedups against any existing
+curated IDs and writes atomically, so the file is never left truncated.
+It is disposable: if it is deleted, the only effect is that
+already-reviewed corrections resurface once (the corrections themselves
+live in claude-mem, not here).
 
 ### Step 5: Assemble Proposal
 
