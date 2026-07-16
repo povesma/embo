@@ -40,35 +40,36 @@ review" (the latter is handled in Step 1).
 
 ### Step 1: Query Corrections
 
-Query the correction observations. The typed filter is tried first;
-because claude-mem 13.11.0 has a broken `type=` filter for custom types
-(see the code comment referencing the upstream issue), fall back to a
-free-text query when the typed query returns nothing:
+Read the correction observations directly from claude-mem's relational
+source of truth. **Do NOT use the MCP `search` tool for this** — its
+`type=` filter is broken for custom types (it drops `correction` before
+querying; upstream issue
+https://github.com/thedotmack/claude-mem/issues/3279), and its
+free-text search is lossy (semantic ranking + `limit` can silently miss
+corrections). The `type` column is a plain string in the DB, so a
+direct SQL read returns every correction for the project,
+deterministically:
 
-```
-mcp__plugin_claude-mem_mcp-search__search(
-  query="correction", type="correction", project="<project-name>", limit=50
-)
-```
-
-If that returns zero results, retry WITHOUT the type filter:
-
-```
-mcp__plugin_claude-mem_mcp-search__search(
-  query="user corrected redirected approach verification code style workflow",
-  project="<project-name>", limit=50
-)
+```bash
+sqlite3 -json ~/.claude-mem/claude-mem.db \
+  "SELECT id, title, subtitle, narrative, created_at
+   FROM observations
+   WHERE type='correction' AND project='<project-name>'
+   ORDER BY created_at DESC"
 ```
 
-Log which path returned results (typed vs free-text) — this is the
-evidence trail for the upstream bug report. Fetch full observations via
-`get_observations`, and keep only those with `type=correction`.
+`<project-name>` is the current project (the working-directory
+basename, same value used elsewhere in embo). The `-json` flag yields
+an array of objects to parse directly. This reads the source `.db`, not
+the Chroma index — Chroma is the vector/full-text index built from this
+table and is not needed here.
 
-> **Workaround marker** — the free-text fallback exists ONLY because
-> claude-mem 13.11.0's `search(type=...)` drops custom types. Upstream
-> issue: https://github.com/thedotmack/claude-mem/issues/3279 — remove
-> this fallback once it is fixed. Do not build new behavior on the
-> free-text path.
+> **Why SQL and not the MCP tool** — corrections are correctly stored
+> AND indexed; the ONLY broken link is the MCP `search` tool's `type=`
+> argument validation (#3279). Reading the source table sidesteps that
+> entirely and is strictly more complete than free-text search. If a
+> future claude-mem release fixes #3279, the MCP path becomes a valid
+> alternative, but SQL remains correct.
 
 Read the local curation state (IDs already reviewed in a prior run):
 
@@ -81,16 +82,21 @@ Remove any correction whose ID is in that list. If zero corrections
 remain after filtering, output `"No corrections to review."` and stop
 (this is the "enabled but nothing new" case).
 
-### Step 2: Group by Category
+### Step 2: Group by Theme
 
-Parse each observation's `[CATEGORY: ...]` tag. Group observations:
+Correction observations do not carry a category tag — classify them
+yourself from their `title` / `subtitle` / `narrative`. Group them:
 
-1. Group by category (`verification`, `code-style`, `workflow`,
-   `approach`, `process`)
-2. Within each category, merge near-duplicates by comparing the
-   "What user wanted" text semantically
-3. Sort categories by total observation count, descending
-4. For each group, select 1-3 representative examples
+1. Assign each correction a theme from its content: `verification`
+   (check docs/web/real sources first), `code-style` (naming, comments,
+   simplicity), `workflow` (skip/add a step), `approach` (over-
+   engineering, wrong method), `process` (a standing "always do X"
+   rule). These themes map to target files in Step 3.
+2. Within each theme, merge near-duplicates by comparing the
+   "what the user wanted changed" meaning semantically.
+3. Sort themes by correction count, descending.
+4. For each group, select 1-3 representative examples (quote the
+   user's actual wording from `title`/`narrative`).
 
 ### Step 3: Interactive Curation
 

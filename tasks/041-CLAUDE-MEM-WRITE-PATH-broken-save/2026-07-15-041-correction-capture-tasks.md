@@ -173,12 +173,14 @@
     file intact, not truncated; then implement to pass [verify: auto-test]
     → 31 passed, 0 failed; write via mktemp+mv, garbage base falls back
     to empty [live] (2026-07-16)
-  - [X] 3.3 Rewrite `improve.md` Step 1 first search call (lines 24-29):
-    typed `search(type="correction")` first, fall back to free-text if
-    it returns zero; log which path was used (upstream-bug evidence)
-    [verify: manual-run-claude]
-    → live: typed search returned 0 (confirmed broken filter),
-    free-text fallback returned results [live] (2026-07-16)
+  - [X] 3.3 `improve.md` Step 1: read corrections via **direct SQL** on
+    `claude-mem.db` (`WHERE type='correction' AND project=X`), NOT the
+    MCP search tool [verify: manual-run-claude]
+    → design revised after investigation: MCP free-text fallback is
+    lossy (semantic rank + limit can miss corrections); the type= filter
+    is broken (#3279) but corrections ARE stored+indexed (Chroma: 44
+    rows), so SQL on the source table is complete + deterministic. Live:
+    SQL returned all 3 embo corrections, exact scope [live] (2026-07-16)
   - [X] 3.4 Delete `improve.md` Step 1 second search call (lines 33-39,
     CORRECTION-STATUS read-back); replace with a read of the local
     curation file [verify: code-only]
