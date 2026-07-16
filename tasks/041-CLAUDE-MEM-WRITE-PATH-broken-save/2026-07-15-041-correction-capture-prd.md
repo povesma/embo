@@ -253,9 +253,14 @@ configuring claude-mem works.
 - **Report the claude-mem search-filter bug** (asking for notes of a
   custom category returns nothing, though the notes are saved; version
   13.11.0). **Filed:**
-  https://github.com/thedotmack/claude-mem/issues/3279. The
-  `/embo:improve` free-text workaround can be removed once this is
-  fixed.
+  https://github.com/thedotmack/claude-mem/issues/3279, **fix PR:**
+  https://github.com/thedotmack/claude-mem/pull/3289. Root cause (from
+  upstream source): on the worker runtime `type` is overloaded as a
+  doc-type selector accepting only `observations`/`sessions`/`prompts`;
+  any other value silently searches nothing. The fix routes a
+  non-selector `type` into the observation-type filter. `/embo:improve`
+  reads via direct SQL and does NOT depend on this landing — the SQL
+  path stays correct either way.
 - **Mode-extension API** (user modes dir + additive `observation_types`
   merge + auto-generated `type_guidance`): already requested upstream
   as #1640, redirected to canonical #2009, which is **CLOSED as
