@@ -284,18 +284,27 @@ spans lines 85-103 — all verified live against the current file):
     subtitle, narrative, created_at FROM observations WHERE
     type='correction' AND project='<project>' ORDER BY created_at
     DESC"`. **Why SQL, not the MCP `search` tool** (decided after live
-    investigation): the MCP `search` tool's `type=` parameter is broken
-    for custom types (issue #3279) — it validates against a hardcoded
-    allowlist and drops `correction` before querying. Its free-text
-    fallback is **lossy**: it ranks by semantic similarity to a fixed
-    query string and caps at `limit`, so it can silently miss
-    corrections. Corrections ARE correctly stored (the `type` column is
-    a plain string) AND indexed in Chroma (verified: 44 rows with
-    `type=correction` metadata) — the ONLY broken link is the MCP
-    tool's argument validation. A direct SQL read on the relational
-    source of truth returns EVERY correction for the project,
-    deterministically, with exact `project` scoping. This is strictly
-    more complete than free-text search, not merely a workaround.
+    investigation): the MCP `search` tool's `type=` parameter does not
+    filter by observation type on the worker runtime (issue #3279).
+    Root cause, confirmed against upstream source (fixed in claude-mem
+    PR #3289): on the worker path, `type` is overloaded as a *doc-type
+    selector* accepting only `observations`/`sessions`/`prompts`; any
+    other value (a custom type like `correction`, or even a built-in
+    like `bugfix`) makes all three search branches false, so nothing is
+    searched → zero results. The real observation-type filter is only
+    reachable via a separate `obs_type` param. (An earlier reading
+    called this a hardcoded-allowlist drop — that was the *server*
+    path's shape; the worker path is this overloaded-selector
+    fallthrough.) The tool's free-text fallback is also **lossy**: it
+    ranks by semantic similarity to a fixed query string and caps at
+    `limit`, so it can silently miss corrections. Corrections ARE
+    correctly stored (the `type` column is a plain string) AND indexed
+    in Chroma (verified: 44 rows with `type=correction` metadata) — the
+    data is intact; only the tool's `type` handling is wrong. A direct
+    SQL read on the relational source of truth returns EVERY correction
+    for the project, deterministically, with exact `project` scoping —
+    and stays correct regardless of whether #3289 merges. Strictly more
+    complete than free-text search, not merely a workaround.
   - Step 1 second search call (lines 33-39, reading `CORRECTION-STATUS`
     observations) and Step 4 (lines 85-103, writing via `save_memory`)
     are **deleted**. Replaced by: read/write a local curation-state

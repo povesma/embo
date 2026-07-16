@@ -66,10 +66,10 @@ table and is not needed here.
 
 > **Why SQL and not the MCP tool** — corrections are correctly stored
 > AND indexed; the ONLY broken link is the MCP `search` tool's `type=`
-> argument validation (#3279). Reading the source table sidesteps that
-> entirely and is strictly more complete than free-text search. If a
-> future claude-mem release fixes #3279, the MCP path becomes a valid
-> alternative, but SQL remains correct.
+> handling on the worker runtime (issue #3279, fix PR #3289). Reading
+> the source table sidesteps that entirely and is strictly more
+> complete than free-text search. Even if #3289 merges, SQL remains
+> correct — no need to switch back.
 
 Read the local curation state (IDs already reviewed in a prior run):
 
