@@ -278,15 +278,24 @@ Steps:
 its first search call is lines 24-29, its second lines 33-39; Step 4
 spans lines 85-103 — all verified live against the current file):
 - **Changes**:
-  - Step 1 first search call (lines 24-29): replace
-    `search(query="[TYPE: CORRECTION] [STATUS: pending]")` with
-    `search(query="correction", type="correction")` attempted first,
-    **falling back** to an untyped free-text query
-    (`search(query="user corrected OR redirected approach")`) if the
-    typed query returns zero results — this directly encodes the PRD's
-    documented workaround for the broken `type=` filter without
-    silently hiding the underlying claude-mem bug (log which path was
-    used, for the upstream bug report evidence trail).
+  - Step 1 first search call (lines 24-29): replace the tag-based
+    `search(...)` with a **direct SQL read** of the source-of-truth DB:
+    `sqlite3 -json ~/.claude-mem/claude-mem.db "SELECT id, title,
+    subtitle, narrative, created_at FROM observations WHERE
+    type='correction' AND project='<project>' ORDER BY created_at
+    DESC"`. **Why SQL, not the MCP `search` tool** (decided after live
+    investigation): the MCP `search` tool's `type=` parameter is broken
+    for custom types (issue #3279) — it validates against a hardcoded
+    allowlist and drops `correction` before querying. Its free-text
+    fallback is **lossy**: it ranks by semantic similarity to a fixed
+    query string and caps at `limit`, so it can silently miss
+    corrections. Corrections ARE correctly stored (the `type` column is
+    a plain string) AND indexed in Chroma (verified: 44 rows with
+    `type=correction` metadata) — the ONLY broken link is the MCP
+    tool's argument validation. A direct SQL read on the relational
+    source of truth returns EVERY correction for the project,
+    deterministically, with exact `project` scoping. This is strictly
+    more complete than free-text search, not merely a workaround.
   - Step 1 second search call (lines 33-39, reading `CORRECTION-STATUS`
     observations) and Step 4 (lines 85-103, writing via `save_memory`)
     are **deleted**. Replaced by: read/write a local curation-state
@@ -374,8 +383,14 @@ requirement.
   `enable-corrections` run)
 - claude-mem worker process, via `worker.pid` — stop signal only; the
   hook infrastructure respawns it
-- `mcp__plugin_claude-mem_mcp-search__search` /
-  `get_observations` — read-only, used by rewritten `improve.md`
+- `~/.claude-mem/claude-mem.db` (SQLite, the relational source of
+  truth) — **read-only** `SELECT` by `improve.md` to enumerate
+  corrections by `type`+`project`. This is the correction-read path;
+  the MCP `search` tool is NOT used for it (its `type=` filter is
+  broken, #3279). claude-mem's Chroma index
+  (`~/.claude-mem/chroma/`) is the vector/full-text index built FROM
+  this DB (each Chroma record carries a `sqlite_id` back-reference); we
+  read the source table directly rather than the index.
 
 ### Error Handling
 
