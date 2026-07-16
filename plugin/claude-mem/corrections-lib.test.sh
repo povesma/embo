@@ -203,6 +203,31 @@ corrections_curation_write "$TMP/cur_atomic.json" 4
 assert_eq "curation file still valid after rewrite" "1 2 3 4" \
   "$(corrections_curation_read "$TMP/cur_atomic.json")"
 
+# ---- corrections_list (against a fixture DB) ----
+# Reads type='correction' rows for a project, newest first, as JSON.
+# Only runs if sqlite3 is available.
+if command -v sqlite3 >/dev/null 2>&1; then
+  export CORRECTIONS_DB="$TMP/fixture.db"
+  sqlite3 "$CORRECTIONS_DB" "CREATE TABLE observations(id INTEGER, project TEXT, type TEXT, title TEXT, subtitle TEXT, narrative TEXT, created_at TEXT);"
+  sqlite3 "$CORRECTIONS_DB" "INSERT INTO observations VALUES
+    (1,'embo','correction','older corr','s1','n1','2026-01-01T00:00:00Z'),
+    (2,'embo','correction','newer corr','s2','n2','2026-02-01T00:00:00Z'),
+    (3,'embo','discovery','not a corr','s3','n3','2026-03-01T00:00:00Z'),
+    (4,'other','correction','other project','s4','n4','2026-02-15T00:00:00Z');"
+
+  LIST="$(corrections_list embo)"
+  assert_eq "list returns only embo corrections (2)" "2" \
+    "$(printf '%s' "$LIST" | jq 'length')"
+  assert_eq "list excludes non-correction types" "false" \
+    "$(printf '%s' "$LIST" | jq '[.[].title] | contains(["not a corr"])')"
+  assert_eq "list excludes other projects" "false" \
+    "$(printf '%s' "$LIST" | jq '[.[].title] | contains(["other project"])')"
+  assert_eq "list is newest-first" "newer corr" \
+    "$(printf '%s' "$LIST" | jq -r '.[0].title')"
+else
+  printf 'SKIP: sqlite3 not available for corrections_list test\n'
+fi
+
 # ---- summary ----
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

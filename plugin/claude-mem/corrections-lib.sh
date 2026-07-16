@@ -139,3 +139,22 @@ corrections_curation_write() {
         last_run_at: $at
       }' > "$tmp" && mv "$tmp" "$file"
 }
+
+# The claude-mem relational DB. Overridable so tests target a fixture DB.
+CORRECTIONS_DB="${CORRECTIONS_DB:-$HOME/.claude-mem/claude-mem.db}"
+
+# corrections_list <project>
+#   Print every correction observation for <project> as a JSON array
+#   (id, title, subtitle, narrative, created_at), newest first. Reads the
+#   relational source of truth directly — NOT the MCP search tool, whose
+#   type= filter is broken for custom types (#3279). Keeping this in the
+#   lib lets /embo:improve call it as one bare command, so the approval
+#   dialog shows `corrections_list embo`, not a raw SQL pipeline.
+corrections_list() {
+  local project="$1"
+  sqlite3 -json "$CORRECTIONS_DB" \
+    "SELECT id, title, subtitle, narrative, created_at
+     FROM observations
+     WHERE type='correction' AND project='$project'
+     ORDER BY created_at DESC"
+}

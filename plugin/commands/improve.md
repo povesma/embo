@@ -40,41 +40,35 @@ review" (the latter is handled in Step 1).
 
 ### Step 1: Query Corrections
 
-Read the correction observations directly from claude-mem's relational
-source of truth. **Do NOT use the MCP `search` tool for this** — its
-`type=` filter is broken for custom types (it drops `correction` before
-querying; upstream issue
-https://github.com/thedotmack/claude-mem/issues/3279), and its
-free-text search is lossy (semantic ranking + `limit` can silently miss
-corrections). The `type` column is a plain string in the DB, so a
-direct SQL read returns every correction for the project,
-deterministically:
+Source the helper library, then list corrections for the current
+project with one bare call:
 
 ```bash
-sqlite3 -json ~/.claude-mem/claude-mem.db \
-  "SELECT id, title, subtitle, narrative, created_at
-   FROM observations
-   WHERE type='correction' AND project='<project-name>'
-   ORDER BY created_at DESC"
+source "$CLAUDE_PLUGIN_ROOT/claude-mem/corrections-lib.sh"
+corrections_list <project-name>
 ```
 
 `<project-name>` is the current project (the working-directory
-basename, same value used elsewhere in embo). The `-json` flag yields
-an array of objects to parse directly. This reads the source `.db`, not
-the Chroma index — Chroma is the vector/full-text index built from this
-table and is not needed here.
+basename, same value used elsewhere in embo). `corrections_list` prints
+a JSON array (id, title, subtitle, narrative, created_at), newest
+first, which you parse directly.
 
-> **Why SQL and not the MCP tool** — corrections are correctly stored
-> AND indexed; the ONLY broken link is the MCP `search` tool's `type=`
-> handling on the worker runtime (issue #3279, fix PR #3289). Reading
-> the source table sidesteps that entirely and is strictly more
-> complete than free-text search. Even if #3289 merges, SQL remains
-> correct — no need to switch back.
+Keep it a single bare call — do not inline the SQL. The function reads
+claude-mem's relational source of truth; a raw multi-line
+`sqlite3 "SELECT ..."` in the command would trip the approval dialog
+every run (RULE:AVOID-APPROVAL).
+
+> **Why the DB and not the MCP `search` tool** — the MCP `type=` filter
+> is broken for custom types on the worker runtime (issue #3279, fix PR
+> #3289), and its free-text fallback is lossy (semantic ranking +
+> `limit` can silently miss corrections). Corrections are correctly
+> stored AND indexed; only the tool's `type` handling is wrong, so
+> reading the source table is both a sidestep and strictly more
+> complete. Even if #3289 merges, this stays correct.
 
 Read the local curation state (IDs already reviewed in a prior run):
 
 ```bash
-source "$CLAUDE_PLUGIN_ROOT/claude-mem/corrections-lib.sh"
 corrections_curation_read .claude/correction-curation.json
 ```
 

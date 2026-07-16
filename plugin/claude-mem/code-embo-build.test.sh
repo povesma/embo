@@ -77,8 +77,15 @@ assert_eq "type_guidance no longer says 6 options" "false" "$GUIDANCE_NO_6"
 RF_APPENDED="$(jq -r '.prompts.recording_focus | contains("correction")' "$OUT")"
 assert_eq "recording_focus mentions correction" "true" "$RF_APPENDED"
 
-SG_APPENDED="$(jq -r '.prompts.skip_guidance | contains("corrected how Claude works")' "$OUT")"
+SG_APPENDED="$(jq -r '.prompts.skip_guidance | contains("steered how Claude works")' "$OUT")"
 assert_eq "skip_guidance has the correction exception" "true" "$SG_APPENDED"
+
+# The broadened wording must reach the observer: recording_focus names the
+# indirect forms (questions/doubt/problems) and the general-rule framing.
+RF_INDIRECT="$(jq -r '.prompts.recording_focus | contains("questions a choice")' "$OUT")"
+assert_eq "recording_focus covers indirect corrections" "true" "$RF_INDIRECT"
+RF_RULE="$(jq -r '.prompts.recording_focus | contains("GENERAL RULE")' "$OUT")"
+assert_eq "recording_focus asks for the general rule" "true" "$RF_RULE"
 
 # ---- 4.3 run against the actually-installed code.json ----
 CM_DIR="$HOME/.claude/plugins/cache/thedotmack/claude-mem"

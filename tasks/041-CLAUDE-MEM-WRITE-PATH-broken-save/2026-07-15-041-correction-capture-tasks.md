@@ -265,8 +265,29 @@
     CLOSED as NOT_PLANNED. Recorded in PRD upstream-action item; embo's
     approach does not depend on it landing [live] (2026-07-16)
 
+- [ ] 7.0 **User Story:** As an embo user, I want the corrections I give
+  mid-session to actually be captured, so `/embo:improve` sees them —
+  not just the rare tool-adjacent ones. (DESIGNED, NOT BUILT — see
+  FINDINGS limitation #2. Deferred to a focused follow-up.)
+  - [ ] 7.1 Add a behavioral rule to `start.md`: "When the user corrects
+    how you work, restate your understanding of it as a general do/don't
+    rule in your next message, then act on it." [verify: code-only]
+  - [ ] 7.2 Have `behavioral-reminder.sh` inject that rule every turn
+    (same CHECKLIST channel it already uses), so it reaches Claude Code
+    in every session, not only after `/embo:start` [verify: auto-test]
+  - [ ] 7.3 Live-validate: give a conversation-only correction, confirm
+    Claude restates it AND it lands as a `type=correction` row
+    [verify: manual-run-claude]
+  - Rationale (why this shape, not a new hook): observations are
+    tool-triggered (claude-mem how-it-works). Making Claude restate the
+    correction produces a tool-adjacent turn the observer can catch —
+    no parallel observer, keeps the "don't duplicate claude-mem"
+    principle. The behavioral rule is load-bearing; the already-
+    broadened observer prompt only catches what it produces.
+
 ## Summary
-6 user stories, 35 subtasks. Stories 1-3 carry the implementation
-(a sourceable `corrections-lib.sh`, two new commands, and the
-improve.md rewrite); story 4 is the jq safety test; story 5 is
-docs/ignore hygiene; story 6 is upstream follow-up.
+7 user stories. Stories 1-3 carry the implementation (a sourceable
+`corrections-lib.sh`, two new commands, and the improve.md rewrite);
+story 4 is the jq safety test; story 5 is docs/ignore hygiene; story 6
+is upstream follow-up; story 7 (designed, not built) fixes mid-session
+correction visibility via a restate-the-correction behavioral rule.
