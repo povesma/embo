@@ -49,8 +49,10 @@ under `plugin/`; the manifests are `.claude-plugin/marketplace.json`
      claude-mem or RLM
 
 4. **Commands** (`plugin/commands/`)
-   - 17 commands: 15 flat (`/embo:<name>`) + `research/` subdir
-     (`/embo:research:examine`, `/embo:research:verify`)
+   - 19 commands: 17 flat (`/embo:<name>`) + `research/` subdir
+     (`/embo:research:examine`, `/embo:research:verify`). The flat set
+     includes `/embo:enable-corrections` and
+     `/embo:disable-corrections` (opt-in correction capture, task 041).
    - Each integrates RLM + claude-mem via Bash and MCP tools
    - Commands invoke RLM as a bare `rlm_repl` (the `plugin/bin/`
      wrapper) — never inline `${CLAUDE_PLUGIN_ROOT}/...rlm_repl.py`,
@@ -71,14 +73,16 @@ see README §macOS / Linux Installation.
 
 Commands use MCP tools (requires plugin):
 - `mcp__plugin_claude-mem_mcp-search__search`
-- `mcp__plugin_claude-mem_mcp-search__save_memory`
+- `mcp__plugin_claude-mem_mcp-search__get_observations`
 
-Commands should **fail with clear error** if claude-mem unavailable.
+Observations are written by claude-mem's automatic observer, not by a
+manual command call. Commands should **fail with clear error** if
+claude-mem unavailable.
 
 ### Runtime: stay on worker tools (do not migrate to server-beta yet)
 
 These commands target the **worker** runtime (`CLAUDE_MEM_RUNTIME=worker`)
-and use `search` / `get_observations` / `save_memory`. As of the
+and use `search` / `get_observations`. As of the
 2026-06-07 plugin update, claude-mem also exposes a `server-beta`
 runtime with a REST backend (`/v1/*`) and a new tool family
 (`observation_search`, `observation_context`, `observation_add`,
@@ -124,9 +128,14 @@ plugin/                          # THE PLUGIN ROOT (${CLAUDE_PLUGIN_ROOT})
 │   ├── examine-advisor.md       # /embo:research:examine agent
 │   ├── approach-validator.md    # /embo:research:verify agent
 │   └── visual-qa-reviewer.md    # /embo:visual-impl judge (experimental)
-├── commands/                    # 17 commands; research/ → nested ns
+├── commands/                    # 19 commands; research/ → nested ns
 │   ├── visual-impl.md           # design-to-code loop (experimental)
+│   ├── enable-corrections.md    # opt-in correction capture (task 041)
+│   ├── disable-corrections.md   # reverse enable-corrections
 │   └── research/                # examine.md, verify.md
+├── claude-mem/                  # claude-mem integration helpers
+│   ├── code-embo.build.jq       # jq: add `correction` type to code mode
+│   └── corrections-lib.sh       # sourceable enable/disable/curation fns
 ├── profiles/                    # quality.yaml, fast.yaml, minimal.yaml
 ├── hooks/
 │   ├── hooks.json               # registers the 3 event handlers

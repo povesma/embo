@@ -29,6 +29,9 @@ Desktop.ini
 .claude/rlm_state/
 *.pkl
 
+# Correction curation bookkeeping (per-project, written by /embo:improve)
+.claude/correction-curation.json
+
 # Scratch dir for redirected command output (read back via the Read tool)
 tmp/
 
