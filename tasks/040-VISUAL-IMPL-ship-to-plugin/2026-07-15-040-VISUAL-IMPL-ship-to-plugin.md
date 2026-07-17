@@ -75,6 +75,10 @@ with Figma named as the primary design source.
    sync manually — a known drift risk (this session hand-synced 4 files).
    The maintainer may later switch to a single source of truth; if so,
    drop the `.claude/` copies and treat `plugin/` as canonical.
+   → RESOLVED 2026-07-17: the `.claude/commands/dev/visual-impl.md`
+   dogfood copy was deleted; `plugin/` is now the sole source of truth
+   for this command. (The `.claude/agents/` reviewer copy, if still
+   present, remains a separate sync item.)
 
 8. **Version → 0.2.0; git tag + GitHub Release DEFERRED until verified.**
    Adding a user-facing command + agent is a minor feature bump. But the
@@ -150,10 +154,18 @@ with Figma named as the primary design source.
 
 - [~] 1.0 **User Story:** As a plugin user, I can invoke
   `/embo:visual-impl` and it uses the Playwright CLI for browser work.
-  [4/4 coded, pending verification]
+  [4/4 coded; 1.4 verified live; 1.1/1.2/1.3 pending a live end-to-end
+  run. Command registration + tool contract corrected 2026-07-17.]
   - [~] 1.1 Switch browser automation from Playwright MCP to CLI in the
-    source command (`open`, `eval`, `resize`, `screenshot`;
-    `toHaveScreenshot` diff). Figma kept on MCP. [verify: manual-run-claude]
+    source command (`open`, `eval`, `resize`, `screenshot`). Figma kept
+    on MCP. [verify: manual-run-claude]
+      → CORRECTED 2026-07-17: the original coding wired the diff to
+        `toHaveScreenshot`, which does NOT exist in `@playwright/cli`
+        (it is `@playwright/test`-only). Rewrote the gate to
+        conformance-first (Decision 4); pixel diff via standalone
+        pixelmatch is now a MOCKUP-only fallback. CLI `eval`/`resize`
+        verified present in the installed binary. Still pending a live
+        end-to-end run.
   - [X] 1.2 Prerequisites preflight: Figma-MCP presence check,
     Playwright-CLI install-if-absent + functional re-check, reachable-
     URL note. [verify: manual-run-claude]
@@ -179,9 +191,16 @@ with Figma named as the primary design source.
     `/embo:visual-impl`) and `visual-qa-reviewer.md` →
     `plugin/agents/`. [verify: code-only]
       → done 2026-07-15 (claude-mem obs 28722)
-  - [~] 1.4 Rewrite `/dev:visual-impl` → `/embo:visual-impl` (2 refs);
+  - [X] 1.4 Rewrite `/dev:visual-impl` → `/embo:visual-impl` (2 refs);
     strip `~/artec/...` origin path from the shipped command.
     [verify: code-only]
+      → INCOMPLETE until 2026-07-17: the shipped command lacked YAML
+        frontmatter, so it did not register as `/embo:visual-impl` at
+        all, and a stale dogfood copy `.claude/commands/dev/
+        visual-impl.md` kept surfacing `/dev:visual-impl`. Fixed: added
+        frontmatter (registration VERIFIED live — skill list now shows
+        `embo:visual-impl`), deleted the stale dev/ copy (git rm).
+        Now genuinely done.
 
 - [~] 2.0 **User Story:** As a plugin user, the command fails cleanly
   when its dependencies are absent, and works against any target origin.
