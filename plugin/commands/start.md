@@ -137,6 +137,46 @@ user decide on a false picture — that loses work.
 <!-- /CHECKLIST -->
 
 
+<!-- RULE:RESTATE-CORRECTION -->
+### Restate a correction before acting on it
+
+When the user corrects how you work — redirects your approach, fixes
+your style, tells you to verify externally, or names a workflow habit
+to change — **restate your understanding of it as a general do/don't
+rule in your next message, then act on it.** State the rule in one
+line ("Rule I'll follow: <do/don't>"), then carry out the corrected
+work.
+
+Why this matters beyond good manners: claude-mem's observer records
+observations from your tool activity, not from the user's raw message.
+A correction you answer with pure conversation leaves no trace for
+`/embo:improve` to learn from. Restating it and then acting produces a
+tool-adjacent turn that carries the correction, so it is captured as a
+`correction` observation. If you never restate, the correction is lost.
+
+**Do:**
+- Name the general rule, not just the one incident ("Rule I'll follow:
+  check Context7 before asserting an API signature", not "ok I'll check
+  the docs for this one")
+- Restate then act in the same turn — the acting is what makes it stick
+
+**Do not:**
+- Acknowledge a correction with conversation only and no restatement
+- Announce that you are saving it — capture is automatic and silent
+
+<!-- CHECKLIST:RESTATE-CORRECTION
+     This block is injected verbatim on every user prompt by
+     hooks/behavioral-reminder.sh. Keep it short; edit it here only. -->
+[RESTATE-CORRECTION checklist] If this turn corrects how you work
+(approach, style, verify-externally, a workflow habit): restate it as
+a general do/don't rule in one line ("Rule I'll follow: <do/don't>"),
+then act on it in the same turn. State the general rule, not just the
+one incident. Do not acknowledge a correction with conversation only —
+the restatement + acting is what makes claude-mem capture it as a
+correction for /embo:improve. Never announce the capture.
+<!-- /CHECKLIST -->
+
+
 <!-- RULE:PLAIN-ENGLISH -->
 ### Write in plain English
 

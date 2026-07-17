@@ -224,9 +224,35 @@ if command -v sqlite3 >/dev/null 2>&1; then
     "$(printf '%s' "$LIST" | jq '[.[].title] | contains(["other project"])')"
   assert_eq "list is newest-first" "newer corr" \
     "$(printf '%s' "$LIST" | jq -r '.[0].title')"
+
+  # A project name that is not a plain identifier (here an apostrophe, the
+  # SQL-injection vector AND a query-breaker) must be rejected before it
+  # reaches SQL: non-zero return, no output, no crash.
+  BAD_OUT="$(corrections_list "x'; DROP TABLE observations; --" 2>/dev/null)"
+  BAD_RC=$?
+  assert_eq "list rejects a non-identifier project (rc)" "2" "$BAD_RC"
+  assert_eq "list emits nothing for a bad project" "" "$BAD_OUT"
+  # The injection did not run: the table still has all 4 rows.
+  assert_eq "list rejection left the table intact" "4" \
+    "$(sqlite3 "$CORRECTIONS_DB" 'SELECT count(*) FROM observations;')"
+  # A legitimate name with a hyphen/dot/underscore still works.
+  sqlite3 "$CORRECTIONS_DB" "INSERT INTO observations VALUES
+    (5,'my-repo.v2_x','correction','ok name','s5','n5','2026-04-01T00:00:00Z');"
+  assert_eq "list accepts hyphen/dot/underscore names" "1" \
+    "$(corrections_list 'my-repo.v2_x' | jq 'length')"
 else
   printf 'SKIP: sqlite3 not available for corrections_list test\n'
 fi
+
+# ---- curation_write is fail-safe on a non-numeric id ----
+# A stray non-numeric argument must not abort the write and lose the
+# session's curation; it is skipped, valid ids are still recorded.
+corrections_curation_write "$TMP/cur_mixed.json" 10 notanumber 20
+assert_eq "curation write skips a non-numeric id, keeps the rest" "10 20" \
+  "$(corrections_curation_read "$TMP/cur_mixed.json")"
+assert_eq "curation file valid JSON after mixed-id write" "true" \
+  "$(jq -e 'type == "object"' "$TMP/cur_mixed.json" >/dev/null 2>&1 \
+     && echo true || echo false)"
 
 # ---- summary ----
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"

@@ -1,7 +1,9 @@
 # 041 — Correction capture via claude-mem custom mode (proven working)
 
 **Status**: Mechanism proven end-to-end 2026-07-15. Ships as opt-in
-per-user config. Two known limitations recorded below.
+per-user config. Mid-session conversation-only capture (limitation #2)
+resolved + validated live 2026-07-17. Remaining limitations recorded
+below.
 
 This supersedes the SEED's framing ("no write path, use a local file")
 and task 009's PRD assumption ("claude-mem has no write API, corrections
@@ -127,8 +129,18 @@ line appears, the env var did not reach the worker process — check
    deterministic and stays correct even after #3289 merges. Filed:
    issue #3279, fix PR #3289.
 
-2. **OBSERVATIONS ARE TOOL-TRIGGERED, NOT MESSAGE-TRIGGERED (the real
-   blocker).** Confirmed 2026-07-17 from claude-mem's OWN docs
+2. **OBSERVATIONS ARE TOOL-TRIGGERED, NOT MESSAGE-TRIGGERED — RESOLVED
+   2026-07-17 (was the real blocker).** The RESTATE-CORRECTION solution
+   below is now BUILT (stories 7.1/7.2) and VALIDATED LIVE (story 7.3):
+   a conversation-only correction given this session ("stop reminding me
+   about commit") was captured as obs **#30025, `type=correction`**
+   (session b4eca6d6, prompt 4, title "Don't prompt user to commit
+   changes") — because the behavioral rule made Claude restate it and
+   act, giving the tool-triggered observer a turn to attach to. Both
+   halves of the loop (restate + `type=correction` row) proven against
+   the live DB. The analysis of the blocker follows.
+
+   Confirmed 2026-07-17 from claude-mem's OWN docs
    (`how-it-works` skill), not from guessing: *"Every Read, Edit, and
    Bash that Claude makes turns into a compressed observation."* The
    observer creates an observation FROM each of Claude's tool calls — it
@@ -153,9 +165,9 @@ line appears, the env var did not reach the worker process — check
    works and the classifier can recognize a correction *when it sees
    one*, but the observer only "sees" turns that carry tool activity.
 
-   **DESIGNED SOLUTION (agreed 2026-07-17, not yet built — no new
-   hook).** Do NOT build a parallel observer. Instead, make corrections
-   reliably tool-adjacent by having Claude Code RESTATE the correction:
+   **SOLUTION (built + validated 2026-07-17, no new hook).** Do NOT
+   build a parallel observer. Instead, make corrections reliably
+   tool-adjacent by having Claude Code RESTATE the correction:
    - **Behavioral rule (the load-bearing half):** "When the user
      corrects how you work, restate your understanding of it as a
      general do/don't rule in your next message, then act on it." Claude
@@ -188,12 +200,25 @@ line appears, the env var did not reach the worker process — check
    notebook). Keep it — it helps once visibility is solved — but it does
    NOT make the feature work on its own.
 
-3. **A correction must arrive as its own fresh top-level user prompt.**
-   The observer only sees the user's words via `<user_request>`, which
-   is populated only at the session-init boundary (a fresh prompt).
-   A correction bundled mid-turn or not delivered as a new prompt is
-   invisible to the observer. In practice corrections usually are fresh
-   prompts, so this is acceptable.
+3. **A correction must arrive as its own user prompt (any turn, not
+   only session-init).** The observer sees the user's words via
+   `<user_request>`, which is refreshed on **every** `UserPromptSubmit`
+   — not only the first prompt of the session. Confirmed against
+   `worker-service.cjs` (2026-07-17, verify pass): `handleSessionInit
+   ByClaudeId` runs on every prompt, branches on `promptNumber>1`
+   ("CONTINUATION"), and calls `initializeSession(..., currentPromptText,
+   promptNumber)` each time (log line: "Updating userPrompt for
+   continuation"); both the init template (`sb`) and the continuation
+   template (`ab`) embed `<user_request>${userPrompt}</user_request>`,
+   and the next generator start carries the refreshed value. So a
+   mid-session correction delivered as a fresh prompt IS seen — the
+   only real requirement is that it be a top-level user prompt (a
+   correction bundled inside another turn is not).
+
+   (An earlier draft of this limitation claimed `<user_request>` is
+   "populated only at the session-init boundary" — that was WRONG,
+   corrected 2026-07-17 after tracing the actual code. It described
+   only the first prompt, not every prompt.)
 
 4. **Global + cross-project.** `CLAUDE_MEM_MODE` and the env var are
    machine-wide; switching to `code-embo` changes capture for every repo
@@ -235,3 +260,8 @@ a maintenance step to document for users.
   capture).
 - `search(type="correction")` → empty; free-text search → finds 29191
   (search-filter limitation, item 1 above). [live]
+- Correction observation id 30025, `type=correction`, project `embo`,
+  title "Don't prompt user to commit changes" — conversation-only
+  correction (no tool call in the correcting turn), captured via the
+  RESTATE-CORRECTION rule; session b4eca6d6, prompt 4. Proves
+  limitation #2's solution end-to-end. [live] (2026-07-17)

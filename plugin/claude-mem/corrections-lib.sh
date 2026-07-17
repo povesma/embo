@@ -131,7 +131,9 @@ corrections_curation_write() {
   else
     existing='[]'
   fi
-  ids_json="$(printf '%s\n' "$@" | jq -R 'tonumber' | jq -s '.')"
+  # Coerce each arg to a number, silently dropping any non-numeric one, so
+  # a stray bad id can never abort the write and lose the reviewed set.
+  ids_json="$(printf '%s\n' "$@" | jq -R '(try tonumber catch empty)' | jq -s '.')"
   jq -n --argjson old "$existing" --argjson new "$ids_json" \
      --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
      '{
@@ -152,6 +154,14 @@ CORRECTIONS_DB="${CORRECTIONS_DB:-$HOME/.claude-mem/claude-mem.db}"
 #   dialog shows `corrections_list embo`, not a raw SQL pipeline.
 corrections_list() {
   local project="$1"
+  # Guard against SQL injection / query-breakage: the project name is a
+  # directory basename, but a name with an apostrophe (or worse) would
+  # break — or subvert — the interpolated query. Accept only the plain
+  # identifier characters a project name legitimately uses; reject
+  # anything else with rc 2 and no output.
+  case "$project" in
+    *[!A-Za-z0-9._-]* | "") return 2 ;;
+  esac
   sqlite3 -json "$CORRECTIONS_DB" \
     "SELECT id, title, subtitle, narrative, created_at
      FROM observations

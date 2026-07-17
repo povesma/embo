@@ -54,6 +54,16 @@ assert_contains "checklist mandates AskUserQuestion" \
 assert_contains "checklist keeps decide-first test" \
   "obvious best answer" "$OUT"
 
+# A SECOND CHECKLIST block (RESTATE-CORRECTION) is also extracted from
+# start.md and injected every turn — the hook captures every
+# CHECKLIST region, not just the first.
+assert_contains "restate-correction checklist injected" \
+  "RESTATE-CORRECTION checklist" "$OUT"
+assert_contains "restate checklist carries the restate instruction" \
+  "Rule I'll follow" "$OUT"
+assert_contains "restate checklist keeps both blocks (closing-choice still present)" \
+  "CLOSING-CHOICE checklist" "$OUT"
+
 # A git-related prompt additionally triggers the DEV-GIT reminder.
 GITOUT="$(run_hook '"please git commit my changes"')"
 assert_contains "git prompt triggers DEV-GIT reminder" \
