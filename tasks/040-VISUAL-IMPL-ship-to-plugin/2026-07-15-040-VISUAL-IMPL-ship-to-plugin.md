@@ -24,18 +24,19 @@ with Figma named as the primary design source.
 
 ## Decisions (this session)
 
-1. **Playwright CLI, not Playwright MCP, for browser automation.**
-   Verified against Microsoft's own docs via Context7
-   (`/microsoft/playwright-cli`): the CLI is "designed for modern coding
-   agents, token-efficient… avoids loading large tool schemas and
-   accessibility trees into the model context." The MCP is for
-   "exploratory automation, self-healing tests, long-running autonomous
-   workflows where maintaining continuous browser context matters more
-   than token cost." `visual-impl` runs a scripted navigate → screenshot
-   → resize → diff sequence — the CLI's exact target workload — so the
-   CLI is strictly better here. (The e2e test agents in task 033 are the
-   "self-healing/exploratory" workload and would keep the MCP; out of
-   scope here.)
+1. **Playwright CLI, not Playwright MCP, for browser automation
+   (HARD REQUIREMENT — user-stated, non-negotiable).** Capture, live CSS
+   reads, and interaction probes MUST run through the `@playwright/cli`
+   binary, NEVER the Playwright MCP. Rationale, re-verified 2026-07-17
+   against playwright.dev/agent-cli + independent benchmarks: MCP streams
+   full accessibility trees and Base64 screenshot bytes into the model
+   context (~114k tokens for a typical task); the CLI saves screenshots +
+   YAML snapshots to disk (`.playwright-cli/`) and returns file paths +
+   element refs (~27k tokens) — a ~4× token reduction, and faster (a
+   persistent daemon, no per-call MCP round-trip). This is a documented,
+   testable constraint, not an implementation preference — see AC-1.
+   (The e2e test agents in task 033 are the self-healing/exploratory
+   workload and keep the MCP; out of scope here.)
 
 2. **Figma stays on MCP** — there is no Figma CLI equivalent; design
    extraction (`get_variable_defs`, `get_design_context`, `get_metadata`,
@@ -45,11 +46,18 @@ with Figma named as the primary design source.
    the most popular design tool, so When-to-Use, arguments, and
    prerequisites call it out specifically.
 
-4. **The CLI switch also closed a real gap** — the numeric-diff step was
-   under-specified ("prefer toHaveScreenshot… otherwise looks-same"). The
-   CLI *is* the `@playwright/test` runner, so `toHaveScreenshot({
-   maxDiffPixelRatio })` (auto `-actual`/`-expected`/`-diff` images)
-   becomes the first-class diff method.
+4. **Conformance-first verification; pixel diff is a caveated fallback.**
+   The primary gate is (a) **token/property conformance** — read live
+   computed CSS via `playwright-cli eval` and compare numerically to the
+   named design tokens/component specs ("live `border-radius: 28px`,
+   token defines `16px`") — plus (b) an **independent visual-qa-reviewer**
+   7-category audit over the render + the Figma mockup. This is SYSTEM
+   MODE (Step 4-SYSTEM), the command's preferred path. Raw pixel diff
+   survives ONLY as a weak MOCKUP-mode fallback (no documented design
+   system), labelled as such: generous `maxDiffPixelRatio`, masking, and
+   the stated caveat that a design export never pixel-matches a render.
+   `playwright-cli` is used for capture + `eval` + `resize` only (`eval`
+   and `resize` verified present in the installed binary, 2026-07-17).
 
 6. **Target is any reachable URL, not just localhost (design fix).** The
    prototype hardcoded a local dev server. Corrected to `<target-url>`
@@ -94,6 +102,38 @@ with Figma named as the primary design source.
    RULE:ASSUME-BROKEN. Both files now carry an "experimental — contract
    may change" label instead of "PROTOTYPE". Promotion to stable is a
    later state, earned by real runs. See task 5.0.
+
+## Rejected decisions
+
+- **`toHaveScreenshot` as the first-class diff gate** (was Decision 4).
+  Rejected 2026-07-17: `@playwright/cli` (capture binary) is NOT
+  `@playwright/test` (the runner that owns `toHaveScreenshot`) — the diff
+  step could not run and broke the first live use. Superseded by
+  Decision 4 (conformance-first).
+- **Raw pixel diff against a Figma export as the gate.** Rejected: a
+  browser render never pixel-matches a design canvas (font-smoothing /
+  sub-pixel / anti-aliasing noise); kept only as a caveated MOCKUP-mode
+  fallback.
+- **Playwright MCP for browser automation.** Rejected: token-inefficient
+  (~4×) and slower than the CLI — see Decision 1.
+
+## Acceptance criteria
+
+- **AC-1 (no MCP for browser work):** every browser action in the
+  command — navigate, screenshot, computed-CSS read, resize, interaction
+  probe — invokes the `@playwright/cli` binary. No
+  `mcp__...playwright__browser_*` call appears in the browser-automation
+  path. (Figma MCP is separate and allowed.)
+- **AC-2 (conformance is the primary gate):** in SYSTEM MODE the pass/
+  fail verdict is driven by token/component/behavior conformance +
+  the visual-qa-reviewer audit, with no pixel-diff threshold. Pixel diff
+  appears only under MOCKUP MODE, explicitly labelled a weak fallback.
+- **AC-3 (no false tool claims):** the command contains no statement that
+  the capture CLI is the `@playwright/test` runner or that it provides
+  `toHaveScreenshot`.
+- **AC-4 (tool reality):** the `eval` and `resize` subcommands the gate
+  relies on exist in the installed `@playwright/cli` binary (verified
+  2026-07-17).
 
 ## Scope
 
