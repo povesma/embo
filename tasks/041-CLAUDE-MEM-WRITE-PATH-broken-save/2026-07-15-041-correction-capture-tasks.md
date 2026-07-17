@@ -265,19 +265,31 @@
     CLOSED as NOT_PLANNED. Recorded in PRD upstream-action item; embo's
     approach does not depend on it landing [live] (2026-07-16)
 
-- [ ] 7.0 **User Story:** As an embo user, I want the corrections I give
+- [X] 7.0 **User Story:** As an embo user, I want the corrections I give
   mid-session to actually be captured, so `/embo:improve` sees them —
-  not just the rare tool-adjacent ones. (DESIGNED, NOT BUILT — see
-  FINDINGS limitation #2. Deferred to a focused follow-up.)
-  - [ ] 7.1 Add a behavioral rule to `start.md`: "When the user corrects
+  not just the rare tool-adjacent ones. (BUILT + VALIDATED live via 7.3,
+  2026-07-17 — the RESTATE-CORRECTION rule turns a conversation-only
+  correction into a captured `type=correction` row.)
+  - [X] 7.1 Add a behavioral rule to `start.md`: "When the user corrects
     how you work, restate your understanding of it as a general do/don't
     rule in your next message, then act on it." [verify: code-only]
-  - [ ] 7.2 Have `behavioral-reminder.sh` inject that rule every turn
+    → added RULE:RESTATE-CORRECTION section + a verbatim
+    `[RESTATE-CORRECTION checklist]` CHECKLIST block for the hook to
+    inject (2026-07-17)
+  - [X] 7.2 Have `behavioral-reminder.sh` inject that rule every turn
     (same CHECKLIST channel it already uses), so it reaches Claude Code
     in every session, not only after `/embo:start` [verify: auto-test]
-  - [ ] 7.3 Live-validate: give a conversation-only correction, confirm
+    → generalized the awk extractor to capture EVERY CHECKLIST region
+    (was single CLOSING-CHOICE block); 13 passed, 0 failed [live]
+    (2026-07-17)
+  - [X] 7.3 Live-validate: give a conversation-only correction, confirm
     Claude restates it AND it lands as a `type=correction` row
     [verify: manual-run-claude]
+    → live: user gave a conversation-only correction ("stop reminding me
+    about commit"); RULE:RESTATE-CORRECTION fired, restated as a general
+    do/don't rule + acted; observer captured obs #30025 (type=correction,
+    session b4eca6d6, prompt 4): "Don't prompt user to commit changes".
+    Both halves (restate + type=correction row) proven [live] (2026-07-17)
   - Rationale (why this shape, not a new hook): observations are
     tool-triggered (claude-mem how-it-works). Making Claude restate the
     correction produces a tool-adjacent turn the observer can catch —
