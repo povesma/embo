@@ -2,10 +2,7 @@
 
 All notable changes to the embo plugin are documented here.
 
-## [0.2.0] - unreleased
-
-Version bumped; git tag + GitHub Release held until the visual-impl
-loop has at least one verified end-to-end run.
+## [0.2.0] - 2026-07-17
 
 ### Added
 
@@ -17,6 +14,18 @@ loop has at least one verified end-to-end run.
   reachable URL (local dev server, hosted preview, staging, or sandbox),
   not only localhost. Labeled experimental — argument and output
   contract may change until promoted to stable.
+- **Opt-in correction capture** — `/embo:enable-corrections` configures
+  claude-mem to record a `correction` observation whenever you steer how
+  Claude works, so `/embo:improve` has real data to learn from;
+  `/embo:disable-corrections` fully reverses it. Machine-wide and
+  reversible. A `RULE:RESTATE-CORRECTION` behavioral rule (injected every
+  turn via `behavioral-reminder.sh`) makes Claude restate a correction
+  before acting, so conversation-only corrections become captured
+  observations instead of being lost.
+- `/embo:improve` now finds saved corrections by reading claude-mem's
+  relational store directly (the MCP `type=` filter is broken upstream,
+  issue #3279 / fix PR #3289) and remembers reviewed items in a local
+  curation file so they do not resurface.
 
 ## [0.1.5] - 2026-07-10
 

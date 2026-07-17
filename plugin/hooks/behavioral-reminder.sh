@@ -96,17 +96,22 @@ read -r CRITICISM IMPL_REQUEST GIT_REQUEST <<< "$(
 # --- Build additionalContext ---
 BASELINE="[RULES ACTIVE: CHALLENGE-INSTRUCTION · WITHSTAND-CRITICISM · DOCS-FIRST · ONE-SUBTASK · DEV-GIT · CLEAR-OPTIONS · PLAIN-ENGLISH · CAPTURE-OUTPUT · AVOID-APPROVAL · RESEARCH-VERIFY · DECIDE-OR-ASK]"
 
-# Point-of-action checklist: inject the operative text of the two
+# Point-of-action checklist: inject the operative text of the
 # chronically failing rules VERBATIM, extracted at runtime from the
 # shipped rule file (single source of truth — edit it there, not here).
 # A rule NAME triggers reconstruction from memory, which drops exactly
 # the atypical clauses; verbatim text does not. See
 # tasks/039-RULE-SALIENCE-closing-menu.
+#
+# Extracts EVERY CHECKLIST region: each starts on a line matching
+# `^[<...> checklist` and ends at the next `<!-- /CHECKLIST -->`.
+# Multiple regions (CLOSING-CHOICE, RESTATE-CORRECTION, ...) are all
+# captured in document order.
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || true)"
 START_MD="$HOOK_DIR/../commands/start.md"
 CHECKLIST=""
 if [ -n "$HOOK_DIR" ] && [ -f "$START_MD" ]; then
-  CHECKLIST="$(awk '/<!-- \/CHECKLIST -->/{f=0} f{print} /^\[CLOSING-CHOICE/{f=1;print}' "$START_MD" 2>/dev/null || true)"
+  CHECKLIST="$(awk '/<!-- \/CHECKLIST -->/{f=0} f{print} /^\[.*checklist/{f=1;print}' "$START_MD" 2>/dev/null || true)"
 fi
 
 REMINDER="$BASELINE"

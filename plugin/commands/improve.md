@@ -12,48 +12,85 @@ change proposal the user can submit upstream.
 
 ## When to Use
 
-- At the end of an `/impl` session (suggested automatically when
+- At the end of an `/embo:impl` session (suggested automatically when
   corrections were captured)
 - When you want to review accumulated feedback across sessions
 - Before submitting a GitHub issue with workflow improvements
 
 ## Process
 
-### Step 1: Query Pending Corrections
+### Step 0: Check correction capture is enabled
 
-```
-mcp__plugin_claude-mem_mcp-search__search(
-  query="[TYPE: CORRECTION] [STATUS: pending]",
-  limit=50
-)
-```
+Corrections are only saved if `/embo:enable-corrections` was run. Read
+the active claude-mem mode:
 
-Fetch full observations via `get_observations` for all returned IDs.
-
-Also query for already-curated corrections:
-```
-mcp__plugin_claude-mem_mcp-search__search(
-  query="[TYPE: CORRECTION-STATUS]",
-  limit=100
-)
+```bash
+jq -r '.CLAUDE_MEM_MODE // "code"' ~/.claude-mem/settings.json
 ```
 
-Extract curated IDs from `[ORIGINAL-ID: ...]` tags. Remove any
-correction whose ID appears in the curated set.
+If it is **not** `code-embo`, correction capture was never turned on.
+Output exactly this and stop (do not say "nothing found"):
 
-If zero pending corrections remain, output:
-`"No pending corrections to review."` and stop.
+> Correction capture is not turned on, so there are no corrections to
+> review. Run `/embo:enable-corrections` first, then use Claude
+> normally — corrections you give it will be saved for next time.
 
-### Step 2: Group by Category
+This distinguishes "never enabled" from "enabled but nothing to
+review" (the latter is handled in Step 1).
 
-Parse each observation's `[CATEGORY: ...]` tag. Group observations:
+### Step 1: Query Corrections
 
-1. Group by category (`verification`, `code-style`, `workflow`,
-   `approach`, `process`)
-2. Within each category, merge near-duplicates by comparing the
-   "What user wanted" text semantically
-3. Sort categories by total observation count, descending
-4. For each group, select 1-3 representative examples
+Source the helper library, then list corrections for the current
+project with one bare call:
+
+```bash
+source "$CLAUDE_PLUGIN_ROOT/claude-mem/corrections-lib.sh"
+corrections_list <project-name>
+```
+
+`<project-name>` is the current project (the working-directory
+basename, same value used elsewhere in embo). `corrections_list` prints
+a JSON array (id, title, subtitle, narrative, created_at), newest
+first, which you parse directly.
+
+Keep it a single bare call — do not inline the SQL. The function reads
+claude-mem's relational source of truth; a raw multi-line
+`sqlite3 "SELECT ..."` in the command would trip the approval dialog
+every run (RULE:AVOID-APPROVAL).
+
+> **Why the DB and not the MCP `search` tool** — the MCP `type=` filter
+> is broken for custom types on the worker runtime (issue #3279, fix PR
+> #3289), and its free-text fallback is lossy (semantic ranking +
+> `limit` can silently miss corrections). Corrections are correctly
+> stored AND indexed; only the tool's `type` handling is wrong, so
+> reading the source table is both a sidestep and strictly more
+> complete. Even if #3289 merges, this stays correct.
+
+Read the local curation state (IDs already reviewed in a prior run):
+
+```bash
+corrections_curation_read .claude/correction-curation.json
+```
+
+Remove any correction whose ID is in that list. If zero corrections
+remain after filtering, output `"No corrections to review."` and stop
+(this is the "enabled but nothing new" case).
+
+### Step 2: Group by Theme
+
+Correction observations do not carry a category tag — classify them
+yourself from their `title` / `subtitle` / `narrative`. Group them:
+
+1. Assign each correction a theme from its content: `verification`
+   (check docs/web/real sources first), `code-style` (naming, comments,
+   simplicity), `workflow` (skip/add a step), `approach` (over-
+   engineering, wrong method), `process` (a standing "always do X"
+   rule). These themes map to target files in Step 3.
+2. Within each theme, merge near-duplicates by comparing the
+   "what the user wanted changed" meaning semantically.
+3. Sort themes by correction count, descending.
+4. For each group, select 1-3 representative examples (quote the
+   user's actual wording from `title`/`narrative`).
 
 ### Step 3: Interactive Curation
 
@@ -67,10 +104,10 @@ For each category group, present to the user via AskUserQuestion:
 
 | Category | Primary target file |
 |---|---|
-| `verification` | `develop/impl.md` |
-| `code-style` | `develop/impl.md` § Code Style |
+| `verification` | `plugin/commands/impl.md` |
+| `code-style` | `plugin/commands/impl.md` § Code Style |
 | `workflow` | Varies — depends on workflow step |
-| `approach` | `develop/impl.md` § Critical Evaluation |
+| `approach` | `plugin/commands/impl.md` § Critical Evaluation |
 | `process` | May require new section or command |
 
 Read the target file during curation to provide a specific section
@@ -84,23 +121,23 @@ reference, not just the filename.
 
 ### Step 4: Mark Curated
 
-After user finishes reviewing all groups, save a curation log:
+After the user finishes reviewing all groups, persist the reviewed IDs
+to the local curation file so they do not resurface next run. There is
+no claude-mem write tool in the worker runtime (`save_memory` was
+removed), so this is a local, project-scoped file. Every reviewed
+correction — accepted OR rejected — is recorded as curated (a rejected
+one was a one-off, and must not resurface either):
 
-```
-mcp__plugin_claude-mem_mcp-search__save_memory(
-  title="Curation: {date} — {N} corrections reviewed",
-  text="[TYPE: CURATION-LOG]\n[DATE: {date}]\n[REVIEWED-IDS: {id1, id2, ...}]\n[ACCEPTED: {N}]\n[REJECTED: {M}]\n\nCorrection IDs reviewed: {list}\nAccepted groups: {summary}\nRejected groups: {summary}"
-)
+```bash
+source "$CLAUDE_PLUGIN_ROOT/claude-mem/corrections-lib.sh"
+corrections_curation_write .claude/correction-curation.json <reviewed-id>...
 ```
 
-Then for each reviewed correction, save a status observation:
-
-```
-mcp__plugin_claude-mem_mcp-search__save_memory(
-  title="Correction status: curated — {original title}",
-  text="[TYPE: CORRECTION-STATUS]\n[ORIGINAL-ID: {id}]\n[STATUS: curated]\n[DECISION: accepted|rejected]\n[CURATION-DATE: {date}]"
-)
-```
+`corrections_curation_write` merges and dedups against any existing
+curated IDs and writes atomically, so the file is never left truncated.
+It is disposable: if it is deleted, the only effect is that
+already-reviewed corrections resurface once (the corrections themselves
+live in claude-mem, not here).
 
 ### Step 5: Assemble Proposal
 
