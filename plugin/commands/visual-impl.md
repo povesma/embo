@@ -1,24 +1,43 @@
+---
+description: >
+  EXPERIMENTAL design-to-code loop: implement a Figma node as frontend
+  code and verify it against the design by token/property conformance and
+  an independent visual-qa-reviewer agent (pixel diff is a weak,
+  mockup-only fallback). Drives the Figma MCP (design source) and the
+  Playwright CLI for capture + live CSS reads. Argument and output
+  contract may still change.
+---
+
 # Visual Design Implementation (EXPERIMENTAL)
 
 **Status: experimental — usable, but the argument and output contract
 may change.** Not yet validated end-to-end enough to promise stability;
 pin a plugin version if you script around it. This command
 orchestrates a design-to-code loop that implements a Figma node and
-verifies it against the design with a numeric gate and an independent
-review agent. It drives the **Figma MCP** (design source) and the
-**Playwright CLI** (render / measure / probe), plus the
-`visual-qa-reviewer` agent.
+verifies it against the design by **conformance** (token / component /
+behavior) and an independent review agent. It drives the **Figma MCP**
+(design source) and the **Playwright CLI** (render / capture / live CSS
+reads / interaction probes), plus the `visual-qa-reviewer` agent.
 
-Browser automation uses the **Playwright CLI**, not the Playwright MCP:
-this command runs a scripted navigate → screenshot → resize → diff
-sequence — the token-efficient workload the CLI is built for — and never
-needs the MCP's persistent page introspection. Figma stays on MCP (no
-CLI equivalent).
+Browser automation uses the **Playwright CLI** for capture, not the
+Playwright MCP: the CLI keeps screenshots and DOM state on disk instead
+of streaming Base64 image bytes and full accessibility trees into the
+LLM context, so a multi-step run does not exhaust the context window.
+Figma stays on MCP (no CLI equivalent).
 
-Core thesis: keep machine vision, but surround it with (1) an extracted
-spec, (2) a real render, (3) a numeric diff against the Figma frame,
-(4) a review step SEPARATE from authoring. The same model that writes
-the code cannot be trusted to judge it.
+Core thesis: **do not gate on a raw pixel diff against the Figma frame.**
+A browser render never pixel-matches a design canvas (OS font-smoothing,
+sub-pixel and anti-aliasing differences produce large false-positive
+noise), and a self-generated screenshot baseline just ratifies whatever
+the author built. Instead: (1) extract a machine-readable spec (tokens /
+component defs), (2) render live, (3) verify by **property/token
+conformance** — read the live computed CSS and compare it numerically to
+the named design values ("live `border-radius: 28px`, token defines
+`16px`") — and (4) a review step SEPARATE from authoring: an independent
+visual-qa-reviewer runs a 7-category audit over the render + the Figma
+mockup. The same model that writes the code cannot be trusted to judge
+it. Pixel diff is retained only as a weak MOCKUP-mode fallback, heavily
+caveated (see Step 4).
 
 ## When to Use
 
@@ -133,20 +152,28 @@ it (or report the blocker); do not proceed on a broken tool.
   Connect was unavailable so fidelity is reduced (no real-component
   mapping).
 
-**2. Playwright CLI** — the `playwright-cli` binary is provided by the
-**`@playwright/cli`** package (scoped, official). Do NOT install the
-unscoped `playwright-cli` package — it is deprecated and ships no
-working binary.
+**2. Playwright CLI (`@playwright/cli`)** — the browser-automation tool
+for capture, live CSS reads (`eval`), and viewport probes (`resize`).
+Browser work goes through this CLI, **never the Playwright MCP**: the
+MCP streams accessibility trees and screenshot bytes into the model
+context (~4× the tokens, and slower), while the CLI writes them to disk
+and returns file paths + element refs. This is a hard requirement.
 
-First check whether it is already present by any install method (avoid
-a redundant global install):
+The `playwright-cli` binary is provided by the **`@playwright/cli`**
+package (scoped, official Microsoft). Do NOT use the unscoped
+`playwright-cli` npm package — it is deprecated and ships no working
+binary. Note this CLI is **not** the `@playwright/test` runner; it does
+not provide `toHaveScreenshot` (see Step 4).
+
+First check whether it is already present (avoid a redundant global
+install):
 
 ```bash
 playwright-cli --version
 ```
 
-If that prints a version, you are done. If it reports not-found, also
-check a project-local install before installing globally:
+If that prints a version, you are done. If not-found, check a
+project-local install before installing globally:
 
 ```bash
 npx --no-install playwright-cli --version
@@ -159,14 +186,9 @@ npm install -g @playwright/cli
 playwright-cli --version
 ```
 
-The final `--version` must print a version (invoke via `npx
-playwright-cli` if you installed it project-locally). If it still
-fails, report the error and stop — the render/measure steps cannot run
-without it. Installing browsers may also be needed once:
-`npx playwright install`.
-
-The second `--version` must print a version. If it still fails, report
+The final `--version` must print a version. If it still fails, report
 the error and stop — the render/measure steps cannot run without it.
+Installing browsers may also be needed once: `npx playwright install`.
 
 **3. A reachable target URL** — some origin serving the current build
 of the code under review. This may be a local dev server OR a hosted
@@ -176,8 +198,9 @@ target is local and startable; for a hosted URL, verify reachability —
 never try to start it.
 
 Storybook + addon-mcp and Uiprobe-style property audit are NOT required
-— they are later extensions. The core loop is Figma baseline → live
-render → pixel diff → separate reviewer → gate.
+— they are later extensions. The core loop is Figma spec → live render →
+**conformance check (token/component/behavior)** → separate reviewer →
+gate. Pixel diff is a MOCKUP-mode fallback only, not the core gate.
 
 ## The Loop: Parse → Generate → Render → Measure → Correct → Gate
 
@@ -252,20 +275,28 @@ Then go to step 5 (separate reviewer) with these findings. There is no
 pixel threshold in system mode; the gate is "zero high-severity
 conformance violations" plus the reviewer's verdict.
 
-### 4. Measure (MOCKUP MODE — put design and result side by side, numerically)
+### 4. Measure (MOCKUP MODE — weak fallback, no documented design system)
+
+Use this ONLY when Step 0 found no documented design system. A raw pixel
+diff against a Figma export is unreliable — a browser render never
+pixel-matches a design canvas (OS font-smoothing, sub-pixel and
+anti-aliasing differences produce large false-positive noise), so treat
+its result as a hint for the reviewer, not a hard gate.
 
 - Baseline: `get_screenshot` on the Figma node (Figma MCP) → save path.
-- Live: `playwright-cli screenshot --filename=<path>` (full page or the
-  matching frame) → save path.
-- Numeric diff: use Playwright Test's `toHaveScreenshot({
-  maxDiffPixelRatio })` — the Playwright CLI is the `@playwright/test`
-  runner, so this is the default, first-class diff method (it writes
-  `-actual` / `-expected` / `-diff` images automatically). Record the
-  value and the threshold (default **maxDiffPixelRatio ≥ 0.01 fails**).
-  Only if no test runner is wired up, fall back to `looks-same`
-  mismatch %.
-- If the project exposes per-element CSS, capture live properties
-  (`playwright-cli eval`) for the reviewer (optional but high value).
+- Live: `playwright-cli screenshot <path>` (full page or the matching
+  frame) → save path.
+- Numeric diff: run a standalone pixel comparison (e.g. `pixelmatch`,
+  the library Playwright itself uses, or `looks-same`) between the two
+  saved PNGs → mismatch ratio + a diff image. Do **not** use
+  `toHaveScreenshot` / `toMatchSnapshot`: those live only in the
+  `@playwright/test` runner (a different product from `@playwright/cli`),
+  and they compare against a self-generated baseline, not an external
+  design export. Set a **generous** threshold and mask volatile / text
+  regions, since exact-match is not expected.
+- Also capture per-element computed CSS with `playwright-cli eval` and
+  hand it to the reviewer — property comparison catches what a noisy
+  pixel diff cannot (font-weight, spacing, radius).
 
 ### 5. Correct (spawn the SEPARATE judge)
 
@@ -273,22 +304,28 @@ Spawn the `visual-qa-reviewer` agent via the Agent tool. It runs in a
 clean context and did not author the code. Pass it:
 
 - `figma_baseline` (path), `live_render` (path)
-- `numeric_verdict` (metric, value, threshold)
-- `design_spec` / `live_properties` if available
+- `conformance_findings` (SYSTEM MODE) — the token / component /
+  behavior / composition deviations from Step 4-SYSTEM; or
+  `numeric_verdict` (MOCKUP MODE) — pixel mismatch ratio + diff-image
+  path, flagged as a weak signal
+- `design_spec` / `live_properties` (computed CSS) if available
 
 It returns measured findings + a PASS/FAIL verdict + ordered fixes.
 **Do not self-review in this command** — that defeats the purpose.
 
 ### 6. Gate
 
-- If `verdict: FAIL` (diff ≥ threshold): apply the reviewer's ordered
-  fixes, then loop back to step 2. Cap at 3 iterations; if still
-  failing, stop and report the remaining findings for human judgement.
-- If `verdict: PASS`: report done, with the final numeric value and the
-  screenshot paths.
+- If `verdict: FAIL` (SYSTEM MODE: any high-severity conformance
+  violation; MOCKUP MODE: reviewer FAIL, pixel mismatch as supporting
+  evidence): apply the reviewer's ordered fixes, then loop back to
+  step 2. Cap at 3 iterations; if still failing, stop and report the
+  remaining findings for human judgement.
+- If `verdict: PASS`: report done, with the conformance summary (or the
+  pixel value in mockup mode) and the screenshot paths.
 
-**Merge is never approved on the model's opinion alone — only when the
-threshold passes.**
+**Merge is never approved on the model's opinion alone — it requires
+zero high-severity conformance violations plus the independent
+reviewer's PASS.**
 
 ## Critical distinction (do not conflate)
 
@@ -302,9 +339,11 @@ the baseline is the Figma frame, not a prior build.
 
 ## Output
 
-Report: iterations run, final numeric verdict vs threshold, the
-reviewer's remaining findings (if any), and the saved baseline/live
-screenshot paths so the result can be re-checked without re-running.
+Report: iterations run, the conformance result (SYSTEM MODE:
+token/component/behavior/composition violations, if any) or the pixel
+mismatch value vs threshold (MOCKUP MODE), the reviewer's remaining
+findings (if any), and the saved baseline/live screenshot paths so the
+result can be re-checked without re-running.
 
 ## Notes
 
