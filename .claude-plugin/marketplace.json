@@ -1,6 +1,6 @@
 {
   "name": "embo",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "embo plugin marketplace: spec-driven development workflow for Claude Code",
   "owner": {
     "name": "Dmytro Povesma"
