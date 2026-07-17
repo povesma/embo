@@ -2,6 +2,19 @@
 
 All notable changes to the embo plugin are documented here.
 
+## [0.2.1] - 2026-07-17
+
+### Fixed
+
+- Status line no longer reports `mem:DOWN` when claude-mem is running on
+  a non-default port. The claude-mem worker port is per-user
+  (`CLAUDE_MEM_WORKER_PORT` if set, else `37700 + uid % 100`), but
+  `statusline.sh` had hardcoded `37777`. The env var is set in the
+  worker's own process and is not reliably inherited by the status line,
+  and installs pin it to different values, so the segment now probes
+  candidate ports (env override, then the per-user formula, then the
+  `37777` fallback) and uses the first that answers with valid JSON.
+
 ## [0.2.0] - 2026-07-17
 
 ### Added
