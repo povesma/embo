@@ -79,15 +79,30 @@ cmem_segment() {
         return
     fi
 
-    local resp
-    resp=$(curl -s --max-time 2 \
-        'http://127.0.0.1:37777/api/observations?limit=1' 2>/dev/null || true)
-    if [ -z "$resp" ]; then
-        printf "%b%s%b" "$RED" "mem:DOWN" "$RESET"
-        return
-    fi
+    # claude-mem's worker port is not fixed. It is CLAUDE_MEM_WORKER_PORT when
+    # set, else 37700 + (uid % 100) (37777 fallback when uid is unavailable,
+    # e.g. Windows). The env var is set in the worker's own process but is not
+    # reliably inherited by the statusline, and installs pin it to different
+    # values, so we probe candidate ports and use the first that answers with
+    # valid JSON rather than trusting a single computed value.
+    local uid formula_port candidates
+    uid=$(id -u 2>/dev/null || echo "")
+    if [ -n "$uid" ]; then formula_port=$(( 37700 + uid % 100 )); else formula_port=37777; fi
+    # Order: explicit env override, the per-user formula, then the legacy default.
+    candidates="${CLAUDE_MEM_WORKER_PORT:-} $formula_port 37777"
 
-    if ! echo "$resp" | jq -e . >/dev/null 2>&1; then
+    local resp="" p
+    for p in $candidates; do
+        [ -z "$p" ] && continue
+        resp=$(curl -s --max-time 2 \
+            "http://127.0.0.1:${p}/api/observations?limit=1" 2>/dev/null || true)
+        if [ -n "$resp" ] && echo "$resp" | jq -e . >/dev/null 2>&1; then
+            break
+        fi
+        resp=""
+    done
+
+    if [ -z "$resp" ]; then
         printf "%b%s%b" "$RED" "mem:DOWN" "$RESET"
         return
     fi
