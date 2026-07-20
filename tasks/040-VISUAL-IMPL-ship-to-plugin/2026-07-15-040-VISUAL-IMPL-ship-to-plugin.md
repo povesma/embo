@@ -152,13 +152,15 @@ with Figma named as the primary design source.
 
 ## Tasks
 
-- [~] 1.0 **User Story:** As a plugin user, I can invoke
+- [X] 1.0 **User Story:** As a plugin user, I can invoke
   `/embo:visual-impl` and it uses the Playwright CLI for browser work.
-  [4/4 coded; 1.4 verified live; 1.1/1.2/1.3 pending a live end-to-end
-  run. Command registration + tool contract corrected 2026-07-17.]
-  - [~] 1.1 Switch browser automation from Playwright MCP to CLI in the
+  [4/4 done; a first live end-to-end run passed 2026-07-20 (basic level;
+  further improvements noted but the contract runs).]
+  - [X] 1.1 Switch browser automation from Playwright MCP to CLI in the
     source command (`open`, `eval`, `resize`, `screenshot`). Figma kept
     on MCP. [verify: manual-run-claude]
+      → VERIFIED 2026-07-20: live end-to-end run passed at a basic
+        level. The conformance-first gate (Decision 4) runs.
       → CORRECTED 2026-07-17: the original coding wired the diff to
         `toHaveScreenshot`, which does NOT exist in `@playwright/cli`
         (it is `@playwright/test`-only). Rewrote the gate to
@@ -202,10 +204,10 @@ with Figma named as the primary design source.
         `embo:visual-impl`), deleted the stale dev/ copy (git rm).
         Now genuinely done.
 
-- [~] 2.0 **User Story:** As a plugin user, the command fails cleanly
+- [X] 2.0 **User Story:** As a plugin user, the command fails cleanly
   when its dependencies are absent, and works against any target origin.
-  [1/3 coded]
-  - [~] 2.1 Target is a **URL of any origin**, not a local server:
+  [3/3; exercised in the 2026-07-20 live run]
+  - [X] 2.1 Target is a **URL of any origin**, not a local server:
     renamed `<target-route>` → `<target-url>`; Arguments, prereq #3, and
     Step 3 now cover local dev server, hosted preview deploy, staging,
     and sandbox. Step 3 checks reachability and stops on a dead URL
@@ -213,7 +215,7 @@ with Figma named as the primary design source.
     the latest push. (Design correction, RULE:BEHAVIOUR-FIRST — the
     prototype wrongly hardcoded localhost.) [verify: manual-run-claude]
       → coded 2026-07-15 in both plugin + .claude copies
-  - [~] 2.2 Degrade policy specified (decision 9): **error always stops,
+  - [X] 2.2 Degrade policy specified (decision 9): **error always stops,
     only clean absence degrades**. A tool that errors or a required input
     missing → halt + report, no auto-fallback, no self-granted exception.
     Preflight #1 splits Figma-MCP *required* tools (stop) from *optional*
@@ -221,7 +223,7 @@ with Figma named as the primary design source.
     Code Connect absent → direct markup; token export absent → MOCKUP
     mode. Every degraded path stated in output. [verify: manual-run-claude]
       → coded 2026-07-15 (both copies synced)
-  - [~] 2.3 Clean stop when required Figma-MCP tools are absent:
+  - [X] 2.3 Clean stop when required Figma-MCP tools are absent:
     preflight #1 says stop with a connect-the-server message if ANY of
     metadata/design-context/variable-defs/screenshot is missing.
     [verify: manual-run-claude]
@@ -240,7 +242,13 @@ with Figma named as the primary design source.
       → done 2026-07-15
 
 - [~] 4.0 **User Story:** As the maintainer, the change is committed and
-  versioned; the tagged release waits for verification. [1/3 coded]
+  versioned; the tagged release waits for verification. [2/3; release
+  gate now satisfied by the 2026-07-20 live run]
+    → NOTE: 0.2.0 and 0.2.1 were tagged and released before the E2E run
+      (decision 8's deferral was effectively bypassed at 0.2.0). The
+      conformance-first tool-contract corrections landed after 0.2.1
+      (commits c5d4c67, b67d56a). The verified run therefore qualifies a
+      **v0.2.2 patch release** carrying those corrections — not v0.2.0.
   - [X] 4.1 Commit moved + edited files (plugin/ copies, .claude/
     sources, CLAUDE.md, README, both manifests, CHANGELOG, this doc).
     [verify: code-only]
@@ -249,8 +257,13 @@ with Figma named as the primary design source.
     plugin.json` + `.claude-plugin/marketplace.json`; add a 0.2.0
     CHANGELOG entry marked unreleased. [verify: code-only]
       → merged in PR #25 (cc91109)
-  - [ ] 4.3 Cut the git tag `v0.2.0` + GitHub Release — DEFERRED until a
-    verified end-to-end run exists (decision 8). [verify: manual]
+  - [~] 4.3 Cut the release now that a verified end-to-end run exists
+    (decision 8 gate satisfied 2026-07-20). Corrected target: bump
+    0.2.1 → **0.2.2**, add a 0.2.2 CHANGELOG entry, land via PR to main,
+    then tag `v0.2.2` + GitHub Release. [verify: manual]
+      → 2026-07-20: version bumped in plugin.json + marketplace.json,
+        0.2.2 CHANGELOG entry added, task markers reconciled. PR +
+        tag/Release pending user go.
 
 - [X] 5.0 **User Story (DECISION GATE):** As the maintainer, I decide
   whether these ship stable or experimental. [1/1]
