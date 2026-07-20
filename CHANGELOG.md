@@ -9,6 +9,8 @@ All notable changes to the embo plugin are documented here.
 - `/embo:visual-impl` (experimental) is usable end-to-end: it implements
   a Figma node as frontend code and verifies the built page against the
   design.
+- `/embo:improve` reviews your saved corrections reliably in any shell,
+  and does not resurface ones you have already reviewed.
 
 ## [0.2.1] - 2026-07-17
 
