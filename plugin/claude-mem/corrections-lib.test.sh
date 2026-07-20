@@ -240,6 +240,46 @@ if command -v sqlite3 >/dev/null 2>&1; then
     (5,'my-repo.v2_x','correction','ok name','s5','n5','2026-04-01T00:00:00Z');"
   assert_eq "list accepts hyphen/dot/underscore names" "1" \
     "$(corrections_list 'my-repo.v2_x' | jq 'length')"
+
+  # ---- 042/1.1 corrections_list_pending ----
+  # Reads corrections for a project (via corrections_list) and subtracts
+  # the IDs already recorded in the curation file, emitting only the
+  # not-yet-reviewed rows as a JSON array, newest first. The model never
+  # does the subtraction. Fixture DB has embo corrections id 1 (older)
+  # and id 2 (newer).
+
+  # First-run: curation file absent → every correction is pending.
+  P_FIRST="$(corrections_list_pending embo "$TMP/lp_absent.json")"
+  assert_eq "pending: absent curation → all corrections" "2" \
+    "$(printf '%s' "$P_FIRST" | jq 'length')"
+  assert_eq "pending: absent curation → newest first" "newer corr" \
+    "$(printf '%s' "$P_FIRST" | jq -r '.[0].title')"
+
+  # After a curation write of id 2 → only id 1 remains pending.
+  corrections_curation_write "$TMP/lp_one.json" 2
+  P_ONE="$(corrections_list_pending embo "$TMP/lp_one.json")"
+  assert_eq "pending: one curated → one remains" "1" \
+    "$(printf '%s' "$P_ONE" | jq 'length')"
+  assert_eq "pending: the remaining one is the uncurated id" "1" \
+    "$(printf '%s' "$P_ONE" | jq -r '.[0].id')"
+
+  # All corrections curated → empty array (valid JSON, length 0).
+  corrections_curation_write "$TMP/lp_all.json" 1 2
+  P_ALL="$(corrections_list_pending embo "$TMP/lp_all.json")"
+  assert_eq "pending: all curated → empty array" "0" \
+    "$(printf '%s' "$P_ALL" | jq 'length')"
+
+  # Unparseable curation file → treated as no state yet → all pending,
+  # never a crash (mirrors corrections_curation_read's fail-safe).
+  printf '%s' 'not json{' > "$TMP/lp_bad.json"
+  P_BAD="$(corrections_list_pending embo "$TMP/lp_bad.json")"
+  assert_eq "pending: unparseable curation → all pending" "2" \
+    "$(printf '%s' "$P_BAD" | jq 'length')"
+
+  # A project with no corrections → empty array, not an error.
+  P_EMPTY="$(corrections_list_pending 'no-such-project' "$TMP/lp_absent.json")"
+  assert_eq "pending: project with no corrections → empty array" "0" \
+    "$(printf '%s' "$P_EMPTY" | jq 'length')"
 else
   printf 'SKIP: sqlite3 not available for corrections_list test\n'
 fi
@@ -253,6 +293,25 @@ assert_eq "curation write skips a non-numeric id, keeps the rest" "10 20" \
 assert_eq "curation file valid JSON after mixed-id write" "true" \
   "$(jq -e 'type == "object"' "$TMP/cur_mixed.json" >/dev/null 2>&1 \
      && echo true || echo false)"
+
+# ---- 042 corrections_mode ----
+# Echoes CLAUDE_MEM_MODE from the (overridable) claude-mem settings file,
+# defaulting to "code" when the file or key is absent; never errors.
+
+export CORRECTIONS_CM_SETTINGS="$TMP/cm_absent.json"   # does not exist
+assert_eq "mode: absent settings → code" "code" "$(corrections_mode)"
+
+printf '%s\n' '{"CLAUDE_MEM_MODE":"code-embo"}' > "$TMP/cm_on.json"
+export CORRECTIONS_CM_SETTINGS="$TMP/cm_on.json"
+assert_eq "mode: reads code-embo when enabled" "code-embo" "$(corrections_mode)"
+
+printf '%s\n' '{"model":"x"}' > "$TMP/cm_nokey.json"
+export CORRECTIONS_CM_SETTINGS="$TMP/cm_nokey.json"
+assert_eq "mode: missing key → code" "code" "$(corrections_mode)"
+
+printf '%s' 'not json{' > "$TMP/cm_bad.json"
+export CORRECTIONS_CM_SETTINGS="$TMP/cm_bad.json"
+assert_eq "mode: garbage settings → code (no crash)" "code" "$(corrections_mode)"
 
 # ---- summary ----
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
