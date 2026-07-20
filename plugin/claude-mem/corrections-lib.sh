@@ -145,6 +145,20 @@ corrections_curation_write() {
 # The claude-mem relational DB. Overridable so tests target a fixture DB.
 CORRECTIONS_DB="${CORRECTIONS_DB:-$HOME/.claude-mem/claude-mem.db}"
 
+# claude-mem's own settings file. Overridable so tests target a fixture.
+CORRECTIONS_CM_SETTINGS="${CORRECTIONS_CM_SETTINGS:-$HOME/.claude-mem/settings.json}"
+
+# corrections_mode
+#   Echo the active claude-mem mode (CLAUDE_MEM_MODE), defaulting to
+#   "code" when the settings file or key is absent — matching claude-mem's
+#   own default. Correction capture is on only when this echoes
+#   "code-embo". Never errors; a missing/garbage file echoes "code".
+corrections_mode() {
+  [ -f "$CORRECTIONS_CM_SETTINGS" ] || { echo "code"; return 0; }
+  jq -r '.CLAUDE_MEM_MODE // "code"' "$CORRECTIONS_CM_SETTINGS" 2>/dev/null \
+    || echo "code"
+}
+
 # corrections_list <project>
 #   Print every correction observation for <project> as a JSON array
 #   (id, title, subtitle, narrative, created_at), newest first. Reads the
@@ -167,4 +181,29 @@ corrections_list() {
      FROM observations
      WHERE type='correction' AND project='$project'
      ORDER BY created_at DESC"
+}
+
+# corrections_list_pending <project> <curation-file>
+#   Print the corrections for <project> that have NOT yet been reviewed,
+#   as a JSON array (same shape as corrections_list), newest first. The
+#   subtraction of already-curated IDs happens here, in code — the caller
+#   never does it by hand. An absent or unparseable curation file means
+#   "no state yet" (every correction is pending), matching
+#   corrections_curation_read's fail-safe. Always emits a valid JSON array
+#   (empty `[]` when nothing is pending), so the caller can parse it
+#   unconditionally.
+corrections_list_pending() {
+  local project="$1" curation="$2" all curated
+  # corrections_list validates the project name and returns rc 2 on a bad
+  # one; propagate that (no output) rather than emitting a bogus array.
+  all="$(corrections_list "$project")" || return $?
+  [ -n "$all" ] || { echo '[]'; return 0; }
+  # Space-separated curated IDs (empty when the file is absent/garbage).
+  curated="$(corrections_curation_read "$curation")"
+  # Build a JSON array of the curated IDs (numbers), then filter the
+  # correction list to rows whose id is not in that set. jq does the
+  # set subtraction so it is exact regardless of list size.
+  printf '%s' "$all" | jq --argjson drop \
+    "$(printf '%s\n' $curated | jq -R '(try tonumber catch empty)' | jq -s '.')" \
+    '[ .[] | select(.id as $i | ($drop | index($i)) | not) ]'
 }

@@ -22,14 +22,15 @@ change proposal the user can submit upstream.
 ### Step 0: Check correction capture is enabled
 
 Corrections are only saved if `/embo:enable-corrections` was run. Read
-the active claude-mem mode:
+the active claude-mem mode with one bare command:
 
 ```bash
-jq -r '.CLAUDE_MEM_MODE // "code"' ~/.claude-mem/settings.json
+embo-corrections mode
 ```
 
-If it is **not** `code-embo`, correction capture was never turned on.
-Output exactly this and stop (do not say "nothing found"):
+If it prints anything other than `code-embo`, correction capture was
+never turned on. Output exactly this and stop (do not say "nothing
+found"):
 
 > Correction capture is not turned on, so there are no corrections to
 > review. Run `/embo:enable-corrections` first, then use Claude
@@ -38,25 +39,28 @@ Output exactly this and stop (do not say "nothing found"):
 This distinguishes "never enabled" from "enabled but nothing to
 review" (the latter is handled in Step 1).
 
-### Step 1: Query Corrections
+### Step 1: Query pending corrections
 
-Source the helper library, then list corrections for the current
-project with one bare call:
+List the corrections for this project that have NOT already been
+reviewed, with one bare command:
 
 ```bash
-source "$CLAUDE_PLUGIN_ROOT/claude-mem/corrections-lib.sh"
-corrections_list <project-name>
+embo-corrections list-pending
 ```
 
-`<project-name>` is the current project (the working-directory
-basename, same value used elsewhere in embo). `corrections_list` prints
-a JSON array (id, title, subtitle, narrative, created_at), newest
-first, which you parse directly.
+`embo-corrections` is a plain command on PATH (the plugin's `bin/`
+wrapper). It derives the project name from the working-directory
+basename, reads the corrections from claude-mem's relational store,
+subtracts the IDs recorded in `.claude/correction-curation.json`, and
+prints only the not-yet-reviewed rows as a JSON array (id, title,
+subtitle, narrative, created_at), newest first. Parse that array
+directly — the subtraction is done for you, not in your head.
 
-Keep it a single bare call — do not inline the SQL. The function reads
-claude-mem's relational source of truth; a raw multi-line
-`sqlite3 "SELECT ..."` in the command would trip the approval dialog
-every run (RULE:AVOID-APPROVAL).
+Being a bare command, it auto-approves under a `Bash(embo-corrections
+*)` rule with no prompt and needs no `${CLAUDE_PLUGIN_ROOT}` expansion
+(RULE:AVOID-APPROVAL). If the array is empty, output
+`"No corrections to review."` and stop (the "enabled but nothing new"
+case).
 
 > **Why the DB and not the MCP `search` tool** — the MCP `type=` filter
 > is broken for custom types on the worker runtime (issue #3279, fix PR
@@ -65,16 +69,6 @@ every run (RULE:AVOID-APPROVAL).
 > stored AND indexed; only the tool's `type` handling is wrong, so
 > reading the source table is both a sidestep and strictly more
 > complete. Even if #3289 merges, this stays correct.
-
-Read the local curation state (IDs already reviewed in a prior run):
-
-```bash
-corrections_curation_read .claude/correction-curation.json
-```
-
-Remove any correction whose ID is in that list. If zero corrections
-remain after filtering, output `"No corrections to review."` and stop
-(this is the "enabled but nothing new" case).
 
 ### Step 2: Group by Theme
 
@@ -122,22 +116,22 @@ reference, not just the filename.
 ### Step 4: Mark Curated
 
 After the user finishes reviewing all groups, persist the reviewed IDs
-to the local curation file so they do not resurface next run. There is
-no claude-mem write tool in the worker runtime (`save_memory` was
-removed), so this is a local, project-scoped file. Every reviewed
-correction — accepted OR rejected — is recorded as curated (a rejected
-one was a one-off, and must not resurface either):
+so they do not resurface next run. There is no claude-mem write tool in
+the worker runtime (`save_memory` was removed), so this is a local,
+project-scoped file. Every reviewed correction — accepted OR rejected —
+is recorded as curated (a rejected one was a one-off, and must not
+resurface either). Pass the IDs the pending list surfaced in Step 1
+(the ones you just reviewed) to the bare wrapper:
 
 ```bash
-source "$CLAUDE_PLUGIN_ROOT/claude-mem/corrections-lib.sh"
-corrections_curation_write .claude/correction-curation.json <reviewed-id>...
+embo-corrections write <reviewed-id>...
 ```
 
-`corrections_curation_write` merges and dedups against any existing
-curated IDs and writes atomically, so the file is never left truncated.
-It is disposable: if it is deleted, the only effect is that
-already-reviewed corrections resurface once (the corrections themselves
-live in claude-mem, not here).
+`embo-corrections write` merges and dedups the IDs into
+`.claude/correction-curation.json` and writes atomically, so the file
+is never left truncated. It is disposable: if it is deleted, the only
+effect is that already-reviewed corrections resurface once (the
+corrections themselves live in claude-mem, not here).
 
 ### Step 5: Assemble Proposal
 
