@@ -24,18 +24,19 @@ with Figma named as the primary design source.
 
 ## Decisions (this session)
 
-1. **Playwright CLI, not Playwright MCP, for browser automation.**
-   Verified against Microsoft's own docs via Context7
-   (`/microsoft/playwright-cli`): the CLI is "designed for modern coding
-   agents, token-efficient… avoids loading large tool schemas and
-   accessibility trees into the model context." The MCP is for
-   "exploratory automation, self-healing tests, long-running autonomous
-   workflows where maintaining continuous browser context matters more
-   than token cost." `visual-impl` runs a scripted navigate → screenshot
-   → resize → diff sequence — the CLI's exact target workload — so the
-   CLI is strictly better here. (The e2e test agents in task 033 are the
-   "self-healing/exploratory" workload and would keep the MCP; out of
-   scope here.)
+1. **Playwright CLI, not Playwright MCP, for browser automation
+   (HARD REQUIREMENT — user-stated, non-negotiable).** Capture, live CSS
+   reads, and interaction probes MUST run through the `@playwright/cli`
+   binary, NEVER the Playwright MCP. Rationale, re-verified 2026-07-17
+   against playwright.dev/agent-cli + independent benchmarks: MCP streams
+   full accessibility trees and Base64 screenshot bytes into the model
+   context (~114k tokens for a typical task); the CLI saves screenshots +
+   YAML snapshots to disk (`.playwright-cli/`) and returns file paths +
+   element refs (~27k tokens) — a ~4× token reduction, and faster (a
+   persistent daemon, no per-call MCP round-trip). This is a documented,
+   testable constraint, not an implementation preference — see AC-1.
+   (The e2e test agents in task 033 are the self-healing/exploratory
+   workload and keep the MCP; out of scope here.)
 
 2. **Figma stays on MCP** — there is no Figma CLI equivalent; design
    extraction (`get_variable_defs`, `get_design_context`, `get_metadata`,
@@ -45,11 +46,18 @@ with Figma named as the primary design source.
    the most popular design tool, so When-to-Use, arguments, and
    prerequisites call it out specifically.
 
-4. **The CLI switch also closed a real gap** — the numeric-diff step was
-   under-specified ("prefer toHaveScreenshot… otherwise looks-same"). The
-   CLI *is* the `@playwright/test` runner, so `toHaveScreenshot({
-   maxDiffPixelRatio })` (auto `-actual`/`-expected`/`-diff` images)
-   becomes the first-class diff method.
+4. **Conformance-first verification; pixel diff is a caveated fallback.**
+   The primary gate is (a) **token/property conformance** — read live
+   computed CSS via `playwright-cli eval` and compare numerically to the
+   named design tokens/component specs ("live `border-radius: 28px`,
+   token defines `16px`") — plus (b) an **independent visual-qa-reviewer**
+   7-category audit over the render + the Figma mockup. This is SYSTEM
+   MODE (Step 4-SYSTEM), the command's preferred path. Raw pixel diff
+   survives ONLY as a weak MOCKUP-mode fallback (no documented design
+   system), labelled as such: generous `maxDiffPixelRatio`, masking, and
+   the stated caveat that a design export never pixel-matches a render.
+   `playwright-cli` is used for capture + `eval` + `resize` only (`eval`
+   and `resize` verified present in the installed binary, 2026-07-17).
 
 6. **Target is any reachable URL, not just localhost (design fix).** The
    prototype hardcoded a local dev server. Corrected to `<target-url>`
@@ -67,6 +75,10 @@ with Figma named as the primary design source.
    sync manually — a known drift risk (this session hand-synced 4 files).
    The maintainer may later switch to a single source of truth; if so,
    drop the `.claude/` copies and treat `plugin/` as canonical.
+   → RESOLVED 2026-07-17: the `.claude/commands/dev/visual-impl.md`
+   dogfood copy was deleted; `plugin/` is now the sole source of truth
+   for this command. (The `.claude/agents/` reviewer copy, if still
+   present, remains a separate sync item.)
 
 8. **Version → 0.2.0; git tag + GitHub Release DEFERRED until verified.**
    Adding a user-facing command + agent is a minor feature bump. But the
@@ -95,6 +107,38 @@ with Figma named as the primary design source.
    may change" label instead of "PROTOTYPE". Promotion to stable is a
    later state, earned by real runs. See task 5.0.
 
+## Rejected decisions
+
+- **`toHaveScreenshot` as the first-class diff gate** (was Decision 4).
+  Rejected 2026-07-17: `@playwright/cli` (capture binary) is NOT
+  `@playwright/test` (the runner that owns `toHaveScreenshot`) — the diff
+  step could not run and broke the first live use. Superseded by
+  Decision 4 (conformance-first).
+- **Raw pixel diff against a Figma export as the gate.** Rejected: a
+  browser render never pixel-matches a design canvas (font-smoothing /
+  sub-pixel / anti-aliasing noise); kept only as a caveated MOCKUP-mode
+  fallback.
+- **Playwright MCP for browser automation.** Rejected: token-inefficient
+  (~4×) and slower than the CLI — see Decision 1.
+
+## Acceptance criteria
+
+- **AC-1 (no MCP for browser work):** every browser action in the
+  command — navigate, screenshot, computed-CSS read, resize, interaction
+  probe — invokes the `@playwright/cli` binary. No
+  `mcp__...playwright__browser_*` call appears in the browser-automation
+  path. (Figma MCP is separate and allowed.)
+- **AC-2 (conformance is the primary gate):** in SYSTEM MODE the pass/
+  fail verdict is driven by token/component/behavior conformance +
+  the visual-qa-reviewer audit, with no pixel-diff threshold. Pixel diff
+  appears only under MOCKUP MODE, explicitly labelled a weak fallback.
+- **AC-3 (no false tool claims):** the command contains no statement that
+  the capture CLI is the `@playwright/test` runner or that it provides
+  `toHaveScreenshot`.
+- **AC-4 (tool reality):** the `eval` and `resize` subcommands the gate
+  relies on exist in the installed `@playwright/cli` binary (verified
+  2026-07-17).
+
 ## Scope
 
 - Source the two files into the plugin tree, flat namespace.
@@ -108,12 +152,22 @@ with Figma named as the primary design source.
 
 ## Tasks
 
-- [~] 1.0 **User Story:** As a plugin user, I can invoke
+- [X] 1.0 **User Story:** As a plugin user, I can invoke
   `/embo:visual-impl` and it uses the Playwright CLI for browser work.
-  [4/4 coded, pending verification]
-  - [~] 1.1 Switch browser automation from Playwright MCP to CLI in the
-    source command (`open`, `eval`, `resize`, `screenshot`;
-    `toHaveScreenshot` diff). Figma kept on MCP. [verify: manual-run-claude]
+  [4/4 done; a first live end-to-end run passed 2026-07-20 (basic level;
+  further improvements noted but the contract runs).]
+  - [X] 1.1 Switch browser automation from Playwright MCP to CLI in the
+    source command (`open`, `eval`, `resize`, `screenshot`). Figma kept
+    on MCP. [verify: manual-run-claude]
+      → VERIFIED 2026-07-20: live end-to-end run passed at a basic
+        level. The conformance-first gate (Decision 4) runs.
+      → CORRECTED 2026-07-17: the original coding wired the diff to
+        `toHaveScreenshot`, which does NOT exist in `@playwright/cli`
+        (it is `@playwright/test`-only). Rewrote the gate to
+        conformance-first (Decision 4); pixel diff via standalone
+        pixelmatch is now a MOCKUP-only fallback. CLI `eval`/`resize`
+        verified present in the installed binary. Still pending a live
+        end-to-end run.
   - [X] 1.2 Prerequisites preflight: Figma-MCP presence check,
     Playwright-CLI install-if-absent + functional re-check, reachable-
     URL note. [verify: manual-run-claude]
@@ -139,14 +193,21 @@ with Figma named as the primary design source.
     `/embo:visual-impl`) and `visual-qa-reviewer.md` →
     `plugin/agents/`. [verify: code-only]
       → done 2026-07-15 (claude-mem obs 28722)
-  - [~] 1.4 Rewrite `/dev:visual-impl` → `/embo:visual-impl` (2 refs);
+  - [X] 1.4 Rewrite `/dev:visual-impl` → `/embo:visual-impl` (2 refs);
     strip `~/artec/...` origin path from the shipped command.
     [verify: code-only]
+      → INCOMPLETE until 2026-07-17: the shipped command lacked YAML
+        frontmatter, so it did not register as `/embo:visual-impl` at
+        all, and a stale dogfood copy `.claude/commands/dev/
+        visual-impl.md` kept surfacing `/dev:visual-impl`. Fixed: added
+        frontmatter (registration VERIFIED live — skill list now shows
+        `embo:visual-impl`), deleted the stale dev/ copy (git rm).
+        Now genuinely done.
 
-- [~] 2.0 **User Story:** As a plugin user, the command fails cleanly
+- [X] 2.0 **User Story:** As a plugin user, the command fails cleanly
   when its dependencies are absent, and works against any target origin.
-  [1/3 coded]
-  - [~] 2.1 Target is a **URL of any origin**, not a local server:
+  [3/3; exercised in the 2026-07-20 live run]
+  - [X] 2.1 Target is a **URL of any origin**, not a local server:
     renamed `<target-route>` → `<target-url>`; Arguments, prereq #3, and
     Step 3 now cover local dev server, hosted preview deploy, staging,
     and sandbox. Step 3 checks reachability and stops on a dead URL
@@ -154,7 +215,7 @@ with Figma named as the primary design source.
     the latest push. (Design correction, RULE:BEHAVIOUR-FIRST — the
     prototype wrongly hardcoded localhost.) [verify: manual-run-claude]
       → coded 2026-07-15 in both plugin + .claude copies
-  - [~] 2.2 Degrade policy specified (decision 9): **error always stops,
+  - [X] 2.2 Degrade policy specified (decision 9): **error always stops,
     only clean absence degrades**. A tool that errors or a required input
     missing → halt + report, no auto-fallback, no self-granted exception.
     Preflight #1 splits Figma-MCP *required* tools (stop) from *optional*
@@ -162,7 +223,7 @@ with Figma named as the primary design source.
     Code Connect absent → direct markup; token export absent → MOCKUP
     mode. Every degraded path stated in output. [verify: manual-run-claude]
       → coded 2026-07-15 (both copies synced)
-  - [~] 2.3 Clean stop when required Figma-MCP tools are absent:
+  - [X] 2.3 Clean stop when required Figma-MCP tools are absent:
     preflight #1 says stop with a connect-the-server message if ANY of
     metadata/design-context/variable-defs/screenshot is missing.
     [verify: manual-run-claude]
@@ -181,7 +242,13 @@ with Figma named as the primary design source.
       → done 2026-07-15
 
 - [~] 4.0 **User Story:** As the maintainer, the change is committed and
-  versioned; the tagged release waits for verification. [1/3 coded]
+  versioned; the tagged release waits for verification. [2/3; release
+  gate now satisfied by the 2026-07-20 live run]
+    → NOTE: 0.2.0 and 0.2.1 were tagged and released before the E2E run
+      (decision 8's deferral was effectively bypassed at 0.2.0). The
+      conformance-first tool-contract corrections landed after 0.2.1
+      (commits c5d4c67, b67d56a). The verified run therefore qualifies a
+      **v0.2.2 patch release** carrying those corrections — not v0.2.0.
   - [X] 4.1 Commit moved + edited files (plugin/ copies, .claude/
     sources, CLAUDE.md, README, both manifests, CHANGELOG, this doc).
     [verify: code-only]
@@ -190,8 +257,13 @@ with Figma named as the primary design source.
     plugin.json` + `.claude-plugin/marketplace.json`; add a 0.2.0
     CHANGELOG entry marked unreleased. [verify: code-only]
       → merged in PR #25 (cc91109)
-  - [ ] 4.3 Cut the git tag `v0.2.0` + GitHub Release — DEFERRED until a
-    verified end-to-end run exists (decision 8). [verify: manual]
+  - [~] 4.3 Cut the release now that a verified end-to-end run exists
+    (decision 8 gate satisfied 2026-07-20). Corrected target: bump
+    0.2.1 → **0.2.2**, add a 0.2.2 CHANGELOG entry, land via PR to main,
+    then tag `v0.2.2` + GitHub Release. [verify: manual]
+      → 2026-07-20: version bumped in plugin.json + marketplace.json,
+        0.2.2 CHANGELOG entry added, task markers reconciled. PR +
+        tag/Release pending user go.
 
 - [X] 5.0 **User Story (DECISION GATE):** As the maintainer, I decide
   whether these ship stable or experimental. [1/1]

@@ -18,6 +18,37 @@ install is documented as a fallback). All shipped components live
 under `plugin/`; the manifests are `.claude-plugin/marketplace.json`
 (repo root) and `plugin/.claude-plugin/plugin.json`.
 
+## Core Design Principle — Enforce, Don't Ask
+
+A behavioral rule that exists only as prose the model is asked to
+follow is unreliable and will eventually be violated — under load the
+model stops looking, guesses, and reverts to its defaults. **The goal
+of embo is to convert every such rule into an external, deterministic
+enforcement mechanism** — a hook, a test, a bin wrapper, a captured
+observation — that makes the correct behavior happen, or makes the
+wrong behavior fail loudly, regardless of whether the model remembers
+to comply.
+
+The task tree is this principle applied: docs-first *guard* (010),
+test-integrity (013), the behavioral-reminder and approval hooks
+(015/026/027/030), rule-salience with a `validate-askuser.sh` PreToolUse
+hook (039), mechanical correction capture (041), the deterministic
+`/embo:improve` flow (042). Each replaces a "please remember to…" with
+a mechanism.
+
+Two consequences, both load-bearing:
+
+1. **A rule the maintainer must state more than once is evidence of a
+   missing mechanism.** The correct response to a repeated correction is
+   not more prose — it is to build the hook/test/wrapper that enforces
+   it. Adding another sentence to a rules file that the model already
+   ignored is not a fix.
+2. **embo is built by the same agent that uses it (dogfooding), so the
+   agent's own violations are the backlog.** When Claude breaks a rule
+   while working in this repo, that break is the specification for the
+   next enforcement mechanism — capture it as a task, do not just
+   apologize and promise.
+
 ## Architecture
 
 ### Three Components
@@ -122,7 +153,10 @@ Edit `rlm_repl.py` → `LANGUAGE_MAP` dict.
 .claude-plugin/marketplace.json  # marketplace entry, source: ./plugin
 plugin/                          # THE PLUGIN ROOT (${CLAUDE_PLUGIN_ROOT})
 ├── .claude-plugin/plugin.json   # manifest (name:"embo")
-├── bin/rlm_repl                 # PATH wrapper → runs rlm_scripts/rlm_repl.py
+├── bin/                         # PATH wrappers (bare commands, no ${...})
+│   ├── rlm_repl                 # → runs rlm_scripts/rlm_repl.py
+│   ├── embo-deliver             # one-shot stage+commit+push (task 038)
+│   └── embo-corrections         # /embo:improve list-pending/write/mode (task 042)
 ├── agents/
 │   ├── rlm-subcall.md           # RLM chunk analysis subagent (Haiku)
 │   ├── examine-advisor.md       # /embo:research:examine agent
@@ -135,7 +169,9 @@ plugin/                          # THE PLUGIN ROOT (${CLAUDE_PLUGIN_ROOT})
 │   └── research/                # examine.md, verify.md
 ├── claude-mem/                  # claude-mem integration helpers
 │   ├── code-embo.build.jq       # jq: add `correction` type to code mode
-│   └── corrections-lib.sh       # sourceable enable/disable/curation fns
+│   ├── corrections-lib.sh       # sourceable enable/disable/curation/
+│   │                              # list-pending/mode fns
+│   └── corrections-lib.test.sh  # fixture tests for corrections-lib.sh
 ├── profiles/                    # quality.yaml, fast.yaml, minimal.yaml
 ├── hooks/
 │   ├── hooks.json               # registers the 3 event handlers
@@ -186,6 +222,38 @@ Conventional style takes priority. Goal: enough to find the right
 commit later — what and (if non-obvious) why. Add a body only when
 the diff doesn't answer *why*; never restate the diff. A one-line
 commit is fine when the subject is enough.
+
+Write the message to this bar — a stranger with no context reads
+`git log` and understands what changed:
+
+- **State the resulting change**, the same "result, not journey" way as
+  CHANGELOG Entries below: describe what the code or version now is or
+  does. The trigger that led to the commit (a test passing, a review, a
+  verification) is not part of it.
+- **Name the capability in plain words, not an internal label.** Write
+  what the thing does ("a command that builds a Figma design as code and
+  checks it matches"), so the subject stands alone for a reader who has
+  never seen the feature name.
+- **The subject stands on its own; the body says what the commit
+  contains.** When a commit bundles several files or concerns, the body
+  lists them so the reader learns the contents without opening the diff.
+- **Readable outside this session**: spell out any reference in full
+  rather than using session-local shorthand.
+
+## CHANGELOG Entries
+
+The CHANGELOG describes **the state of the released version**, for a
+user. **Every release gets an entry** — the entry records why the
+version exists.
+
+- **Describe what the version does.** State the behavior a user gets in
+  the released version; the before-state is not the user's concern.
+- **A fix still gets a `Fixed` entry**, phrased as the capability the
+  user has ("X handles Y correctly").
+- **Behavior, not mechanism.** Describe what the feature does for the
+  user; keep internals (which API or library the code calls, and how
+  the check is computed) out unless that detail is itself the
+  user-facing change.
 
 ## Safety Rules
 
