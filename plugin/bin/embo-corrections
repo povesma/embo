@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# embo-corrections — wrapper that runs the correction-review helpers as a
+# plain command, for /embo:improve.
+#
+# Why: /embo:improve must not depend on the model to expand
+# ${CLAUDE_PLUGIN_ROOT} (unset in a plain shell → a broken source path)
+# or to hardcode an absolute path. Like bin/rlm_repl, this wrapper is
+# shipped in the plugin's bin/ (on the Bash tool PATH while the plugin is
+# enabled), so the command calls a bare `embo-corrections ...` — no
+# expansion in the command string, so no approval prompt, and a simple
+# `Bash(embo-corrections *)` allow rule matches.
+#
+# The wrapper resolves corrections-lib.sh relative to its OWN location,
+# so it works wherever the plugin is installed. The project name is
+# DERIVED from the caller's CWD basename (the value claude-mem keys
+# observations by) — never guessed by the model.
+#
+# Subcommands:
+#   list-pending [<curation-file>]
+#       Print the not-yet-reviewed corrections for the current project as
+#       a JSON array, newest first. Project = basename of $PWD. Curation
+#       file defaults to ./.claude/correction-curation.json.
+#   write [<curation-file>] <id>...
+#       Record the given correction IDs as reviewed (merged, deduped,
+#       atomic). Curation file defaults as above.
+#   mode
+#       Print the active claude-mem mode ("code-embo" when correction
+#       capture is on, else "code"). Reads claude-mem's own settings.
+#   project
+#       Print the derived project name (basename of $PWD). For diagnostics.
+
+set -uo pipefail
+
+# Resolve this script's real directory, following symlinks (PATH entries
+# and plugin installs may be symlinked).
+src="${BASH_SOURCE[0]}"
+while [ -h "$src" ]; do
+  dir="$(cd -P "$(dirname "$src")" >/dev/null 2>&1 && pwd)"
+  src="$(readlink "$src")"
+  case "$src" in /*) ;; *) src="$dir/$src" ;; esac
+done
+bin_dir="$(cd -P "$(dirname "$src")" >/dev/null 2>&1 && pwd)"
+
+# bin/ sits at the plugin root; claude-mem/ is its sibling.
+lib="$bin_dir/../claude-mem/corrections-lib.sh"
+# shellcheck source=/dev/null
+. "$lib"
+
+# Default curation file, relative to the caller's CWD (project-local).
+DEFAULT_CURATION=".claude/correction-curation.json"
+
+# Project name = basename of the working directory, the value claude-mem
+# keys observations by. Derived, not passed in.
+project_name() { basename "$PWD"; }
+
+cmd="${1:-}"
+[ "$#" -gt 0 ] && shift
+
+case "$cmd" in
+  list-pending)
+    curation="${1:-$DEFAULT_CURATION}"
+    corrections_list_pending "$(project_name)" "$curation"
+    ;;
+  write)
+    # Optional leading curation-file arg: if the first arg is not a bare
+    # integer, treat it as the curation-file path; otherwise use the
+    # default and treat every arg as an id.
+    if [ "$#" -gt 0 ] && ! printf '%s' "${1:-}" | grep -Eq '^[0-9]+$'; then
+      curation="$1"; shift
+    else
+      curation="$DEFAULT_CURATION"
+    fi
+    corrections_curation_write "$curation" "$@"
+    ;;
+  mode)
+    corrections_mode
+    ;;
+  project)
+    project_name
+    ;;
+  *)
+    printf 'usage: embo-corrections {list-pending|write|mode|project} [args]\n' >&2
+    exit 2
+    ;;
+esac
