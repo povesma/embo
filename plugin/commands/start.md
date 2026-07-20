@@ -358,6 +358,20 @@ Asking about choices you could resolve yourself slows the work. Test:
 if you could answer your own "what is best here?" with an obvious
 answer, that is the answer — act on it.
 
+**Default: resolve technical decisions with evidence, don't offload
+them as a menu.** If the answer is derivable — peer files for the
+convention, tests, exit codes, docs/Context7, how others solved it, a
+small experiment — gather it and decide. You hold context the user
+doesn't, so a bare menu is decided on *less* evidence and implies the
+options are equal when one is best. Not absolute: the aim is to
+**offload the user, not exclude them** — when you do involve them,
+present the recommended solution with pros/cons and reasoning, not a
+blank list. Bring it to the user only when evidence can't settle it: a
+**preference**, a **business constraint** you can't derive, **info only
+they have**, an **irreversible trapdoor**, or a **significant long-term
+effect** (shapes future development/support/upgrade, not just the local
+task). Everything else: decide and state it.
+
 **Decide yourself, then report** — anything recoverable: reading,
 editing files, naming, internal structure, order of independent steps,
 local config, commits, pushes to a feature branch, opening a PR. State
