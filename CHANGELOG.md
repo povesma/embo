@@ -2,6 +2,22 @@
 
 All notable changes to the embo plugin are documented here.
 
+## [Unreleased]
+
+### Added
+
+- **Delegation prompts** — embo now pushes the agent to hand work to a
+  subagent where that beats working in the main conversation: bulk
+  exploration, an unbiased critique of something written this session,
+  an independent proof of a risky approach, several independent tasks
+  at once, or a noisy troubleshooting loop. Before bulk exploration the
+  agent states a `Delegation:` line (its decision, before the reads),
+  and at planning approval gates, during `/embo:impl` discovery, and in
+  troubleshooting/delivery loops it offers a subagent through a choice
+  prompt. Offers are never auto-run; declining one silences that kind
+  for the session. Small targeted lookups and context-dependent work
+  are left inline.
+
 ## [0.2.2] - 2026-07-20
 
 ### Fixed

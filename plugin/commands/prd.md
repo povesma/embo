@@ -398,7 +398,10 @@ When referencing any library, framework, or external API — use the Context7 MC
 3. Use RLM to analyze current codebase capabilities
 4. **🚨 MANDATORY: Ask clarifying questions using AskUserQuestion tool**
 5. Synthesize PRD incorporating user's answers + RLM + claude-mem insights
-6. Save to both claude-mem and file system
-7. Report what insights were used and quality improvements
-8. Suggest `/embo:tech-design` as next step
+6. Before approval, apply RULE:DELEGATE trigger 2: offer a
+   clean-context `examine-advisor` critique of the draft (marker
+   `[delegate:trigger-2]`)
+7. Save to both claude-mem and file system
+8. Report what insights were used and quality improvements
+9. Suggest `/embo:tech-design` as next step
 9. DO NOT start technical design yet, wait for user approval

@@ -124,6 +124,11 @@ back to `conventional`.
 
 ## Process
 
+**Delegation checkpoint (per RULE:DELEGATE trigger 5).** If delivery
+includes a deploy-then-verify loop, offer to run it in a subagent
+(marker `[delegate:trigger-5]`). Routine stage/commit/push stays
+inline.
+
 ### Step 0: Load profile (always, before any mode)
 
 ```bash

@@ -247,6 +247,29 @@ of resetting to zero every morning.
 
 Full per-command reference under [Reference](#reference).
 
+### Delegation prompts
+
+embo pushes the agent to hand work to a subagent when that beats
+doing it in the main conversation — for exploration that would read
+many files, an unbiased critique of something written this session,
+an independent proof of a risky approach, several independent tasks
+at once, or a noisy troubleshooting loop. You will see two things:
+
+- **A `Delegation:` line before bulk exploration** — the agent
+  states whether it is delegating and why, *before* it starts
+  reading, so the choice is visible while it still saves context.
+- **A subagent offer via a choice prompt** — at planning approval
+  gates (`/embo:prd`, `/embo:tech-design`, `/embo:tasks`), during
+  `/embo:impl` discovery, and in troubleshooting/delivery loops, the
+  agent offers to spawn a subagent. You approve or decline; declining
+  a given kind of offer silences it for the rest of the session.
+  Nothing is ever spawned without your approval.
+
+The agent never delegates a small, targeted lookup or work that
+needs the running conversation's context — the offer appears only
+where a subagent genuinely pays off. To tune this, edit `RULE:DELEGATE`
+in `plugin/commands/start.md`.
+
 ### Rapid delivery: `/embo:git deliver`
 
 For a small change or hotfix, `/embo:git deliver` runs the whole

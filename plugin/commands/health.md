@@ -21,6 +21,10 @@ operational. Renders a combined summary table with fix instructions.
 to determine which checks to run and which MCPs to validate.
 If no profile, use defaults (rlm=true, memory_backend=claude-mem).
 
+**Delegation checkpoint (per RULE:DELEGATE trigger 5).** Fixed checks
+run inline; if a failure becomes an open-ended troubleshooting loop,
+offer to run it in a subagent (marker `[delegate:trigger-5]`).
+
 **Run all checks even if earlier ones fail. Collect results first,
 then render the combined summary at the end.**
 
