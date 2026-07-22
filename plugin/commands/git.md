@@ -384,7 +384,11 @@ From the current development situation, determine:
 - **branch** — the branch the change is delivered ON. For `push`, this is
   where the commit lands. For `pr`/`pr-merge`, this is the head branch the
   PR is opened FROM. Default to the current branch ONLY when no deploy
-  branch is implicated (see above).
+  branch is implicated (see above). This field is **authoritative**: the
+  executor reconciles the working tree onto it before committing (see
+  "Branch reconcile" below) — it does NOT commit on whatever branch you
+  happen to be standing on. Name the real destination here; do not assume
+  the checked-out branch is correct.
 - **mode** — one of:
   - `push` — stage + commit + push. For a feature branch you own that
     nothing deploys from directly.
@@ -448,6 +452,29 @@ message:
 
 For `pr-merge` plans the leading irreversibility comment is mandatory —
 it is how the dialog warns the user that approval includes a merge.
+
+**Branch reconcile (executor guarantee).** `plan.branch` is the single
+source of truth for where the commit lands; the executor never trusts the
+ambient checked-out branch. Before staging it:
+
+1. **Refuses a protected base as a `push` commit target.** If `mode` is
+   `push` and `branch` is `main`/`master`, delivery aborts (exit 7) — a
+   commit must not land directly on a protected branch. To reach `main`,
+   use `pr`/`pr-merge` with `base: main` (a protected branch is a valid PR
+   *base*, never a `push` target).
+2. **Reconciles the working tree onto `plan.branch`.** If you are on a
+   different branch, it switches to `plan.branch`. If that branch does not
+   exist, it is created from `base` (pr modes); in `push` mode there is no
+   base, so an absent branch aborts (exit 7) with guidance rather than
+   inventing the branch point from the current HEAD. A pre-existing branch
+   is switched to as-is and never force-reset.
+3. **Re-asserts** the branch immediately before commit; any drift aborts
+   (exit 7) with no commit made.
+
+Consequence for planning: name the true destination in `branch`. You do
+not need to switch branches yourself before delivering — the executor
+moves the working tree for you — but a `push` plan to a branch that does
+not exist yet will abort, so create the branch first or use a `pr` mode.
 
 **Zero-gate warning:** if the environment allowlists
 `Write(tmp/git-*.txt)`, the write is silent and the delivery runs with

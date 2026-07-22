@@ -248,7 +248,7 @@ assert_exit "P2: outside a git repo -> exit 2" 2 "$RC_NR"
 
 REPO2="$WORK/repo73"
 mkdir -p "$REPO2"
-git -C "$REPO2" init -q
+git -C "$REPO2" init -q -b b     # start ON plan.branch so reconcile is a no-op
 git -C "$REPO2" config user.email t@t.t
 git -C "$REPO2" config user.name t
 printf 'v1\n' > "$REPO2/a.py"
@@ -272,7 +272,7 @@ assert_contains "P4: failure msg reflects no new commit" "nothing committed, pus
 # (b) a genuinely-staged change commits and does NOT warn
 REPO3="$WORK/repo73b"
 mkdir -p "$REPO3"
-git -C "$REPO3" init -q
+git -C "$REPO3" init -q -b b     # start ON plan.branch so reconcile is a no-op
 git -C "$REPO3" config user.email t@t.t
 git -C "$REPO3" config user.name t
 printf 'v1\n' > "$REPO3/a.py"
@@ -367,6 +367,133 @@ git -C "$BARE76" rev-parse --verify -q refs/heads/b >/dev/null && B_ON_REMOTE=1
 assert_exit "P6: branch b arrived on the remote" 1 "$B_ON_REMOTE"
 UP76="$(git -C "$REPO76" rev-parse --abbrev-ref 'b@{u}' 2>/dev/null)"
 assert_contains "P6: upstream re-pointed to origin/b" "origin/b" "$UP76"
+
+# --- BUG-2026-07-22: branch reconcile + protected-base guard -------------
+# The executor must treat plan.branch as authoritative for where the commit
+# lands, never the ambient checked-out branch. Regression: a commit landed
+# on main while the push targeted a stale feature branch.
+
+# (a) protected base as a push target -> refuse, exit 7, no git changes.
+#     This is a validation-time check (before any git state), so --dry-run
+#     exercises it and asserts nothing runs.
+for b in main master; do
+  PLAN_PROT="$(write_plan "prot-$b.txt" "branch: $b
+mode: push
+file: a.py
+message:
+x")"
+  run_dry "$PLAN_PROT"
+  assert_exit "reconcile: push to protected '$b' -> exit 7" 7 "$RC"
+  assert_contains "reconcile: names the protected branch '$b'" "$b" "$OUT"
+  assert_not_contains "reconcile: protected push runs no git add" "add -- " "$OUT"
+done
+
+# (b) protected branch as a PR *base* is legitimate -> not refused.
+run_dry "$VALID_PR"    # base: main, branch: feature/x
+assert_exit "reconcile: main as PR base is allowed, exit 0" 0 "$RC"
+
+# (c) THE BUG: standing on main, plan targets a feature branch that already
+#     exists at a stale commit. The commit must land on the feature branch,
+#     never on main. Real run against a throwaway repo with a bare remote.
+BARE_R="$WORK/bareR.git"
+git init -q --bare "$BARE_R"
+REPO_R="$WORK/repoR"
+mkdir -p "$REPO_R"
+git -C "$REPO_R" init -q -b main
+git -C "$REPO_R" config user.email t@t.t
+git -C "$REPO_R" config user.name t
+printf 'x\n' > "$REPO_R/a.py"
+git -C "$REPO_R" add a.py
+git -C "$REPO_R" commit -qm init
+git -C "$REPO_R" branch feat/x           # feature branch exists at init commit
+git -C "$REPO_R" remote add origin "$BARE_R"
+git -C "$REPO_R" push -qu origin main
+MAIN_BEFORE="$(git -C "$REPO_R" rev-parse main)"
+# operator is standing on main (the mistake) with a real change to deliver:
+git -C "$REPO_R" checkout -q main
+printf 'y\n' > "$REPO_R/a.py"
+PLAN_R="$(write_plan reconcile.txt 'branch: feat/x
+mode: push
+file: a.py
+message:
+fix: bump on the right branch')"
+OUT_R="$(cd "$REPO_R" && bash "$BIN" --plan "$PLAN_R" 2>&1)"
+RC_R=$?
+assert_exit "reconcile: delivery from main -> exit 0" 0 "$RC_R"
+MAIN_AFTER="$(git -C "$REPO_R" rev-parse main)"
+assert_exit "reconcile: main is UNCHANGED (commit did not land here)" \
+  "$MAIN_BEFORE" "$MAIN_AFTER"
+HEAD_BRANCH="$(git -C "$REPO_R" symbolic-ref --short HEAD)"
+assert_contains "reconcile: HEAD ends on the plan branch" "feat/x" "$HEAD_BRANCH"
+FEAT_MSG="$(git -C "$REPO_R" log -1 --format=%s feat/x)"
+assert_contains "reconcile: commit landed on feat/x" "fix: bump on the right branch" "$FEAT_MSG"
+
+# (d) branch does not exist + push mode (no base) -> abort, exit 7, no commit.
+REPO_N="$WORK/repoN"
+mkdir -p "$REPO_N"
+git -C "$REPO_N" init -q -b main
+git -C "$REPO_N" config user.email t@t.t
+git -C "$REPO_N" config user.name t
+printf 'x\n' > "$REPO_N/a.py"
+git -C "$REPO_N" add a.py
+git -C "$REPO_N" commit -qm init
+CNT_N_BEFORE="$(git -C "$REPO_N" rev-list --count HEAD)"
+printf 'y\n' > "$REPO_N/a.py"
+PLAN_N="$(write_plan noexist.txt 'branch: feat/new
+mode: push
+file: a.py
+message:
+fix: bump')"
+OUT_N="$(cd "$REPO_N" && bash "$BIN" --plan "$PLAN_N" 2>&1)"
+RC_N=$?
+assert_exit "reconcile: push to absent branch (no base) -> exit 7" 7 "$RC_N"
+assert_contains "reconcile: message tells operator to create it or use pr" "does not exist" "$OUT_N"
+CNT_N_AFTER="$(git -C "$REPO_N" rev-list --count HEAD)"
+assert_exit "reconcile: no commit made when aborting" "$CNT_N_BEFORE" "$CNT_N_AFTER"
+
+# (e) branch does not exist + pr mode with base -> created from base, delivered.
+BARE_C="$WORK/bareC.git"
+git init -q --bare "$BARE_C"
+REPO_C="$WORK/repoC"
+mkdir -p "$REPO_C"
+git -C "$REPO_C" init -q -b main
+git -C "$REPO_C" config user.email t@t.t
+git -C "$REPO_C" config user.name t
+printf 'x\n' > "$REPO_C/a.py"
+git -C "$REPO_C" add a.py
+git -C "$REPO_C" commit -qm init
+git -C "$REPO_C" remote add origin "$BARE_C"
+git -C "$REPO_C" push -qu origin main
+printf 'y\n' > "$REPO_C/a.py"
+# pr mode invokes gh, which is not present in the test env; the branch
+# creation + commit + push happen BEFORE gh. We assert the branch was
+# created from base and the commit landed on it, regardless of the gh step.
+PLAN_C="$(write_plan create-pr.txt 'branch: feat/created
+mode: pr
+base: main
+file: a.py
+message:
+feat: on a freshly created branch')"
+OUT_C="$(cd "$REPO_C" && bash "$BIN" --plan "$PLAN_C" 2>&1)" || true
+CREATED=0
+git -C "$REPO_C" show-ref --verify --quiet refs/heads/feat/created && CREATED=1
+assert_exit "reconcile: pr mode created the absent branch from base" 1 "$CREATED"
+if [ "$CREATED" -eq 1 ]; then
+  C_MSG="$(git -C "$REPO_C" log -1 --format=%s feat/created)"
+  assert_contains "reconcile: commit landed on the created branch" "feat: on a freshly created branch" "$C_MSG"
+fi
+
+# (f) reconcile does NOT run under --dry-run (dry-run mutates no git state).
+#     A dry-run plan targeting a protected base for PUSH still hits the (a)
+#     validation refusal; but a dry-run targeting an absent feature branch
+#     must NOT abort at reconcile, because reconcile is skipped in dry mode.
+PLAN_DRY="$(write_plan dry-absent.txt 'branch: feat/whatever
+mode: push
+file: a.py
+message:
+x')"
+run_dry "$PLAN_DRY"
+assert_exit "reconcile: dry-run skips reconcile (no exit 7 for absent branch)" 0 "$RC"
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

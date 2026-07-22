@@ -21,6 +21,14 @@
 # delivered (push + optional PR/merge). This lets `deliver` land an
 # already-committed branch without inventing an empty commit.
 #
+# The plan file is the source of truth for the target branch. embo-deliver
+# NEVER trusts the ambient checked-out branch: before staging it reconciles
+# the working tree onto `plan.branch`, refuses to commit onto a protected
+# base (main/master), and re-asserts the branch immediately before commit.
+# See tasks/044 delivery bug report (2026-07-22): a commit landed on main
+# while the push targeted a stale feature branch, because the old code
+# committed on whatever HEAD pointed at.
+#
 # Exit codes:
 #   0  full cycle succeeded
 #   2  plan invalid/missing, or not inside a git repo (no git changes made)
@@ -28,6 +36,7 @@
 #   4  push failed (commit made locally, or existing commit if none staged)
 #   5  gh pr create failed (committed+pushed)
 #   6  gh pr merge failed/blocked (PR opened)
+#   7  branch reconcile refused (wrong/protected branch; NO git changes made)
 
 set -uo pipefail
 
@@ -114,6 +123,59 @@ esac
 case "$MODE" in
   pr|pr-merge) [ -n "$BASE" ] || fail "mode $MODE needs 'base'" 2 ;;
 esac
+
+# --- branch reconcile -----------------------------------------------------
+# The plan's `branch:` is authoritative for where the commit lands. The
+# ambient checked-out branch is only a starting point and is NEVER trusted:
+# committing on whatever HEAD points at is the defect this guards against.
+# Order: (1) refuse a protected base as a commit target, (2) move the working
+# tree onto plan.branch without ever force-resetting a pre-existing branch,
+# (3) re-assert the branch just before commit (done at the commit site).
+
+# A protected base is a legitimate PR *base* but never a `push` commit
+# target. Only `push` lands a commit directly on plan.branch; pr/pr-merge
+# open a PR into `base`, so `main` as a base is fine there.
+is_protected() {
+  case "$1" in main|master) return 0 ;; *) return 1 ;; esac
+}
+
+if [ "$MODE" = "push" ] && is_protected "$BRANCH"; then
+  fail "refusing to commit to protected branch '$BRANCH'. Set branch: to a feature branch, or use mode: pr/pr-merge with base: $BRANCH." 7
+fi
+
+# Reconcile only for a real run; a dry-run reports intent without touching
+# git state. current_branch is empty on a detached HEAD.
+if [ "$DRYRUN" -eq 0 ]; then
+  current_branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+
+  if [ "$current_branch" != "$BRANCH" ]; then
+    if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
+      # The branch already exists. Move onto it, but never clobber: if the
+      # switch fails (e.g. a dirty tree would be overwritten), abort rather
+      # than force. A pre-existing branch at a stale commit is exactly what
+      # caused the reported bug — we switch to it as-is and let the commit
+      # land on top; we do NOT reset it to HEAD.
+      git switch "$BRANCH" \
+        || fail "cannot switch to existing branch '$BRANCH' (uncommitted changes would be lost?); resolve the working tree and re-run." 7
+    else
+      # The branch does not exist yet. Create it from the declared base for
+      # pr modes. For push mode there is no base, and creating from ambient
+      # HEAD is the defect itself — abort instead.
+      if [ -n "$BASE" ]; then
+        git switch -c "$BRANCH" "$BASE" \
+          || fail "cannot create branch '$BRANCH' from base '$BASE'." 7
+      else
+        fail "plan.branch '$BRANCH' does not exist and mode 'push' gives no base to create it from; create the branch first, or use pr mode with base:." 7
+      fi
+    fi
+  fi
+
+  # Last-line drift check: whatever the steps above did, the commit MUST
+  # land on plan.branch or not at all.
+  current_branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+  [ "$current_branch" = "$BRANCH" ] \
+    || fail "after reconcile, HEAD is '$current_branch' not plan.branch '$BRANCH'; aborting before commit." 7
+fi
 
 # --- run helper: dry-run prints, real run executes ------------------------
 
