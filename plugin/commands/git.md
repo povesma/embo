@@ -397,8 +397,16 @@ From the current development situation, determine:
   - `pr-merge` — push + open a PR + merge it into `base`. Use when the user
     asked to land the change on the deploy branch in one go; merge is never
     implicit.
-- **base** — required for `pr`/`pr-merge`: the branch the PR merges into
-  (default: `main`, or `master` if the repo has no `main`).
+  - `release` — `pr-merge` + `git tag vX.Y.Z` + publish a GA GitHub
+    Release. Choose it only when publishing a new version (version files +
+    CHANGELOG changed); else prefer `pr-merge`.
+- **base** — required for `pr`/`pr-merge`/`release`: the branch the PR
+  merges into (default: `main`, or `master` if the repo has no `main`).
+- **version** — required for `release`: no `v` prefix (e.g. `0.2.3`);
+  executor tags `v<version>`. Confirm it is already set in the project's
+  version files; never set or bump it yourself (ask if unclear).
+- **release-notes** — required for `release`: the Release body block, per
+  RULE:RELEASE-BODY-AUTHORING.
 - **files** — the explicit set of files that make up this change, by name.
   Determine them from the work just done. **Never** stage `-A`/`.`; list
   every file deliberately. Files not part of this change are excluded. List
@@ -435,23 +443,27 @@ rejecting it cancels the delivery. Do not show the plan in chat before
 or after writing, and do not ask any follow-up question — either would
 add a second interaction to a flow whose point is exactly one.
 
-Format (line-oriented; `message:` must be last, its body runs to EOF;
-`#` lines are ignored by the executor):
+Format (line-oriented; scalar keys first, then block(s) — each block runs
+to the next block header or EOF; `#` lines are ignored by the executor):
 
 ```
 # pr-merge: PR will be MERGED into <base> — irreversible   <- REQUIRED
-#                                          comment for pr-merge plans
+#                            comment for pr-merge / release plans
 branch: <target-branch>
-mode: push | pr | pr-merge
-base: <base-branch>            # only for pr / pr-merge
+mode: push | pr | pr-merge | release
+base: <base-branch>            # only for pr / pr-merge / release
+version: <X.Y.Z>               # only for release (no v prefix)
 file: <path>                   # one line per file, explicit names
 file: <path>
+release-notes:                 # only for release; the Release body
+<release body, may span multiple lines>
 message:
 <commit message, verbatim, may span multiple lines>
 ```
 
-For `pr-merge` plans the leading irreversibility comment is mandatory —
-it is how the dialog warns the user that approval includes a merge.
+For `pr-merge` and `release` plans the leading irreversibility comment is
+mandatory — it warns the user that approval includes a merge (and, for
+`release`, a public tag + Release).
 
 **Branch reconcile (executor guarantee).** `plan.branch` is the single
 source of truth for where the commit lands; the executor never trusts the
