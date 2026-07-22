@@ -513,5 +513,150 @@ x')"
 run_dry "$PLAN_DRY"
 assert_exit "reconcile: dry-run skips reconcile (no exit 7 for absent branch)" 0 "$RC"
 
+# --- T043 1.0: mode: release (dry-run contract) --------------------------
+# A release is a pr-merge PLUS a tail: after merge, tag vX.Y.Z on the merge
+# commit and publish a non-draft/non-prerelease GitHub Release. The executor
+# writes NOTHING to source files — the maintainer edits the version
+# manifests + CHANGELOG beforehand and lists them as ordinary `file:`
+# entries (verified by the skill, never by the executor). New plan fields:
+# `version:` (the vX.Y.Z to tag) and a `release-notes:` block (the Release
+# body). Dry-run must PRINT each step in order and run nothing.
+
+REL_PLAN='# release: merge + PUBLIC tag + Release — irreversible
+branch: feature/rel
+mode: release
+base: main
+version: 9.9.9
+file: plugin/.claude-plugin/plugin.json
+file: CHANGELOG.md
+release-notes:
+embo 9.9.9
+
+Highlights: the thing works.
+message:
+release: 9.9.9'
+
+REL="$(write_plan release.txt "$REL_PLAN")"
+run_dry "$REL"
+assert_exit "release: valid dry-run plan exits 0" 0 "$RC"
+# the executor stages ONLY the plan's file list (maintainer-prepared) —
+# it never edits or names manifests itself.
+assert_contains "release: stages the maintainer-edited manifest" "plugin.json" "$OUT"
+assert_contains "release: stages the maintainer-edited CHANGELOG" "CHANGELOG.md" "$OUT"
+assert_contains "release: commits"                    "git commit" "$OUT"
+assert_contains "release: pushes"                     "git push" "$OUT"
+assert_contains "release: opens a PR"                 "gh pr create" "$OUT"
+assert_contains "release: merges"                     "gh pr merge --squash" "$OUT"
+assert_contains "release: tags vX.Y.Z"                "git tag" "$OUT"
+assert_contains "release: tag carries the v-prefixed version" "v9.9.9" "$OUT"
+assert_contains "release: publishes a GitHub Release"  "gh release create" "$OUT"
+# the executor must NOT edit files itself — no jq, no manifest write step.
+assert_not_contains "release: executor does not run jq" "jq " "$OUT"
+
+# ordering: merge before tag; tag before release.
+line_of() { printf '%s\n' "$OUT" | grep -n -- "$1" | head -1 | cut -d: -f1; }
+N_MERGE="$(line_of 'gh pr merge')"
+N_TAG="$(line_of 'git tag')"
+N_REL="$(line_of 'gh release create')"
+assert_exit "release: merge precedes tag"   1 "$([ -n "$N_MERGE" ] && [ -n "$N_TAG" ] && [ "$N_MERGE" -lt "$N_TAG" ] && echo 1 || echo 0)"
+assert_exit "release: tag precedes publish" 1 "$([ -n "$N_TAG" ] && [ -n "$N_REL" ] && [ "$N_TAG" -lt "$N_REL" ] && echo 1 || echo 0)"
+
+# release requires version:
+REL_NOVER="$(write_plan rel-nover.txt '# release — irreversible
+branch: feature/rel
+mode: release
+base: main
+file: CHANGELOG.md
+release-notes:
+notes
+message:
+release: x')"
+run_dry "$REL_NOVER"
+assert_exit "release: missing version: -> exit 2" 2 "$RC"
+assert_not_contains "release: no-version plan runs no git add" "add -- " "$OUT"
+
+# release requires base:
+REL_NOBASE="$(write_plan rel-nobase.txt '# release — irreversible
+branch: feature/rel
+mode: release
+version: 9.9.9
+file: CHANGELOG.md
+release-notes:
+notes
+message:
+release: x')"
+run_dry "$REL_NOBASE"
+assert_exit "release: missing base: -> exit 2" 2 "$RC"
+
+# release requires a release-notes: block (the GitHub Release body)
+REL_NONOTES="$(write_plan rel-nonotes.txt '# release — irreversible
+branch: feature/rel
+mode: release
+base: main
+version: 9.9.9
+file: CHANGELOG.md
+message:
+release: x')"
+run_dry "$REL_NONOTES"
+assert_exit "release: missing release-notes: -> exit 2" 2 "$RC"
+
+# --- T043 2.0: release halts on failure, undoes nothing ------------------
+# Real run of a release plan where the PR step fails. The commit + push
+# must already have happened and NOT be reverted; the run stops with the
+# step's documented exit code (5, PR not created).
+#
+# CRITICAL: the host may have a real `gh` on PATH. A test must make NO real
+# network/API call, so we shadow `gh` with a stub that always fails,
+# injected at the FRONT of PATH for this run only. This makes the failing
+# step deterministic regardless of the host and guarantees no GitHub API is
+# touched.
+STUBDIR="$WORK/stubbin"
+mkdir -p "$STUBDIR"
+printf '#!/usr/bin/env bash\necho "stub gh: forced failure" >&2\nexit 1\n' > "$STUBDIR/gh"
+chmod +x "$STUBDIR/gh"
+
+BARE_H="$WORK/bareH.git"
+git init -q --bare "$BARE_H"
+REPO_H="$WORK/repoH"
+mkdir -p "$REPO_H"
+git -C "$REPO_H" init -q -b relbranch   # start ON the plan branch
+git -C "$REPO_H" config user.email t@t.t
+git -C "$REPO_H" config user.name t
+printf 'v1\n' > "$REPO_H/a.py"
+git -C "$REPO_H" add a.py
+git -C "$REPO_H" commit -qm init
+git -C "$REPO_H" remote add origin "$BARE_H"
+git -C "$REPO_H" push -qu origin relbranch
+CNT_H_BEFORE="$(git -C "$REPO_H" rev-list --count HEAD)"
+printf 'v2\n' > "$REPO_H/a.py"          # a real release change
+PLAN_H="$(write_plan rel-halt.txt '# release — irreversible
+branch: relbranch
+mode: release
+base: main
+version: 9.9.9
+file: a.py
+release-notes:
+notes body
+message:
+release: 9.9.9')"
+# stub gh at the front of PATH -> gh pr create fails -> exit 5, AFTER the
+# commit + push already succeeded.
+OUT_H="$(cd "$REPO_H" && PATH="$STUBDIR:$PATH" bash "$BIN" --plan "$PLAN_H" 2>&1)"
+RC_H=$?
+CNT_H_AFTER="$(git -C "$REPO_H" rev-list --count HEAD)"
+# The commit was made (count grew by 1) and is NOT undone by the failure.
+assert_exit "release halt: the release commit was made and kept" \
+  "$((CNT_H_BEFORE + 1))" "$CNT_H_AFTER"
+assert_exit "release halt: stops at the PR step -> exit 5" 5 "$RC_H"
+assert_not_contains "release halt: no reset/undo was attempted" "reset" "$OUT_H"
+# commit + push happened before the gh call; the status line says so, and
+# the tag/publish tail never ran.
+assert_contains "release halt: status shows commit+push before the halt" "committed, pushed" "$OUT_H"
+assert_not_contains "release halt: tag step did not run" "tagged v9.9.9" "$OUT_H"
+# no v-tag was created locally, since the tail is past the failing step.
+HAS_TAG=0
+git -C "$REPO_H" rev-parse -q --verify refs/tags/v9.9.9 >/dev/null 2>&1 && HAS_TAG=1
+assert_exit "release halt: no tag created (tail never reached)" 0 "$HAS_TAG"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

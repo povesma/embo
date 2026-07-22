@@ -54,7 +54,7 @@
       (story 2.0). Spike + hook artifacts removed. Finding preserved
       in tech-design "Rejected: the reactive nudge hook" (2026-07-21)
 
-- [~] 2.0 **User Story:** As an embo user, the model declares its
+- [X] 2.0 **User Story:** As an embo user, the model declares its
   delegation decision before bulk exploration, so the choice is made
   (and visible) before the reads are paid for
   - [X] 2.1 Write the declare-before-explore rule text into the
@@ -68,11 +68,13 @@
     → hook injects [DELEGATE checklist] with the declaration line;
       behavioral-reminder.test.sh 13 passed, 0 failed [live]
       (2026-07-21)
-  - [ ] 2.3 Live check: in a fresh session, give a task that needs
+  - [X] 2.3 Live check: in a fresh session, give a task that needs
     multi-file exploration; confirm a `Delegation:` line is emitted
     before the reads begin [verify: manual-run-claude]
+    → `Delegation: none, because …` emitted before /embo:start and
+      /embo:check reads in fresh session (2026-07-21)
 
-- [~] 3.0 **User Story:** As an embo user, every session carries the
+- [X] 3.0 **User Story:** As an embo user, every session carries the
   delegation decision framework, so the model knows when and how to
   suggest
   - [X] 3.1 Write RULE:DELEGATE block in `plugin/commands/start.md`:
@@ -89,10 +91,12 @@
       suite 13 passed, 0 failed [live] (2026-07-21)
   - [X] 3.3 Add DELEGATE to the BASELINE rules banner in
     `behavioral-reminder.sh:97` [verify: code-only]
-  - [ ] 3.4 New session: banner lists DELEGATE; checklist text
+  - [X] 3.4 New session: banner lists DELEGATE; checklist text
     injected on prompt submit [verify: manual-run-claude]
+    → DELEGATE in [RULES ACTIVE: ...] banner; [DELEGATE checklist]
+      injected on every prompt in fresh session (2026-07-21)
 
-- [~] 4.0 **User Story:** As a developer in embo commands, I get
+- [X] 4.0 **User Story:** As a developer in embo commands, I get
   delegation offers at prescribed moments, so high-leverage
   delegation does not depend on model initiative
   - [X] 4.1 Add approval-gate critique checkpoint (trigger 2, cost-
@@ -108,8 +112,15 @@
     did not fit a completion-checking command [verify: code-only]
     → all checkpoints written as one-line pointers to RULE:DELEGATE,
       no restated mechanics (2026-07-21)
-  - [ ] 4.4 Run one doc command end-to-end; approval gate offers
+  - [X] 4.4 Run one doc command end-to-end; approval gate offers
     the critique with marker [verify: manual-run-claude]
+    → verified live (2026-07-22): a real `/embo:tasks` run on task 043
+      reached its Final-Instructions approval gate and fired the
+      trigger-2 checkpoint — an `examine-advisor` clean-context
+      critique offered via AskUserQuestion carrying the
+      `[delegate:trigger-2]` marker, before /embo:impl was suggested.
+      The offer was declinable (user skipped; trigger silenced for the
+      session as specified).
 
 - [X] 5.0 **User Story:** As the model in a free-form turn, I can
   match specialized agents to ad-hoc work, so the shipped agents get
@@ -121,7 +132,7 @@
     → all 4 descriptions gained an "also use ad hoc, outside <cmd>"
       trigger; YAML frontmatter parses for all 4 (2026-07-21)
 
-- [~] 6.0 **User Story:** As the maintainer, the feature is
+- [X] 6.0 **User Story:** As the maintainer, the feature is
   documented and proven live, so it can ship in the next release
   - [X] 6.1 README: "Delegation prompts" section — what the user
     sees (`Delegation:` line + subagent offer), how to decline
@@ -130,8 +141,17 @@
   - [X] 6.2 CHANGELOG entry (Unreleased) describing the behavior;
     version bump deferred to the real release after 6.3
     [verify: code-only]
-  - [ ] 6.3 Live end-to-end: a fresh session shows the DELEGATE
+  - [X] 6.3 Live end-to-end: a fresh session shows the DELEGATE
     banner, a `Delegation:` line before bulk exploration, a subagent
     offer at a checkpoint, and FR-5 diff verification after a
     delegated edit; evidence recorded here [verify: manual-run-claude]
+    → all four signals observed live in one fresh session (2026-07-22):
+      (1) [RULES ACTIVE: … DELEGATE] banner injected every prompt;
+      (2) `Delegation: none, because …` emitted before /embo:start
+      and the embo-deliver-fix reads; (3) a general-purpose review
+      agent offered via AskUserQuestion with delegation reasoning,
+      accepted, ran read-only; (4) after each embo-deliver side effect
+      the diff was verified with `git show` (RULE:ASSUME-BROKEN), not
+      trusted from the summary. Evidenced by the embo-deliver
+      branch-guard fix delivered this session.
 

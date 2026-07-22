@@ -4,6 +4,8 @@ All notable changes to the embo plugin are documented here.
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-07-22
+
 ### Added
 
 - **Delegation prompts** — embo now pushes the agent to hand work to a
@@ -17,6 +19,20 @@ All notable changes to the embo plugin are documented here.
   prompt. Offers are never auto-run; declining one silences that kind
   for the session. Small targeted lookups and context-dependent work
   are left inline.
+- **`/embo:git deliver` cuts a release in one approval** — the deliver
+  flow gains a `release` mode: it delivers your change to the base
+  branch, then tags `vX.Y.Z` and publishes a GitHub Release, all behind
+  the single plan approval. The version manifests and CHANGELOG are
+  edited by you beforehand and delivered like any other file; the tool
+  writes no source files of its own.
+
+### Fixed
+
+- `/embo:git deliver` commits to the branch named in the plan, not
+  whichever branch happens to be checked out. Delivering from `main`
+  no longer lands the commit on `main` while pushing a different branch;
+  the tool moves to the plan's branch first and refuses to commit
+  directly onto a protected branch (`main`/`master`).
 
 ## [0.2.2] - 2026-07-20
 
