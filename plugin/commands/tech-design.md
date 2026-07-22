@@ -373,5 +373,8 @@ When referencing any library, framework, or external API — use the Context7 MC
 4. Learn from historical decisions via claude-mem
 5. **🚨 MANDATORY: Ask technical clarifying questions using AskUserQuestion tool**
 6. Synthesize design incorporating user's answers + RLM + claude-mem insights
-7. Save to both systems
-8. Suggest `/embo:tasks` as next step
+7. Before approval, apply RULE:DELEGATE trigger 2: offer a
+   clean-context `examine-advisor` critique of the design (marker
+   `[delegate:trigger-2]`)
+8. Save to both systems
+9. Suggest `/embo:tasks` as next step

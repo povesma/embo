@@ -248,7 +248,7 @@ assert_exit "P2: outside a git repo -> exit 2" 2 "$RC_NR"
 
 REPO2="$WORK/repo73"
 mkdir -p "$REPO2"
-git -C "$REPO2" init -q
+git -C "$REPO2" init -q -b b     # start ON plan.branch so reconcile is a no-op
 git -C "$REPO2" config user.email t@t.t
 git -C "$REPO2" config user.name t
 printf 'v1\n' > "$REPO2/a.py"
@@ -272,7 +272,7 @@ assert_contains "P4: failure msg reflects no new commit" "nothing committed, pus
 # (b) a genuinely-staged change commits and does NOT warn
 REPO3="$WORK/repo73b"
 mkdir -p "$REPO3"
-git -C "$REPO3" init -q
+git -C "$REPO3" init -q -b b     # start ON plan.branch so reconcile is a no-op
 git -C "$REPO3" config user.email t@t.t
 git -C "$REPO3" config user.name t
 printf 'v1\n' > "$REPO3/a.py"
@@ -367,6 +367,296 @@ git -C "$BARE76" rev-parse --verify -q refs/heads/b >/dev/null && B_ON_REMOTE=1
 assert_exit "P6: branch b arrived on the remote" 1 "$B_ON_REMOTE"
 UP76="$(git -C "$REPO76" rev-parse --abbrev-ref 'b@{u}' 2>/dev/null)"
 assert_contains "P6: upstream re-pointed to origin/b" "origin/b" "$UP76"
+
+# --- BUG-2026-07-22: branch reconcile + protected-base guard -------------
+# The executor must treat plan.branch as authoritative for where the commit
+# lands, never the ambient checked-out branch. Regression: a commit landed
+# on main while the push targeted a stale feature branch.
+
+# (a) protected base as a push target -> refuse, exit 7, no git changes.
+#     This is a validation-time check (before any git state), so --dry-run
+#     exercises it and asserts nothing runs.
+for b in main master; do
+  PLAN_PROT="$(write_plan "prot-$b.txt" "branch: $b
+mode: push
+file: a.py
+message:
+x")"
+  run_dry "$PLAN_PROT"
+  assert_exit "reconcile: push to protected '$b' -> exit 7" 7 "$RC"
+  assert_contains "reconcile: names the protected branch '$b'" "$b" "$OUT"
+  assert_not_contains "reconcile: protected push runs no git add" "add -- " "$OUT"
+done
+
+# (b) protected branch as a PR *base* is legitimate -> not refused.
+run_dry "$VALID_PR"    # base: main, branch: feature/x
+assert_exit "reconcile: main as PR base is allowed, exit 0" 0 "$RC"
+
+# (c) THE BUG: standing on main, plan targets a feature branch that already
+#     exists at a stale commit. The commit must land on the feature branch,
+#     never on main. Real run against a throwaway repo with a bare remote.
+BARE_R="$WORK/bareR.git"
+git init -q --bare "$BARE_R"
+REPO_R="$WORK/repoR"
+mkdir -p "$REPO_R"
+git -C "$REPO_R" init -q -b main
+git -C "$REPO_R" config user.email t@t.t
+git -C "$REPO_R" config user.name t
+printf 'x\n' > "$REPO_R/a.py"
+git -C "$REPO_R" add a.py
+git -C "$REPO_R" commit -qm init
+git -C "$REPO_R" branch feat/x           # feature branch exists at init commit
+git -C "$REPO_R" remote add origin "$BARE_R"
+git -C "$REPO_R" push -qu origin main
+MAIN_BEFORE="$(git -C "$REPO_R" rev-parse main)"
+# operator is standing on main (the mistake) with a real change to deliver:
+git -C "$REPO_R" checkout -q main
+printf 'y\n' > "$REPO_R/a.py"
+PLAN_R="$(write_plan reconcile.txt 'branch: feat/x
+mode: push
+file: a.py
+message:
+fix: bump on the right branch')"
+OUT_R="$(cd "$REPO_R" && bash "$BIN" --plan "$PLAN_R" 2>&1)"
+RC_R=$?
+assert_exit "reconcile: delivery from main -> exit 0" 0 "$RC_R"
+MAIN_AFTER="$(git -C "$REPO_R" rev-parse main)"
+assert_exit "reconcile: main is UNCHANGED (commit did not land here)" \
+  "$MAIN_BEFORE" "$MAIN_AFTER"
+HEAD_BRANCH="$(git -C "$REPO_R" symbolic-ref --short HEAD)"
+assert_contains "reconcile: HEAD ends on the plan branch" "feat/x" "$HEAD_BRANCH"
+FEAT_MSG="$(git -C "$REPO_R" log -1 --format=%s feat/x)"
+assert_contains "reconcile: commit landed on feat/x" "fix: bump on the right branch" "$FEAT_MSG"
+
+# (d) branch does not exist + push mode (no base) -> abort, exit 7, no commit.
+REPO_N="$WORK/repoN"
+mkdir -p "$REPO_N"
+git -C "$REPO_N" init -q -b main
+git -C "$REPO_N" config user.email t@t.t
+git -C "$REPO_N" config user.name t
+printf 'x\n' > "$REPO_N/a.py"
+git -C "$REPO_N" add a.py
+git -C "$REPO_N" commit -qm init
+CNT_N_BEFORE="$(git -C "$REPO_N" rev-list --count HEAD)"
+printf 'y\n' > "$REPO_N/a.py"
+PLAN_N="$(write_plan noexist.txt 'branch: feat/new
+mode: push
+file: a.py
+message:
+fix: bump')"
+OUT_N="$(cd "$REPO_N" && bash "$BIN" --plan "$PLAN_N" 2>&1)"
+RC_N=$?
+assert_exit "reconcile: push to absent branch (no base) -> exit 7" 7 "$RC_N"
+assert_contains "reconcile: message tells operator to create it or use pr" "does not exist" "$OUT_N"
+CNT_N_AFTER="$(git -C "$REPO_N" rev-list --count HEAD)"
+assert_exit "reconcile: no commit made when aborting" "$CNT_N_BEFORE" "$CNT_N_AFTER"
+
+# (e) branch does not exist + pr mode with base -> created from BASE, not
+#     from ambient HEAD. The fixture deliberately puts HEAD on a branch that
+#     is NOT base: main carries an extra commit, and the operator stands on
+#     `other` (forked from init). If the code wrongly created the new branch
+#     from HEAD instead of `base`, the new branch's parent would be init
+#     (other's tip), not main's tip — so the parent assertion is load-bearing.
+BARE_C="$WORK/bareC.git"
+git init -q --bare "$BARE_C"
+REPO_C="$WORK/repoC"
+mkdir -p "$REPO_C"
+git -C "$REPO_C" init -q -b main
+git -C "$REPO_C" config user.email t@t.t
+git -C "$REPO_C" config user.name t
+printf 'x\n' > "$REPO_C/a.py"
+git -C "$REPO_C" add a.py
+git -C "$REPO_C" commit -qm init
+git -C "$REPO_C" checkout -q -b other      # forked from init
+git -C "$REPO_C" checkout -q main
+printf 'x2\n' > "$REPO_C/b.py"              # main advances beyond init
+git -C "$REPO_C" add b.py
+git -C "$REPO_C" commit -qm "main: second commit"
+MAIN_TIP="$(git -C "$REPO_C" rev-parse main)"
+git -C "$REPO_C" remote add origin "$BARE_C"
+git -C "$REPO_C" push -qu origin main
+git -C "$REPO_C" checkout -q other          # operator stands on `other`, NOT base
+printf 'y\n' > "$REPO_C/a.py"
+# pr mode invokes gh, which is not present in the test env; the branch
+# creation + commit + push happen BEFORE gh. We assert the branch was
+# created from base (its parent is main's tip) and the commit landed on it,
+# regardless of the gh step.
+PLAN_C="$(write_plan create-pr.txt 'branch: feat/created
+mode: pr
+base: main
+file: a.py
+message:
+feat: on a freshly created branch')"
+OUT_C="$(cd "$REPO_C" && bash "$BIN" --plan "$PLAN_C" 2>&1)" || true
+CREATED=0
+git -C "$REPO_C" show-ref --verify --quiet refs/heads/feat/created && CREATED=1
+assert_exit "reconcile: pr mode created the absent branch from base" 1 "$CREATED"
+if [ "$CREATED" -eq 1 ]; then
+  C_MSG="$(git -C "$REPO_C" log -1 --format=%s feat/created)"
+  assert_contains "reconcile: commit landed on the created branch" "feat: on a freshly created branch" "$C_MSG"
+  # the new commit's parent must be main's tip — proving create-from-base,
+  # not create-from-HEAD (which would parent it on `other`/init).
+  C_PARENT="$(git -C "$REPO_C" rev-parse 'feat/created^')"
+  assert_exit "reconcile: created branch is rooted on base (not ambient HEAD)" \
+    "$MAIN_TIP" "$C_PARENT"
+fi
+
+# (f) reconcile does NOT run under --dry-run (dry-run mutates no git state).
+#     A dry-run plan targeting a protected base for PUSH still hits the (a)
+#     validation refusal; but a dry-run targeting an absent feature branch
+#     must NOT abort at reconcile, because reconcile is skipped in dry mode.
+PLAN_DRY="$(write_plan dry-absent.txt 'branch: feat/whatever
+mode: push
+file: a.py
+message:
+x')"
+run_dry "$PLAN_DRY"
+assert_exit "reconcile: dry-run skips reconcile (no exit 7 for absent branch)" 0 "$RC"
+
+# --- T043 1.0: mode: release (dry-run contract) --------------------------
+# A release is a pr-merge PLUS a tail: after merge, tag vX.Y.Z on the merge
+# commit and publish a non-draft/non-prerelease GitHub Release. The executor
+# writes NOTHING to source files — the maintainer edits the version
+# manifests + CHANGELOG beforehand and lists them as ordinary `file:`
+# entries (verified by the skill, never by the executor). New plan fields:
+# `version:` (the vX.Y.Z to tag) and a `release-notes:` block (the Release
+# body). Dry-run must PRINT each step in order and run nothing.
+
+REL_PLAN='# release: merge + PUBLIC tag + Release — irreversible
+branch: feature/rel
+mode: release
+base: main
+version: 9.9.9
+file: plugin/.claude-plugin/plugin.json
+file: CHANGELOG.md
+release-notes:
+embo 9.9.9
+
+Highlights: the thing works.
+message:
+release: 9.9.9'
+
+REL="$(write_plan release.txt "$REL_PLAN")"
+run_dry "$REL"
+assert_exit "release: valid dry-run plan exits 0" 0 "$RC"
+# the executor stages ONLY the plan's file list (maintainer-prepared) —
+# it never edits or names manifests itself.
+assert_contains "release: stages the maintainer-edited manifest" "plugin.json" "$OUT"
+assert_contains "release: stages the maintainer-edited CHANGELOG" "CHANGELOG.md" "$OUT"
+assert_contains "release: commits"                    "git commit" "$OUT"
+assert_contains "release: pushes"                     "git push" "$OUT"
+assert_contains "release: opens a PR"                 "gh pr create" "$OUT"
+assert_contains "release: merges"                     "gh pr merge --squash" "$OUT"
+assert_contains "release: tags vX.Y.Z"                "git tag" "$OUT"
+assert_contains "release: tag carries the v-prefixed version" "v9.9.9" "$OUT"
+assert_contains "release: publishes a GitHub Release"  "gh release create" "$OUT"
+# the executor must NOT edit files itself — no jq, no manifest write step.
+assert_not_contains "release: executor does not run jq" "jq " "$OUT"
+
+# ordering: merge before tag; tag before release.
+line_of() { printf '%s\n' "$OUT" | grep -n -- "$1" | head -1 | cut -d: -f1; }
+N_MERGE="$(line_of 'gh pr merge')"
+N_TAG="$(line_of 'git tag')"
+N_REL="$(line_of 'gh release create')"
+assert_exit "release: merge precedes tag"   1 "$([ -n "$N_MERGE" ] && [ -n "$N_TAG" ] && [ "$N_MERGE" -lt "$N_TAG" ] && echo 1 || echo 0)"
+assert_exit "release: tag precedes publish" 1 "$([ -n "$N_TAG" ] && [ -n "$N_REL" ] && [ "$N_TAG" -lt "$N_REL" ] && echo 1 || echo 0)"
+
+# release requires version:
+REL_NOVER="$(write_plan rel-nover.txt '# release — irreversible
+branch: feature/rel
+mode: release
+base: main
+file: CHANGELOG.md
+release-notes:
+notes
+message:
+release: x')"
+run_dry "$REL_NOVER"
+assert_exit "release: missing version: -> exit 2" 2 "$RC"
+assert_not_contains "release: no-version plan runs no git add" "add -- " "$OUT"
+
+# release requires base:
+REL_NOBASE="$(write_plan rel-nobase.txt '# release — irreversible
+branch: feature/rel
+mode: release
+version: 9.9.9
+file: CHANGELOG.md
+release-notes:
+notes
+message:
+release: x')"
+run_dry "$REL_NOBASE"
+assert_exit "release: missing base: -> exit 2" 2 "$RC"
+
+# release requires a release-notes: block (the GitHub Release body)
+REL_NONOTES="$(write_plan rel-nonotes.txt '# release — irreversible
+branch: feature/rel
+mode: release
+base: main
+version: 9.9.9
+file: CHANGELOG.md
+message:
+release: x')"
+run_dry "$REL_NONOTES"
+assert_exit "release: missing release-notes: -> exit 2" 2 "$RC"
+
+# --- T043 2.0: release halts on failure, undoes nothing ------------------
+# Real run of a release plan where the PR step fails. The commit + push
+# must already have happened and NOT be reverted; the run stops with the
+# step's documented exit code (5, PR not created).
+#
+# CRITICAL: the host may have a real `gh` on PATH. A test must make NO real
+# network/API call, so we shadow `gh` with a stub that always fails,
+# injected at the FRONT of PATH for this run only. This makes the failing
+# step deterministic regardless of the host and guarantees no GitHub API is
+# touched.
+STUBDIR="$WORK/stubbin"
+mkdir -p "$STUBDIR"
+printf '#!/usr/bin/env bash\necho "stub gh: forced failure" >&2\nexit 1\n' > "$STUBDIR/gh"
+chmod +x "$STUBDIR/gh"
+
+BARE_H="$WORK/bareH.git"
+git init -q --bare "$BARE_H"
+REPO_H="$WORK/repoH"
+mkdir -p "$REPO_H"
+git -C "$REPO_H" init -q -b relbranch   # start ON the plan branch
+git -C "$REPO_H" config user.email t@t.t
+git -C "$REPO_H" config user.name t
+printf 'v1\n' > "$REPO_H/a.py"
+git -C "$REPO_H" add a.py
+git -C "$REPO_H" commit -qm init
+git -C "$REPO_H" remote add origin "$BARE_H"
+git -C "$REPO_H" push -qu origin relbranch
+CNT_H_BEFORE="$(git -C "$REPO_H" rev-list --count HEAD)"
+printf 'v2\n' > "$REPO_H/a.py"          # a real release change
+PLAN_H="$(write_plan rel-halt.txt '# release — irreversible
+branch: relbranch
+mode: release
+base: main
+version: 9.9.9
+file: a.py
+release-notes:
+notes body
+message:
+release: 9.9.9')"
+# stub gh at the front of PATH -> gh pr create fails -> exit 5, AFTER the
+# commit + push already succeeded.
+OUT_H="$(cd "$REPO_H" && PATH="$STUBDIR:$PATH" bash "$BIN" --plan "$PLAN_H" 2>&1)"
+RC_H=$?
+CNT_H_AFTER="$(git -C "$REPO_H" rev-list --count HEAD)"
+# The commit was made (count grew by 1) and is NOT undone by the failure.
+assert_exit "release halt: the release commit was made and kept" \
+  "$((CNT_H_BEFORE + 1))" "$CNT_H_AFTER"
+assert_exit "release halt: stops at the PR step -> exit 5" 5 "$RC_H"
+assert_not_contains "release halt: no reset/undo was attempted" "reset" "$OUT_H"
+# commit + push happened before the gh call; the status line says so, and
+# the tag/publish tail never ran.
+assert_contains "release halt: status shows commit+push before the halt" "committed, pushed" "$OUT_H"
+assert_not_contains "release halt: tag step did not run" "tagged v9.9.9" "$OUT_H"
+# no v-tag was created locally, since the tail is past the failing step.
+HAS_TAG=0
+git -C "$REPO_H" rev-parse -q --verify refs/tags/v9.9.9 >/dev/null 2>&1 && HAS_TAG=1
+assert_exit "release halt: no tag created (tail never reached)" 0 "$HAS_TAG"
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

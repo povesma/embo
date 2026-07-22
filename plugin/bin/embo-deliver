@@ -21,6 +21,14 @@
 # delivered (push + optional PR/merge). This lets `deliver` land an
 # already-committed branch without inventing an empty commit.
 #
+# The plan file is the source of truth for the target branch. embo-deliver
+# NEVER trusts the ambient checked-out branch: before staging it reconciles
+# the working tree onto `plan.branch`, refuses to commit onto a protected
+# base (main/master), and re-asserts the branch immediately before commit.
+# See tasks/044 delivery bug report (2026-07-22): a commit landed on main
+# while the push targeted a stale feature branch, because the old code
+# committed on whatever HEAD pointed at.
+#
 # Exit codes:
 #   0  full cycle succeeded
 #   2  plan invalid/missing, or not inside a git repo (no git changes made)
@@ -28,6 +36,16 @@
 #   4  push failed (commit made locally, or existing commit if none staged)
 #   5  gh pr create failed (committed+pushed)
 #   6  gh pr merge failed/blocked (PR opened)
+#   7  branch reconcile refused (wrong/protected branch; NO git changes made)
+#   8  release: tag create/push failed (merged; tag not on remote)
+#   9  release: GitHub Release publish failed (merged + tagged)
+#
+# `mode: release` is `pr-merge` plus a tail — after the merge it tags
+# vX.Y.Z on the base tip and publishes a GA (non-draft) GitHub Release.
+# The executor writes NO source files: the version manifests and CHANGELOG
+# are edited by the maintainer beforehand and delivered as ordinary `file:`
+# entries. Release plans carry `version:` (the vX.Y.Z to tag) and a
+# `release-notes:` block (the Release body).
 
 set -uo pipefail
 
@@ -69,33 +87,55 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" \
 cd "$REPO_ROOT" || fail "cannot cd to repo root: $REPO_ROOT" 2
 
 # --- parse the plan file --------------------------------------------------
-# Line-oriented: `key: value` lines, then a trailing `message:` block whose
-# body runs to EOF. `file:` may repeat. No command substitution needed.
+# Line-oriented. Scalar `key: value` lines come first (branch, mode, base,
+# version; `file:` may repeat), then one or more BLOCK headers whose bodies
+# run to the next block header or EOF: `message:` (commit message; required)
+# and `release-notes:` (the GitHub Release body, release mode). Scalar keys
+# are only recognized before the first block header. No command substitution
+# needed.
+#
+# The release executor writes NOTHING to source files: the version manifests
+# and CHANGELOG are edited by the maintainer beforehand and appear as
+# ordinary `file:` entries. There is deliberately no `changelog:` field.
 
 BRANCH=""
 MODE=""
 BASE=""
+VERSION=""
 FILES=()
 MESSAGE=""
-in_message=0
+RELNOTES=""
+cur_block=""   # "", message, relnotes
+
+append_block() {
+  # append "$2" (a line) to the block named by $1
+  case "$1" in
+    message)  MESSAGE="${MESSAGE:+$MESSAGE
+}$2" ;;
+    relnotes) RELNOTES="${RELNOTES:+$RELNOTES
+}$2" ;;
+  esac
+}
 
 while IFS= read -r line || [ -n "$line" ]; do
-  if [ "$in_message" -eq 1 ]; then
-    if [ -z "$MESSAGE" ]; then
-      MESSAGE="$line"
-    else
-      MESSAGE="$MESSAGE
-$line"
-    fi
+  # A block header switches the current block; everything else while inside
+  # a block is body content (verbatim, blank lines included).
+  case "$line" in
+    message:)       cur_block="message";  continue ;;
+    release-notes:) cur_block="relnotes"; continue ;;
+  esac
+  if [ -n "$cur_block" ]; then
+    append_block "$cur_block" "$line"
     continue
   fi
+  # Scalar keys (only before any block header).
   case "$line" in
-    branch:*) BRANCH="${line#branch:}"; BRANCH="${BRANCH# }" ;;
-    mode:*)   MODE="${line#mode:}";     MODE="${MODE# }" ;;
-    base:*)   BASE="${line#base:}";     BASE="${BASE# }" ;;
-    file:*)   f="${line#file:}"; f="${f# }"; [ -n "$f" ] && FILES+=("$f") ;;
-    message:) in_message=1 ;;
-    *) : ;;  # ignore blank/unknown lines outside the message block
+    branch:*)  BRANCH="${line#branch:}";   BRANCH="${BRANCH# }" ;;
+    mode:*)    MODE="${line#mode:}";       MODE="${MODE# }" ;;
+    base:*)    BASE="${line#base:}";       BASE="${BASE# }" ;;
+    version:*) VERSION="${line#version:}"; VERSION="${VERSION# }" ;;
+    file:*)    f="${line#file:}"; f="${f# }"; [ -n "$f" ] && FILES+=("$f") ;;
+    *) : ;;  # ignore blank/unknown/comment lines outside a block
   esac
 done < "$PLAN"
 
@@ -103,17 +143,75 @@ done < "$PLAN"
 
 [ -n "$BRANCH" ] || fail "plan missing 'branch'" 2
 [ -n "$MODE" ]   || fail "plan missing 'mode'" 2
-[ "$in_message" -eq 1 ] && [ -n "$MESSAGE" ] || fail "plan missing 'message'" 2
+[ -n "$MESSAGE" ] || fail "plan missing 'message'" 2
 [ "${#FILES[@]}" -gt 0 ] || fail "plan lists no files" 2
 
 case "$MODE" in
-  push|pr|pr-merge) ;;
-  *) fail "unknown mode: $MODE (want push|pr|pr-merge)" 2 ;;
+  push|pr|pr-merge|release) ;;
+  *) fail "unknown mode: $MODE (want push|pr|pr-merge|release)" 2 ;;
 esac
 
 case "$MODE" in
   pr|pr-merge) [ -n "$BASE" ] || fail "mode $MODE needs 'base'" 2 ;;
+  release)
+    [ -n "$BASE" ]     || fail "mode release needs 'base'" 2
+    [ -n "$VERSION" ]  || fail "mode release needs 'version'" 2
+    [ -n "$RELNOTES" ] || fail "mode release needs a 'release-notes:' block" 2
+    ;;
 esac
+
+# --- branch reconcile -----------------------------------------------------
+# The plan's `branch:` is authoritative for where the commit lands. The
+# ambient checked-out branch is only a starting point and is NEVER trusted:
+# committing on whatever HEAD points at is the defect this guards against.
+# Order: (1) refuse a protected base as a commit target, (2) move the working
+# tree onto plan.branch without ever force-resetting a pre-existing branch,
+# (3) re-assert the branch just before commit (done at the commit site).
+
+# A protected base is a legitimate PR *base* but never a `push` commit
+# target. Only `push` lands a commit directly on plan.branch; pr/pr-merge
+# open a PR into `base`, so `main` as a base is fine there.
+is_protected() {
+  case "$1" in main|master) return 0 ;; *) return 1 ;; esac
+}
+
+if [ "$MODE" = "push" ] && is_protected "$BRANCH"; then
+  fail "refusing to commit to protected branch '$BRANCH'. Set branch: to a feature branch, or use mode: pr/pr-merge with base: $BRANCH." 7
+fi
+
+# Reconcile only for a real run; a dry-run reports intent without touching
+# git state. current_branch is empty on a detached HEAD.
+if [ "$DRYRUN" -eq 0 ]; then
+  current_branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+
+  if [ "$current_branch" != "$BRANCH" ]; then
+    if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
+      # The branch already exists. Move onto it, but never clobber: if the
+      # switch fails (e.g. a dirty tree would be overwritten), abort rather
+      # than force. A pre-existing branch at a stale commit is exactly what
+      # caused the reported bug — we switch to it as-is and let the commit
+      # land on top; we do NOT reset it to HEAD.
+      git switch "$BRANCH" \
+        || fail "cannot switch to existing branch '$BRANCH' (uncommitted changes would be lost?); resolve the working tree and re-run." 7
+    else
+      # The branch does not exist yet. Create it from the declared base for
+      # pr modes. For push mode there is no base, and creating from ambient
+      # HEAD is the defect itself — abort instead.
+      if [ -n "$BASE" ]; then
+        git switch -c "$BRANCH" "$BASE" \
+          || fail "cannot create branch '$BRANCH' from base '$BASE'." 7
+      else
+        fail "plan.branch '$BRANCH' does not exist and mode 'push' gives no base to create it from; create the branch first, or use pr mode with base:." 7
+      fi
+    fi
+  fi
+
+  # Last-line drift check: whatever the steps above did, the commit MUST
+  # land on plan.branch or not at all.
+  current_branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+  [ "$current_branch" = "$BRANCH" ] \
+    || fail "after reconcile, HEAD is '$current_branch' not plan.branch '$BRANCH'; aborting before commit." 7
+fi
 
 # --- run helper: dry-run prints, real run executes ------------------------
 
@@ -178,8 +276,10 @@ else
 fi
 
 # --- PR / merge -----------------------------------------------------------
+# `release` runs the same PR + merge path as `pr-merge`, then adds a tail
+# (tag + publish) below. The merge itself is done for both.
 
-if [ "$MODE" = "pr" ] || [ "$MODE" = "pr-merge" ]; then
+if [ "$MODE" = "pr" ] || [ "$MODE" = "pr-merge" ] || [ "$MODE" = "release" ]; then
   command -v gh >/dev/null 2>&1 \
     || fail "$STEPS; gh not installed, open PR manually" 3
 
@@ -193,11 +293,38 @@ if [ "$MODE" = "pr" ] || [ "$MODE" = "pr-merge" ]; then
     || fail "$STEPS; PR not created" 5
   STEPS="$STEPS, PR opened"
 
-  if [ "$MODE" = "pr-merge" ]; then
+  if [ "$MODE" = "pr-merge" ] || [ "$MODE" = "release" ]; then
     run gh pr merge --squash \
       || fail "$STEPS; merge blocked, merge manually" 6
     STEPS="$STEPS, merged"
   fi
+fi
+
+# --- release tail: tag the merge commit + publish the GitHub Release ------
+# The executor writes NO source files here — the version manifests and
+# CHANGELOG were part of the merged commit (maintainer-prepared, in the
+# `file:` list). This tail only tags and publishes.
+#
+# `git fetch` then tag on the base tip so the tag lands on the just-merged
+# commit rather than a stale local ref. Failures halt with their own codes
+# and undo nothing (the merge already happened — consistent with the
+# no-rollback contract).
+
+if [ "$MODE" = "release" ]; then
+  TAG="v$VERSION"
+  run git fetch origin "$BASE" \
+    || fail "$STEPS; fetch of $BASE failed before tagging" 8
+  run git tag "$TAG" "origin/$BASE" \
+    || fail "$STEPS; tag $TAG failed" 8
+  run git push origin "$TAG" \
+    || fail "$STEPS; tag $TAG not pushed" 8
+  STEPS="$STEPS, tagged $TAG"
+
+  # Publish a GA Release (non-draft, non-prerelease). Title is the tag; the
+  # body is the release-notes block.
+  run gh release create "$TAG" --title "$TAG" --notes "$RELNOTES" \
+    || fail "$STEPS; GitHub Release for $TAG not published" 9
+  STEPS="$STEPS, Release $TAG published"
 fi
 
 printf 'embo-deliver: %s\n' "$STEPS"
