@@ -6,7 +6,9 @@ description: >
   independent source rather than the author's confidence — then advises
   constructively (alternatives if unconfirmed, confirming evidence if
   proven). Spawned by the dev:research:verify command. Returns a
-  per-criterion verdict table and never edits the target.
+  per-criterion verdict table and never edits the target. Also use
+  ad hoc, outside that command, whenever a chosen approach is risky
+  or complex and needs independent proof before you implement it.
 model: sonnet
 tools:
   - Read

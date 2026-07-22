@@ -6,7 +6,10 @@ description: >
   option to pick when the choice is unclear or too technical, or finds
   inconsistencies and suggests concrete improvements in a document. Run
   in two passes (research + internal) by the dev:research:examine
-  command, which reconciles them. Never edits the target.
+  command, which reconciles them. Never edits the target. Also use
+  ad hoc, outside that command, whenever a decision or a document
+  needs a clean-context second opinion this session's author cannot
+  give.
 model: sonnet
 tools:
   - Read

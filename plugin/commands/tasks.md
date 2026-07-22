@@ -256,4 +256,7 @@ summary line, if used, states counts only (stories, subtasks).
 4. Use RLM complexity data + claude-mem velocity to judge task-list
    granularity (subtask count) — never to produce an effort/time figure
    in the output (see "No Effort/Time Estimates" above)
-5. Suggest `/embo:impl` as next step
+5. After the list is generated, apply RULE:DELEGATE trigger 2: offer
+   a clean-context `examine-advisor` critique of the list (marker
+   `[delegate:trigger-2]`)
+6. Suggest `/embo:impl` as next step

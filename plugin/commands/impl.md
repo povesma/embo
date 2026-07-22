@@ -289,6 +289,14 @@ ls tasks/{feature-id}-{feature-name}/*-test-plan.md 2>/dev/null
 
 **Skip this entire step if profile `tools.rlm` is `false`.**
 
+**Delegation checkpoint (per RULE:DELEGATE).** Apply trigger 1 to
+this discovery if it reads many files (`rlm-subcall`, marker
+`[delegate:trigger-1]`) and trigger 4 if the story has 3+
+independent subtasks (parallel fan-out, marker
+`[delegate:trigger-4]`). This is additive — the profile `subagents`
+test agents (Testing Guidelines) stay a prescribed, non-optional
+spawn.
+
 **3a. Find relevant existing code:**
 
 Use the **Glob tool** (not Bash, not `find`) with patterns derived from

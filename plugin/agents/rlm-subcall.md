@@ -1,6 +1,6 @@
 ---
 name: rlm-subcall
-description: Acts as the RLM sub-LLM (llm_query) for code analysis. Given a chunk of code/files and a query, extract relevant information about code structure, patterns, dependencies, and implementation details. Use for analyzing large codebases.
+description: Acts as the RLM sub-LLM (llm_query) for code analysis. Given a chunk of code/files and a query, extract relevant information about code structure, patterns, dependencies, and implementation details. Use for analyzing large codebases — including ad hoc, outside /embo:prd, whenever exploration would read many files whose bulk should stay out of the main context.
 tools: Read, Grep, Glob
 model: haiku
 ---

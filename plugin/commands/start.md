@@ -453,6 +453,50 @@ task, resolve the behaviour issue, then resume.
   move(s) as a structured block (RULE:CLEAR-OPTIONS), never a prose
   "X or Y?". Do clear in-scope steps, then present what follows.
 
+<!-- RULE:DELEGATE -->
+### Delegate to a subagent where it beats the main context
+
+You delegate far less than you should. **Before starting a bulk
+exploration** — a search or read spanning several files — state one
+line, then proceed: `Delegation: <to <agent>, because … | none,
+because <reason>>`. Declaring first is the point: once the files are
+in context the benefit is gone, and the line is the trace
+`/embo:improve` learns from (like RULE:RESTATE-CORRECTION). Not for a
+single targeted read.
+
+**Weigh a subagent when:** exploring many files (~10+); judging work
+authored this session (a clean context can't ratify its own errors);
+proving a load-bearing claim independently; 3+ independent tasks
+(parallel); a noisy trial-and-error loop (troubleshoot, deploy/verify,
+flaky test); a shipped agent already fits.
+
+**Don't when:** steps are sequentially dependent, edits share a file,
+a single lookup suffices, the work needs session context, it needs
+your approval mid-run (subagents can't ask), or the cost dwarfs the
+stakes.
+
+**Protocol:** offer via `AskUserQuestion` (never auto-spawn) with
+marker `[delegate:trigger-<n>]`, naming the agent and rough cost;
+declining suppresses that trigger for the session. Give the subagent
+everything it needs in the dispatch prompt (task, scope, constraints,
+output shape, what NOT to do) — it inherits no session context. After
+a delegated side effect, verify the diff, never trust the summary
+(RULE:ASSUME-BROKEN).
+
+<!-- CHECKLIST:DELEGATE
+     Injected verbatim on every user prompt by
+     hooks/behavioral-reminder.sh. Keep it short; edit it here only. -->
+[DELEGATE checklist] Before a bulk exploration (search/read spanning
+several files) state one line first — `Delegation: <to <agent> … |
+none, because <reason>>` — then proceed; declaring after the reads is
+too late. Weigh a subagent for many-file exploration, judging this
+session's own work, independent proof, 3+ independent tasks, or noisy
+loops. Offer via AskUserQuestion, never auto-spawn; skip a single
+lookup or sequentially-dependent/same-file work. Verify a delegated
+diff, don't trust the summary.
+<!-- /CHECKLIST -->
+
+
 ### Step 1: Verify Systems
 
 **(Skip if profile `tools.rlm` is `false`)**

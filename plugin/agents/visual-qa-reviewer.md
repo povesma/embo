@@ -8,7 +8,9 @@ description: >
   and a 7-category rubric — never having authored the code itself, so it
   cannot ratify its own errors. Returns measured findings ("gap is 32px,
   should be 16px") and a pass/fail verdict against the threshold. Spawned
-  by the embo:visual-impl command. Never edits the target.
+  by the embo:visual-impl command. Never edits the target. Also use
+  ad hoc, outside that command, whenever design-to-code output needs
+  an unbiased visual check that its author cannot give.
 model: sonnet
 tools:
   - Read

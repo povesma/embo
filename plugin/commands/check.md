@@ -10,6 +10,10 @@ Check task completion status by analyzing actual code implementation.
 
 ## Process
 
+**Delegation checkpoint (per RULE:DELEGATE trigger 1).** If verifying
+a large task list will read many files, offer an `rlm-subcall` pass
+(marker `[delegate:trigger-1]`).
+
 ### Step 1: Load Task List
 
 Use the Glob tool to find task files:
