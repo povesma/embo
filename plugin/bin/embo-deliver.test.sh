@@ -451,7 +451,12 @@ assert_contains "reconcile: message tells operator to create it or use pr" "does
 CNT_N_AFTER="$(git -C "$REPO_N" rev-list --count HEAD)"
 assert_exit "reconcile: no commit made when aborting" "$CNT_N_BEFORE" "$CNT_N_AFTER"
 
-# (e) branch does not exist + pr mode with base -> created from base, delivered.
+# (e) branch does not exist + pr mode with base -> created from BASE, not
+#     from ambient HEAD. The fixture deliberately puts HEAD on a branch that
+#     is NOT base: main carries an extra commit, and the operator stands on
+#     `other` (forked from init). If the code wrongly created the new branch
+#     from HEAD instead of `base`, the new branch's parent would be init
+#     (other's tip), not main's tip — so the parent assertion is load-bearing.
 BARE_C="$WORK/bareC.git"
 git init -q --bare "$BARE_C"
 REPO_C="$WORK/repoC"
@@ -462,12 +467,20 @@ git -C "$REPO_C" config user.name t
 printf 'x\n' > "$REPO_C/a.py"
 git -C "$REPO_C" add a.py
 git -C "$REPO_C" commit -qm init
+git -C "$REPO_C" checkout -q -b other      # forked from init
+git -C "$REPO_C" checkout -q main
+printf 'x2\n' > "$REPO_C/b.py"              # main advances beyond init
+git -C "$REPO_C" add b.py
+git -C "$REPO_C" commit -qm "main: second commit"
+MAIN_TIP="$(git -C "$REPO_C" rev-parse main)"
 git -C "$REPO_C" remote add origin "$BARE_C"
 git -C "$REPO_C" push -qu origin main
+git -C "$REPO_C" checkout -q other          # operator stands on `other`, NOT base
 printf 'y\n' > "$REPO_C/a.py"
 # pr mode invokes gh, which is not present in the test env; the branch
 # creation + commit + push happen BEFORE gh. We assert the branch was
-# created from base and the commit landed on it, regardless of the gh step.
+# created from base (its parent is main's tip) and the commit landed on it,
+# regardless of the gh step.
 PLAN_C="$(write_plan create-pr.txt 'branch: feat/created
 mode: pr
 base: main
@@ -481,6 +494,11 @@ assert_exit "reconcile: pr mode created the absent branch from base" 1 "$CREATED
 if [ "$CREATED" -eq 1 ]; then
   C_MSG="$(git -C "$REPO_C" log -1 --format=%s feat/created)"
   assert_contains "reconcile: commit landed on the created branch" "feat: on a freshly created branch" "$C_MSG"
+  # the new commit's parent must be main's tip — proving create-from-base,
+  # not create-from-HEAD (which would parent it on `other`/init).
+  C_PARENT="$(git -C "$REPO_C" rev-parse 'feat/created^')"
+  assert_exit "reconcile: created branch is rooted on base (not ambient HEAD)" \
+    "$MAIN_TIP" "$C_PARENT"
 fi
 
 # (f) reconcile does NOT run under --dry-run (dry-run mutates no git state).
