@@ -155,7 +155,9 @@ plugin/                          # THE PLUGIN ROOT (${CLAUDE_PLUGIN_ROOT})
 ├── .claude-plugin/plugin.json   # manifest (name:"embo")
 ├── bin/                         # PATH wrappers (bare commands, no ${...})
 │   ├── rlm_repl                 # → runs rlm_scripts/rlm_repl.py
-│   ├── embo-deliver             # one-shot stage+commit+push (task 038)
+│   ├── embo-deliver             # one-shot stage+commit+push+(PR/merge);
+│   │                              # `release` mode adds tag+GitHub Release
+│   │                              # (tasks 038, 043)
 │   └── embo-corrections         # /embo:improve list-pending/write/mode (task 042)
 ├── agents/
 │   ├── rlm-subcall.md           # RLM chunk analysis subagent (Haiku)
