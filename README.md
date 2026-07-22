@@ -274,7 +274,16 @@ in `plugin/commands/start.md`.
 
 For a small change or hotfix, `/embo:git deliver` runs the whole
 stage → commit → push → (open PR) → (merge) cycle after **one** approval,
-instead of a separate prompt per git command.
+instead of a separate prompt per git command. The plan's `mode` selects
+how far the cycle runs:
+
+- `push` — stage + commit + push.
+- `pr` — the above + `gh pr create`.
+- `pr-merge` — the above + `gh pr merge --squash`.
+- `release` — the above + `git tag vX.Y.Z` on the merge commit +
+  `gh release create`. The plan adds `version:` and a `release-notes:`
+  block; the version manifests and CHANGELOG are edited by you and listed
+  as files, `embo-deliver` writes no source files itself.
 
 How it works: the command builds a delivery plan (exact files, commit
 message, target branch, mode) and writes it to a uniquely-named
