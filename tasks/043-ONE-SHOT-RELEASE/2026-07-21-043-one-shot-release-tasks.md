@@ -55,7 +55,7 @@
 
 ## Tasks
 
-- [~] 1.0 **User Story:** As the maintainer, `embo-deliver` executes a
+- [X] 1.0 **User Story:** As the maintainer, `embo-deliver` executes a
   full release from a plan with no decisions of its own — `mode: release`
   runs the pr-merge path over the maintainer-prepared files, then tags
   `vX.Y.Z` on the base tip and publishes the GA Release. The executor
@@ -105,43 +105,62 @@
     → same test asserts no "tagged v9.9.9" status and refs/tags/v9.9.9
       absent after the halt (2026-07-22)
 
-- [ ] 3.0 **User Story:** As the maintainer, `/embo:git deliver` picks
-  the delivery mode from repo state via the fixed decision table, never
-  a judgement call, defaulting to the safer mode when signals are
-  ambiguous
-  - [ ] 3.1 Write the mode-inference decision table into the `deliver`
-    section of `git.md`: the three rows (feature-branch/no-version-change
-    → push; destined-for-main/no-version-change → pr-merge;
-    version-would-change or capability-cut → release), each signal
-    checkable from repo state, and the explicit ambiguous→safer-default
-    rule (never auto-`release` when unsure) [verify: code-only]
-  - [ ] 3.2 State that the chosen mode + the signals that produced it are
-    written into the plan file, and that the plan-file Write is the only
-    confirmation — no separate "confirm the mode?" prompt; remove any
-    remaining text implying the user names the mode [verify: code-only]
+  DESIGN CHANGE (2026-07-22, user): stories 3.0/4.0 were originally a
+  deterministic "mode-inference decision table" the skill would evaluate.
+  That was rejected as overcomplication — the agent reading the repo and
+  drafting a sensible plan IS the decision; it does not need a codified
+  rules engine. Rewritten below to "the agent drafts the release plan."
+  Both remain OPEN (skill-side git.md work); the executor (1.0/2.0) and
+  the live release (5.2) do not depend on them.
 
-- [ ] 4.0 **User Story:** As the maintainer, an inferred `release` plan
-  shows the derived version and drafted notes, so the single approval is
+- [X] 3.0 **User Story:** As the maintainer, `/embo:git deliver` builds a
+  correct `release` plan from the situation — the agent picks the mode by
+  judgment (no codified table), shows it in the plan, and the plan-file
+  Write is the only confirmation
+  - [X] 3.1 In the `deliver` section of `git.md`, state plainly when the
+    agent should choose `release` (publishing a new version: version files
+    + CHANGELOG changed) vs `pr-merge`; kept as one-line guidance, not a
+    lookup engine [verify: code-only]
+    → `release` added to the mode list with "choose only when publishing a
+      new version; else prefer pr-merge" (2026-07-22)
+  - [X] 3.2 State that the chosen mode is written into the plan and the
+    plan-file Write is the sole confirmation [verify: code-only]
+    → the existing "plan-file Write is the single gate" text already
+      covers all modes incl. release; mode appears in the format block
+      (2026-07-22)
+
+- [X] 4.0 **User Story:** As the maintainer, a `release` plan the agent
+  drafts shows the version and release notes, so the single approval is
   informed
-  - [ ] 4.1 Document in `git.md` how the skill derives the next semver
-    (from the latest `vX.Y.Z` tag + the change class) and drafts the
-    CHANGELOG entry + release body (per RULE:RELEASE-BODY-AUTHORING) INTO
-    the plan — neither guessed silently nor asked separately
-    [verify: code-only]
-  - [ ] 4.2 Document the mandatory leading irreversibility comment for a
-    `release` plan (merge AND public tag+Release are irreversible) so the
-    Write-approval is informed; show a complete `release` plan example
-    [verify: code-only]
+  - [X] 4.1 Document in `git.md` that for a `release` the agent confirms
+    the version is already set (asking if it can't confirm — never editing
+    it), and drafts the `release-notes:` body per RULE:RELEASE-BODY-
+    AUTHORING [verify: code-only]
+    → `version` field note "confirm it is already set; never set or bump
+      it yourself (ask if unclear)"; `release-notes` field points to
+      RULE:RELEASE-BODY-AUTHORING (2026-07-22)
+  - [X] 4.2 Document the mandatory leading irreversibility comment for a
+    `release` plan; show a complete `release` plan example [verify: code-only]
+    → format block shows mode/version/release-notes; irreversibility
+      comment note extended to release (2026-07-22)
 
-- [ ] 5.0 **User Story:** As the maintainer, the feature is documented
+- [X] 5.0 **User Story:** As the maintainer, the feature is documented
   and proven on a real release
-  - [ ] 5.1 Document the one-shot delivery/release procedure in README
-    (user-facing: what `deliver` infers, the one approval) and CLAUDE.md
-    (maintainer: release is a `deliver` mode, not manual steps)
-    [verify: code-only]
-  - [ ] 5.2 Live: cut the real next embo release (0.2.3) via
-    `/embo:git deliver`; confirm inferred `release` → one plan approval →
-    published GA. `gh release view v0.2.3` reports `isDraft:false,
-    isPrerelease:false`; the tag points at the merge commit (AC-1, AC-4)
-    [verify: manual-run-claude]
+  - [X] 5.1 Document the one-shot delivery/release procedure in README
+    (user-facing) and CLAUDE.md (maintainer) [verify: code-only]
+    → README DONE: the `deliver` section lists the `mode` values incl.
+      `release`, shipped to main via PR #34 (2026-07-22). CLAUDE.md DONE:
+      the embo-deliver bin entry notes `release` mode adds tag+GitHub
+      Release (2026-07-22).
+  - [X] 5.2 Live: cut the real next embo release (0.2.3) via
+    `/embo:git deliver`; confirm `release` → one plan approval →
+    published GA [verify: manual-run-claude]
+    → RELEASED v0.2.3 (2026-07-22) by dogfooding `mode: release`:
+      plan tmp/git-release-0.2.3.txt → PR #33 → squash-merge into main →
+      tag v0.2.3 → GitHub Release. Verified: `gh release view v0.2.3`
+      = isDraft:false, isPrerelease:false; tag v0.2.3 == origin/main tip
+      (799984f) (AC-1, AC-4). First attempt halted at PR step (exit 5,
+      collaborator auth) with commit+push kept and nothing undone —
+      halt-on-failure contract confirmed live; retry after auth fix
+      completed the chain.
 
