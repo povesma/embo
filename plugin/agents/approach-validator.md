@@ -71,9 +71,16 @@ verification needs something to prove against.
      solved this, what do comparable systems do," query NotebookLM
      (`notebook_list` → `notebook_query` / `cross_notebook_query`) over
      relevant research notebooks. **Use the NotebookLM MCP tools
-     (`mcp__notebooklm-mcp__*`) only — never the `nlm` CLI.** On an auth
-     or expired error, report `EXTERNAL-CHECK-SKIPPED: notebooklm auth`
-     and proceed on the other sources.
+     (`mcp__notebooklm-mcp__*`) only — never the `nlm` CLI.** Two
+     distinct failure signals — do not conflate:
+     - **Tools ABSENT** (no `mcp__notebooklm-mcp__*` tool available — MCP
+       server was disconnected at spawn): report
+       `EXTERNAL-CHECK-UNAVAILABLE: notebooklm tools absent` as a hard
+       error; a prior-art-dependent claim CANNOT be marked confirmed
+       against a check that never ran — mark it unconfirmed and say why.
+     - **Tools present, call returns auth/expired**: report
+       `EXTERNAL-CHECK-SKIPPED: notebooklm auth` and proceed on the other
+       sources.
    - **Your own clean-context judgment** — only for design-logic claims
      with no external source; weight it lowest and mark such claims
      accordingly.

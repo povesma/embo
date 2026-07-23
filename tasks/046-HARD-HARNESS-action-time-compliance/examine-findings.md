@@ -74,11 +74,30 @@ now folded into the PRD revision.
 4. Prompt-only capped, determinism needs an external gate — confirmed
    from a second literature (HiL-Bench) beyond the PRD's own citations.
 
-## Process finding (for /embo:improve)
+## Process finding (for /embo:improve) — ROOT CAUSE CORRECTED 2026-07-23
 
-The `embo:examine-advisor` subagent **could not resolve the
-`mcp__notebooklm-mcp__*` tools** even though its agent definition lists
-them and the tools worked in the main context. This defeated the
-research pass twice. The prior-art query had to be run directly from the
-main context. This is a subagent-MCP-tool-resolution gap worth a task
-seed — the examine command's research pass is unreliable until fixed.
+**Initial (WRONG) diagnosis:** "the examine-advisor subagent cannot
+resolve the `mcp__notebooklm-mcp__*` tools even though its definition
+lists them." This was asserted from the subagents' own reports, not
+verified.
+
+**Actual root cause (verified by a diagnostic subagent spawned AFTER the
+NotebookLM server reconnected):** the three NotebookLM tools ARE present
+in the subagent's toolset when the MCP server is connected. The two
+failed research passes were spawned during the window when the
+`notebooklm-mcp` server was **disconnected** (a session-level MCP
+disconnect, later restored by the user via `/mcp`). A subagent spawned
+while a server is down gets no tools for it — the tools do not exist in
+the session at that moment. Nothing is wrong with the agent definition
+or with subagent tool resolution.
+
+**The real defect (task seed for the examine command):** the
+`research:examine` command spawns its research-pass subagent WITHOUT
+first checking that the NotebookLM MCP server is connected. When it is
+down, the pass silently degrades to `EXTERNAL-CHECK-SKIPPED` and the
+command proceeds on the internal pass alone. The fix is a
+**connectivity precondition**: before spawning the research pass, verify
+the notebooklm-mcp server is reachable; if not, surface it as a BLOCKER
+(prompt the user to reconnect via `/mcp` or `nlm login`) rather than
+proceeding degraded. Do NOT work around it by running the query from the
+main context (that hides the failure instead of fixing it).

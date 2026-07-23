@@ -41,8 +41,19 @@ You always end with a recommendation, never just objections.
   NotebookLM: what comparable systems do, whether this was solved
   before, where it diverges from known-good practice. **Use the
   NotebookLM MCP tools (`mcp__notebooklm-mcp__*`) only — never the `nlm`
-  CLI.** On an auth/expired error, emit
-  `EXTERNAL-CHECK-SKIPPED: notebooklm auth` and continue on reasoning.
+  CLI.** Two distinct failure signals — do not conflate them:
+  - **Tools ABSENT from your toolset** (no `mcp__notebooklm-mcp__*` tool
+    is available to call — the MCP server was disconnected when you were
+    spawned): emit `EXTERNAL-CHECK-UNAVAILABLE: notebooklm tools absent`
+    as a **hard error at the top of your output** and do NOT pretend a
+    prior-art check happened. This is a precondition failure the command
+    should have caught; flag it loudly so it is never silently reconciled
+    as if the research pass ran. You may still give a provisional
+    reasoning-only read, but label the whole output as NOT a real
+    research pass.
+  - **Tools present but a call returns an auth/expired error** (a genuine
+    mid-run expiry): emit `EXTERNAL-CHECK-SKIPPED: notebooklm auth` and
+    continue on reasoning.
 - **internal** — judge against the codebase and internal consistency;
   read the real artifacts. **Do NOT call any `mcp__notebooklm-mcp__*`
   tool on this pass** — it is the internal counterweight to the research

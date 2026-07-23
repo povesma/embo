@@ -46,6 +46,22 @@ is a thin spawner: the judgment lives in the `examine-advisor` agent.
 3. **Get user go-ahead** on the digest + context block before any
    outbound call (a subagent cannot prompt mid-run).
 
+3a. **Verify the NotebookLM MCP server is connected — a precondition for
+   the research pass.** A subagent spawned while `notebooklm-mcp` is
+   disconnected receives NONE of its `mcp__notebooklm-mcp__*` tools (the
+   tools do not exist in the session at that moment), so the research
+   pass silently degrades to reasoning-only. Do NOT let that happen
+   silently, and do NOT work around it by running the query from the
+   main context — that hides the failure.
+   - Check reachability first (e.g. attempt a cheap
+     `mcp__notebooklm-mcp__notebook_list`, or confirm the tool is present
+     in this session). If reachable, proceed to step 4.
+   - **If NOT reachable, STOP and surface it as a blocker:** tell the
+     user the research pass cannot run until NotebookLM is reconnected,
+     and to restore it via `/mcp` (reconnect) or `nlm login` (re-auth),
+     then re-invoke. Offer to proceed **internal-pass-only** as an
+     explicit, user-chosen fallback — never as a silent default.
+
 4. **Spawn `examine-advisor` twice in parallel** (Agent tool, one
    message, background), each passed the digest + context block:
    - `pass=research` — judges against prior art via NotebookLM MCP.
@@ -53,9 +69,17 @@ is a thin spawner: the judgment lives in the `examine-advisor` agent.
 
 5. **Await both, then reconcile:** merge findings, dedupe, rank by
    severity, mark "both passes flagged" (high-signal) vs "one flagged",
-   and combine the two recommendations into one. If the research pass
-   returned `EXTERNAL-CHECK-SKIPPED`, proceed on the internal pass and
-   flag the missing external check.
+   and combine the two recommendations into one.
+   - `EXTERNAL-CHECK-SKIPPED: notebooklm auth` (a genuine mid-run auth
+     expiry) → proceed on the internal pass and flag the missing
+     external check.
+   - `EXTERNAL-CHECK-UNAVAILABLE: notebooklm tools absent` (the hard
+     error the agent returns when its NotebookLM tools were not in its
+     toolset at all) → this is the precondition failure step 3a is meant
+     to prevent. Do NOT silently reconcile it as a soft skip. Report
+     that the research pass never ran, and that the reconciled result is
+     internal-only — a partial review, not the full two-pass check the
+     user asked for.
 
 6. **Emit the reconciled report + recommendation.** Report-only — do
    not edit the target or start implementing.
