@@ -9,28 +9,37 @@
 - [cc-bug-tracking.md](cc-bug-tracking.md) :: Claude Code hook-API bugs
   the design is conditioned on (#75915, #19432, #19115)
 - [examine-findings.md](examine-findings.md) :: reconciled PRD review
+- [plugin/hooks/harness-lib.sh](../../plugin/hooks/harness-lib.sh)
+  :: DONE — loader + iso_now/now_epoch + detector_fires (class2 dispatch)
 - [plugin/hooks/approve-compound.sh](../../plugin/hooks/approve-compound.sh)
-  :: MODIFIED — single matcher-`*` hook; main() if/else; M1-hold + M3
+  :: DONE — single matcher-`*` hook; main() if/else; M1-hold + M3;
+     class1_check + class1_trigger_matches; sources harness-lib +
+     custodian-halt
 - [plugin/hooks/approve-compound.test.sh](../../plugin/hooks/approve-compound.test.sh)
-  :: MODIFIED — hold / M3 / branch-order fixtures
+  :: DONE — class1 M3 + FR-9 branch-order fixtures (194 pass)
 - [plugin/hooks/custodian-halt.sh](../../plugin/hooks/custodian-halt.sh)
-  :: CREATE — PostToolUse matcher-`*` (M1 SET + M9 capture)
+  :: DONE — PostToolUse matcher-`*` (M1 SET + M9 capture); hold-check,
+     is_exempt, flap_check, harness_violation
 - [plugin/hooks/custodian-halt.test.sh](../../plugin/hooks/custodian-halt.test.sh)
-  :: CREATE — detector / marker / capture fixtures
+  :: DONE — detector / marker / hold / exempt / flap / M9 fixtures
+     (38 pass)
 - [plugin/hooks/harness-rules.json](../../plugin/hooks/harness-rules.json)
-  :: CREATE — shipped default rules (2 per class, distinct shapes)
+  :: DONE — shipped default rules (2 per class, distinct shapes)
 - [plugin/hooks/harness-rules.test.sh](../../plugin/hooks/harness-rules.test.sh)
-  :: CREATE — config-driven decision + genericity + boundary fixtures
+  :: DONE — config-driven decision + genericity + boundary fixtures
+     (22 pass)
 - [plugin/bin/embo-custodian](../../plugin/bin/embo-custodian)
-  :: CREATE — clear-marker wrapper (stable hook-visible head)
+  :: DONE — clear/status wrapper (stable hook-visible head)
 - [plugin/bin/embo-custodian.test.sh](../../plugin/bin/embo-custodian.test.sh)
-  :: CREATE — wrapper fixtures
+  :: DONE — wrapper fixtures (8 pass)
 - [plugin/commands/custodian-clear.md](../../plugin/commands/custodian-clear.md)
-  :: CREATE — `/embo:custodian-clear` command
+  :: DONE — `/embo:custodian-clear` command
 - [plugin/hooks/hooks.json](../../plugin/hooks/hooks.json)
-  :: MODIFIED — PreToolUse Bash→`*`; add PostToolUse `*`
-- [.gitignore](../../.gitignore) :: MODIFIED — add `.claude/embo_state/`
-- [CLAUDE.md](../../CLAUDE.md) :: MODIFIED — mechanism-level note only
+  :: DONE — PreToolUse Bash→`*`; added PostToolUse `*`
+- [.gitignore](../../.gitignore) :: DONE — added `.claude/embo_state/`
+- [CLAUDE.md](../../CLAUDE.md) :: DONE — mechanism-level entries
+- [README.md](../../README.md) :: DONE — action-time rule harness
+  section (FR-10 user docs)
 
 ## Notes
 
@@ -46,58 +55,74 @@
 
 ## Tasks
 
-- [ ] 1.0 **User Story:** As an embo maintainer, I want all rules
+- [X] 1.0 **User Story:** As an embo maintainer, I want all rules
   declared in one runtime config so a new rule of a known shape is added
   by editing JSON, never code — proving the harness is generic, not a
   point solution. [6/0]
-  - [ ] 1.1 Write `harness-rules.test.sh`: a rule loader reads
+  - [X] 1.1 Write `harness-rules.test.sh`: a rule loader reads
     `harness-rules.json`, merges shipped defaults with an optional
     project `.claude/embo_state/harness-rules.json`, and returns
     `class1`/`class2` rule arrays; malformed JSON → empty + logged (fail
     open) [verify: auto-test]
-  - [ ] 1.2 Implement the rule-loader function(s) in a sourceable form
+    → 11 passed, 0 failed [live] (2026-07-23)
+  - [X] 1.2 Implement the rule-loader function(s) in a sourceable form
     (reuse the 4-layer merge idea from `approve-compound.sh:load_rules`)
     to pass 1.1 [verify: auto-test]
-  - [ ] 1.3 Author `harness-rules.json` with the four seed rules:
+    → load_harness_rules in harness-lib.sh; 11 passed [live] (2026-07-23)
+  - [X] 1.3 Author `harness-rules.json` with the four seed rules:
     class1 `jq-not-python` (heads+arg+body) and `rg-not-grep`
     (head+flag); class2 `auth-halt` (`stderr_matches`) and
     `destructive-precondition` (`exit_and_tool`) — two distinct shapes
     per class [verify: code-only]
-  - [ ] 1.4 Write test: the `signal`/trigger **shape dispatch** — a
+  - [X] 1.4 Write test: the `signal`/trigger **shape dispatch** — a
     known `signal` type routes to its matcher; an UNKNOWN `signal` type
     fails open and logs "unknown signal shape" (the documented
     genericity boundary) [verify: auto-test]
-  - [ ] 1.5 Implement the shape-dispatch to pass 1.4 [verify: auto-test]
-  - [ ] 1.6 Write the FR-genericity-test harness: add a 3rd rule per
+    → 18 passed, 0 failed [live] (2026-07-23)
+  - [X] 1.5 Implement the shape-dispatch to pass 1.4 [verify: auto-test]
+    → detector_fires dispatches stderr_matches/exit_and_tool, unknown
+      fails open + logs; 18 passed [live] (2026-07-23)
+  - [X] 1.6 Write the FR-genericity-test harness: add a 3rd rule per
     class (`uv-not-pip`; `missing-approval-halt`) via JSON only and
     assert both fire with **zero `.sh` change** (diff-guard the scripts)
     [verify: auto-test]
+    → 3rd rule/class loads + fires; lib cksum unchanged; 22 passed
+      [live] (2026-07-23)
 
-- [ ] 2.0 **User Story:** As a developer, I want a procedural-habit rule
+- [X] 2.0 **User Story:** As a developer, I want a procedural-habit rule
   (CLASS 1) to deny the wrong command at the tool boundary and hand back
   the exact sanctioned substitute, so I follow the rule at action-time
   regardless of what I recall. [4/0]
-  - [ ] 2.1 Write tests in `approve-compound.test.sh`: for each class1
+  - [X] 2.1 Write tests in `approve-compound.test.sh`: for each class1
     rule, a matching normalized Bash subcommand → `deny` with the rule's
     substitute in `permissionDecisionReason`; a non-matching command →
     unaffected (falls through to existing logic) [verify: auto-test]
-  - [ ] 2.2 Implement the M3 check as a sourceable function
+    → 9 new class1 cases; TDD red (class1_check absent), 177 prior pass
+      [live] (2026-07-23)
+  - [X] 2.2 Implement the M3 check as a sourceable function
     (`class1_check`) reusing `normalize_subcommand`/`split_subcommands`,
     reading rules from Story 1's loader, to pass 2.1 [verify: auto-test]
-  - [ ] 2.3 Write test: `SUBSTITUTE_SUPPLY_DISABLED=1` → M3 check is a
+    → class1_check + class1_trigger_matches; main() denies with
+      substitute; 186 passed, 0 failed [live] (2026-07-23)
+  - [X] 2.3 Write test: `SUBSTITUTE_SUPPLY_DISABLED=1` → M3 check is a
     no-op (control-arm switch, FR-8) [verify: auto-test]
-  - [ ] 2.4 Implement the disable switch to pass 2.3 [verify: auto-test]
+    → 2 switch cases (disabled no-op / enabled fires); pass [live]
+      (2026-07-23)
+  - [X] 2.4 Implement the disable switch to pass 2.3 [verify: auto-test]
+    → SUBSTITUTE_SUPPLY_DISABLED early-return in class1_check; 186
+      passed, 0 failed [live] (2026-07-23)
 
-- [ ] 3.0 **User Story:** As a developer, I want a critical-failure
+- [X] 3.0 **User Story:** As a developer, I want a critical-failure
   signal in any tool's output to set an out-of-band halt marker, and a
   hold-check that reads it — the CLASS 2 detection + state, built
   standalone before the hook wiring that uses it. [8/0]
-  - [ ] 3.1 Write `custodian-halt.test.sh`: synthetic PostToolUse JSON
+  - [X] 3.1 Write `custodian-halt.test.sh`: synthetic PostToolUse JSON
     for a Bash tool AND a non-Bash (MCP-style) tool whose `tool_output`
     matches a class2 detector → emits root-level
     `{"decision":"block","reason":<report>}` and writes the marker;
     non-matching output → no marker, no block [verify: auto-test]
-  - [ ] 3.2 Implement `custodian-halt.sh` (PostToolUse matcher-`*`):
+    → Bash + MCP + no-match cases; 25 passed, 0 failed [live] (2026-07-23)
+  - [X] 3.2 Implement `custodian-halt.sh` (PostToolUse matcher-`*`):
     set its executable bit; create the marker dir if absent; source a
     shared timestamp helper (a single `iso_now` fn, since the sandbox
     can restrict bare `date` — define it once and reuse across hooks);
@@ -105,61 +130,87 @@
     detector via the shape dispatch (Story 1), on match write the marker
     **atomically** (`> f.tmp && mv f.tmp f`) — to pass 3.1
     [verify: auto-test]
-  - [ ] 3.3 Write the HOLD tests for `custodian_hold_check` (a sourceable
+    → tool_response paths (stdout/stderr/exit_code, MCP .content[].text)
+      confirmed via claude-code-guide; exec bit set; 25 passed [live]
+      (2026-07-23)
+  - [X] 3.3 Write the HOLD tests for `custodian_hold_check` (a sourceable
     function): marker present → returns halt + report; marker absent →
     no-halt; marker present-but-unparseable → **halt (fail-SAFE), NOT
     no-halt** [verify: auto-test]
-  - [ ] 3.4 Implement `custodian_hold_check` (read marker, fail-safe-to-
+    → present/absent/corrupt cases; pass [live] (2026-07-23)
+  - [X] 3.4 Implement `custodian_hold_check` (read marker, fail-safe-to-
     halt on corrupt) as a standalone sourceable function to pass 3.3;
     wiring into `main()` happens in Story 4 [verify: auto-test]
-  - [ ] 3.5 Write test: `is_exempt` returns true for `Read`/`Grep`/`Glob`
+    → fail-SAFE on unparseable marker; report from class2 config [live]
+      (2026-07-23)
+  - [X] 3.5 Write test: `is_exempt` returns true for `Read`/`Grep`/`Glob`
     and for a command whose normalized head is the `embo-custodian`
     wrapper; false otherwise [verify: auto-test]
-  - [ ] 3.6 Implement `is_exempt` to pass 3.5 [verify: auto-test]
-  - [ ] 3.7 Write test: `CUSTODIAN_HALT_DISABLED=1` → SET and
+    → 8 exempt/non-exempt cases; pass [live] (2026-07-23)
+  - [X] 3.6 Implement `is_exempt` to pass 3.5 [verify: auto-test]
+    → Read/Grep/Glob + embo-custodian head exempt; else not [live]
+      (2026-07-23)
+  - [X] 3.7 Write test: `CUSTODIAN_HALT_DISABLED=1` → SET and
     hold-check are both no-ops (control-arm switch, FR-8)
     [verify: auto-test]
-  - [ ] 3.8 Implement the disable switch to pass 3.7 [verify: auto-test]
+    → SET no-op (no marker/block) + hold no-op cases; pass [live]
+      (2026-07-23)
+  - [X] 3.8 Implement the disable switch to pass 3.7 [verify: auto-test]
+    → CUSTODIAN_HALT_DISABLED guards main/set/hold; 25 passed [live]
+      (2026-07-23)
 
-- [ ] 4.0 **User Story:** As a developer, I want the PreToolUse hook
+- [X] 4.0 **User Story:** As a developer, I want the PreToolUse hook
   restructured into a single matcher-`*` registration that calls the
   hold-check first (all tools) then the Bash path — so the CLASS 2 gate
   covers every tool and the #75915 updatedInput-discard bug is avoided
   by construction. [2/0]
-  - [ ] 4.1 Write the FR-9 branch-order tests (single hook, one
+  - [X] 4.1 Write the FR-9 branch-order tests (single hook, one
     invocation per case), now that `custodian_hold_check` (Story 3) and
     `class1_check` (Story 2) exist: (a) marker present + non-Bash tool →
     `deny`; (b) marker present + Bash w/ M3 trigger → `deny`, **no
     `updatedInput` emitted**; (c) no marker + allowed Bash →
     `allow`+rewrite intact; (d) no marker + non-Bash → silent
     fallthrough [verify: auto-test]
-  - [ ] 4.2 Restructure `approve-compound.sh` `main()`: replace the
+    → 8 branch-order cases incl. exempt Read; 194 passed, 0 failed
+      [live] (2026-07-23)
+  - [X] 4.2 Restructure `approve-compound.sh` `main()`: replace the
     `[ "$TOOL" = "Bash" ] || exit 0` early-exit (line ~423) with an
     if/else — read `tool_name`; call `custodian_hold_check` +
     `is_exempt` first for ALL tools (deny + exit on halt); then run the
     Bash-only path (`class1_check` from Story 2 + existing allow/wrap)
     only when `tool_name == Bash` — to pass 4.1 [verify: auto-test]
+    → hold-check-first if/else; sources custodian-halt.sh; deny returns
+      before rewrite (no updatedInput); 194 passed [live] (2026-07-23)
 
 - [ ] 5.0 **User Story:** As a developer, I want to clear an active halt
   myself through a dedicated command, with a flap guard that flags a
   recurring false-positive signature — so a stuck or noisy gate never
   silently degrades into a rule I route around. [6/0]
-  - [ ] 5.1 Write `embo-custodian.test.sh`: `embo-custodian clear`
+  - [X] 5.1 Write `embo-custodian.test.sh`: `embo-custodian clear`
     deletes the marker and appends `{rule_id, cleared_ts}` as an NDJSON
     line to `custodian-cleared.log`; `embo-custodian status` reports
     active/none [verify: auto-test]
-  - [ ] 5.2 Implement `plugin/bin/embo-custodian` (pattern of
+    → status/clear/append/no-marker cases; 8 passed, 0 failed [live]
+      (2026-07-23)
+  - [X] 5.2 Implement `plugin/bin/embo-custodian` (pattern of
     `embo-deliver`/`embo-corrections`); set the executable bit
     (`chmod +x`) so it is invocable as a bare command on PATH, matching
     the sibling wrappers — to pass 5.1 [verify: auto-test]
-  - [ ] 5.3 Write test: flap guard — `custodian-halt.sh` greps
+    → clear/status subcommands; sources custodian-halt.sh; exec bit set;
+      8 passed [live] (2026-07-23)
+  - [X] 5.3 Write test: flap guard — `custodian-halt.sh` greps
     `custodian-cleared.log` filtered by `rule_id`; same rule cleared
     within N turns/min → report escalates to "possible false-positive
     signature for rule <id>"; different rule's clear does NOT affect it
     (append-log, not overwrite) [verify: auto-test]
-  - [ ] 5.4 Implement the flap-guard read in `custodian-halt.sh` to pass
+    → same-recent/same-old/different-rule/no-log + escalated-report
+      cases; 30 passed, 0 failed [live] (2026-07-23)
+  - [X] 5.4 Implement the flap-guard read in `custodian-halt.sh` to pass
     5.3 [verify: auto-test]
-  - [ ] 5.5 Create `plugin/commands/custodian-clear.md`
+    → flap_check (time-windowed, keyed by rule_id, CUSTODIAN_FLAP_WINDOW_SEC
+      default 900); main() escalates report on flap; 30 passed [live]
+      (2026-07-23)
+  - [X] 5.5 Create `plugin/commands/custodian-clear.md`
     (`/embo:custodian-clear`) that runs `embo-custodian clear`
     [verify: code-only]
   - [ ] 5.6 Verify the command end-to-end: trip a halt, run
@@ -170,20 +221,24 @@
   captured to a log and the whole harness wired into hooks.json with
   docs and disable switches — so the mechanism is observable,
   installable, and reversible. [7/0]
-  - [ ] 6.1 Write test: `custodian-halt.sh` appends one NDJSON line
+  - [X] 6.1 Write test: `custodian-halt.sh` appends one NDJSON line
     (`ts, rule_id, class, mechanism, tool_name, verdict`) per
     violation-shaped signal to `harness-violations.log`, regardless of
     block; no model-facing output from the capture [verify: auto-test]
-  - [ ] 6.2 Implement the M9 capture append to pass 6.1
+    → one-line/fields/clean-no-log cases; 38 passed, 0 failed [live]
+      (2026-07-23)
+  - [X] 6.2 Implement the M9 capture append to pass 6.1
     [verify: auto-test]
-  - [ ] 6.3 Update `hooks.json`: change the PreToolUse entry matcher from
+    → harness_violation NDJSON append (class 2, M1, halted); 38 passed
+      [live] (2026-07-23)
+  - [X] 6.3 Update `hooks.json`: change the PreToolUse entry matcher from
     `Bash` to `*` (single registration); add a PostToolUse matcher-`*`
     entry for `custodian-halt.sh` [verify: code-only]
-  - [ ] 6.4 Add `.claude/embo_state/` to `.gitignore` [verify: code-only]
-  - [ ] 6.5 Document the mechanism in `CLAUDE.md` at the same
+  - [X] 6.4 Add `.claude/embo_state/` to `.gitignore` [verify: code-only]
+  - [X] 6.5 Document the mechanism in `CLAUDE.md` at the same
     mechanism-level as the existing `approve-compound.sh` entry
     [verify: code-only]
-  - [ ] 6.6 Write the user-facing docs (FR-10): `harness-rules.json`
+  - [X] 6.6 Write the user-facing docs (FR-10): `harness-rules.json`
     schema + how to add a rule + `/embo:custodian-clear` usage + manual
     fallback, in README and the command file (NOT CLAUDE.md, per the
     not-a-deliverable rule) [verify: code-only]

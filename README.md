@@ -321,6 +321,105 @@ all** after you ask for one. Only add this if you consciously want
 unattended delivery; there is no way for the agent to warn you at
 delivery time that the gate is gone.
 
+## Behavioral rule reminders
+
+embo's primary mechanism for rule compliance is **per-rule conclusion
+checklists**: each behavioral rule in `plugin/commands/start.md` carries
+a `<!-- CHECKLIST:<RULE> -->` block with an explicit one-line artifact the
+model must emit before taking the governed action. The
+`behavioral-reminder.sh` UserPromptSubmit hook extracts every checklist
+block from `start.md` at runtime and injects them verbatim into the
+assistant's context before each response.
+
+How it works:
+- **Rule text** declares the requirement and the artifact format
+  (e.g. `Objection-check: <hold | concede | partly> — <reason>`)
+- **Checklist block** is injected unconditionally on every turn — not
+  gated on keywords — so the model sees the artifact format regardless
+  of prompt wording
+- **Stop-hook measurement** (`tasks/047-*/prototype/conclusion-probe.sh`,
+  registered in repo `.claude/settings.local.json`) logs each artifact
+  emission to `.claude/embo_state/conclusion-probe.log` for observability
+
+Adding a new rule: write the rule prose and its `CHECKLIST` block in
+`start.md`. The hook auto-injects it with zero code change — the
+genericity test (`behavioral-reminder.test.sh`) proves this.
+
+## Action-time rule harness (disabled by default)
+
+> **Status**: ships as infrastructure; both CLASS 1 and CLASS 2 gates are
+> off unless explicitly enabled (`SUBSTITUTE_SUPPLY_DISABLED=0` /
+> `CUSTODIAN_HALT_DISABLED=0`). The per-rule conclusion checklist
+> mechanism above is the active enforcement path.
+
+Two hooks turn behavioral rules into deterministic gates at the tool
+boundary, so the right behavior happens regardless of what the model
+recalls. Both read their rules from **runtime config** — adding a rule
+of a known shape is a JSON edit, never a code change.
+
+- **CLASS 1 (procedural habit)** — a PreToolUse check denies the wrong
+  command and hands back the sanctioned substitute in the deny reason
+  (e.g. `grep -r` → "use rg"). You get the right command instead of
+  running the wrong one.
+- **CLASS 2 (critical failure)** — a PostToolUse detector watches every
+  tool's output for a critical-failure signal (auth failure, a tripped
+  destructive-operation precondition). On a match it sets an out-of-band
+  **halt**: subsequent non-exempt tool calls are denied with the report,
+  so the failure cannot be silently routed around. Read/Grep/Glob and
+  the clear command stay exempt so you can still investigate.
+
+### Rules config
+
+Shipped defaults live in `plugin/hooks/harness-rules.json`; a project can
+add or override rules in `.claude/embo_state/harness-rules.json` (same
+merge as the permissions layers — project rules append after defaults).
+
+```json
+{
+  "class1": [
+    { "id": "rg-not-grep",
+      "trigger": { "heads": ["grep"], "arg_matches": "(^|\\s)-[a-zA-Z]*[rR]" },
+      "action": "deny",
+      "substitute": "use ripgrep: rg '<pattern>' <path>" }
+  ],
+  "class2": [
+    { "id": "auth-halt",
+      "detector": { "signal": "stderr_matches",
+                    "pattern": "401 Unauthorized|403 Forbidden|not logged in" },
+      "report": "A critical tool failed authentication. Report and STOP." }
+  ]
+}
+```
+
+**Add a rule** by appending an object of a **known shape**:
+- CLASS 1 `trigger`: `heads` (list) + optional `arg_matches` /
+  `body_matches` regexes — all present parts must match.
+- CLASS 2 `detector.signal`: `stderr_matches` (regex over output) or
+  `exit_and_tool` (`tool_matches` + `exit_code` + optional
+  `stderr_matches`).
+
+A genuinely **new signal shape** (e.g. "N consecutive failures") needs a
+new matcher branch in `harness-lib.sh` — that boundary is intentional and
+documented; an unknown signal fails open (no rule enforced) and logs.
+
+### Clearing a halt — `/embo:custodian-clear`
+
+A halt is human-gated; no hook auto-clears it. When one is active, run
+**`/embo:custodian-clear`**: it reports the active rule, deletes the
+marker, and records the clear. If the *same* rule halts again within a
+short window, the next report escalates to "possible false-positive
+signature" — a sign the detector is too broad and should be narrowed
+rather than cleared repeatedly.
+
+**Manual fallback:** if the `embo-custodian` wrapper is not on PATH,
+delete `.claude/embo_state/custodian-halt.json` in the project by hand.
+This lifts the halt but does not feed the flap guard.
+
+Disable switches (set in the environment): `SUBSTITUTE_SUPPLY_DISABLED=1`
+turns off CLASS 1; `CUSTODIAN_HALT_DISABLED=1` turns off CLASS 2 (set and
+hold). Removing the PostToolUse entry from `hooks.json` also disables
+CLASS 2 entirely.
+
 ## Test subagents
 
 Five specialised agents run in **isolated contexts** during
