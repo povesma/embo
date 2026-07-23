@@ -38,6 +38,11 @@ rlm=true, memory_backend=claude-mem, docs_first=strict. Otherwise
 parse the YAML for profile fields. Note the active profile name
 (or "default") in the session summary output.
 
+**Read depth** follows the profile: `fast`/`minimal` → **brief**
+(Step 2 memory search skipped; the task-scout returns names + counts
+only); anything else → **full**. Steps 2 and 3 apply it; note the depth
+in the summary.
+
 ## Session Behavioral Rules
 
 These rules apply for the entire session, across all commands and
@@ -520,40 +525,33 @@ auto-approves under a `Bash(rlm_repl *)` rule with no prompt.
 
 ### Step 2: Query Claude-Mem for Historical Context
 
-**(Skip if profile `tools.memory_backend` is `none`)**
+**(Skip if `tools.memory_backend` is `none`, or in brief depth.)**
 
-**MANDATORY project scoping.** claude-mem uses ONE global database
-shared across every repo. A `search(...)` with no `project` argument
-reads observations from ALL projects, leaking unrelated (and possibly
-confidential) cross-repo context into this session. Every `search(...)`
-call below MUST pass `project` scoped to the current project. This is a
-correctness and confidentiality requirement, not a preference — do not
-omit it, and do not rely on a CLAUDE.md reminder to add it.
+Recent activity is already in context: claude-mem's SessionStart hook
+injects a "recent context" block (recent observations + stats) before
+this command runs. Read recent work, decisions, and in-progress items
+from that block — **do not re-search for recent work**, it double-pays
+for what is already present.
 
-The project name is the last path segment of the **working directory
-you were launched in** — already shown in your environment as
-`Primary working directory` (e.g. `/Users/.../embo` → `embo`). Take it
-from there directly; it needs no command. Use that string as `project`
-in every call. (claude-mem keys observations by this segment, so two
-repos with the same final segment — `/home/embo` and `/var/embo` —
-share one memory scope. This is a known claude-mem limitation; the read
-scope must match the segment used at capture, so do not substitute a
-full path here.)
+Issue only the one query that block does not cover — topical overview:
 
 ```
 mcp__plugin_claude-mem_mcp-search__search(query="project overview goals architecture", project="<project-name>", limit=5)
-mcp__plugin_claude-mem_mcp-search__search(query="implementation completed features recent work", project="<project-name>", limit=10, orderBy="created_at DESC")
-mcp__plugin_claude-mem_mcp-search__search(query="task list TODO in progress", project="<project-name>", limit=5)
 ```
-Fetch full observations for top results with `mcp__plugin_claude-mem_mcp-search__get_observations`.
 
-**If the scoped queries return little or nothing**, the project may have
-been renamed since its history was captured (claude-mem stores the
-directory basename used *at capture time*). Only in that case, retry
-once with the prior name if you can infer it, and note the rename in the
-session summary. Never fall back to an unscoped (all-projects) search.
+`project` is **mandatory** and is the launch directory's last path
+segment (`Primary working directory` in your environment, e.g. `embo`).
+Without it, `search` reads ALL projects and leaks cross-repo context —
+never omit it, never pass a full path. Fetch full observations
+(`get_observations`) only for a detail the index row lacks.
 
-Extract: project goals, completed features, active tasks, recent decisions, known issues.
+If NO SessionStart block is present (claude-mem absent, or a
+non-injecting runtime), then also run one recency query so recent
+activity is not empty:
+`search(query="recent work completed in progress", project="<project-name>", limit=8, orderBy="created_at DESC")`.
+If the overview query returns near-nothing, the project may have been
+renamed since capture — retry once with the inferable prior name, note
+the rename; never fall back to an unscoped search.
 
 ### Step 3: Codebase Context
 
@@ -565,18 +563,14 @@ directed; if Glob is unavailable, skip the step.
 - Docs: use the **Glob tool** (not Bash, not `find`) with pattern
   `**/README*.md`, then again with `**/CLAUDE*.md`. Read the
   matched files at the project root only.
-- Tasks: use the **Glob tool** (not Bash, not `find`) with pattern
-  `tasks/**/*-tasks.md`. Discard matches whose path contains
-  `/archive/`. For each surviving file:
-  - Read it.
-  - Count `[X]` markers vs all task markers (`[ ]`, `[~]`, `[X]`).
-  - If ≥80% are `[X]` (mostly complete): use only the file's header
-    block (title, status line, story titles) and lines containing
-    `[ ]` or `[~]`. Discard completed subtask bodies and their
-    evidence notes from context.
-  - Otherwise: use the full file content.
-  - When the user selects this task for active work, re-read the
-    full file.
+- Tasks: **do not read task files here — delegate.** Spawn the
+  `embo:session-scout` agent (Task tool) with the repo root and the
+  resolved depth. It reads `tasks/**/*-tasks.md` in ITS OWN context and
+  returns a compact digest (top active tasks by recency, open-marker
+  counts, a recommended next task); the task-file bulk never enters this
+  context. Use the digest verbatim for the summary's Active Tasks and
+  recommendation. Read a task file in full only when the user selects it
+  for active work.
 - Git: run these two commands exactly as shown. Do not change
   flags, count, or `HEAD` reference; they are pre-approved at
   these exact prefixes.
@@ -658,6 +652,9 @@ Based on:
 - ✅ RLM: Ready ({total_files} files indexed)
 - ✅ Claude-Mem: Ready ({obs_count} observations)
 - ✅ Git: {git_branch} ({git_status})
+- Read depth: {full|brief} — in brief, memory search skipped and the
+  task-scout returns names + counts only; label any skipped section
+  rather than omitting it.
 
 Ready to code! 🎉
 ```

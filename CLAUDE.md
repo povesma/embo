@@ -161,6 +161,9 @@ plugin/                          # THE PLUGIN ROOT (${CLAUDE_PLUGIN_ROOT})
 │   └── embo-corrections         # /embo:improve list-pending/write/mode (task 042)
 ├── agents/
 │   ├── rlm-subcall.md           # RLM chunk analysis subagent (Haiku)
+│   ├── session-scout.md         # /embo:start task-discovery digest
+│   │                              # (Haiku; keeps task-file bulk out of
+│   │                              # the main context)
 │   ├── examine-advisor.md       # /embo:research:examine agent
 │   ├── approach-validator.md    # /embo:research:verify agent
 │   └── visual-qa-reviewer.md    # /embo:visual-impl judge (experimental)
