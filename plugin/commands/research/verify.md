@@ -41,6 +41,13 @@ does the work in its own clean context and returns a verdict.
    constructive advice (alternatives if unconfirmed, evidence if
    proven), and the bottom line. Do **not** edit the target or start
    implementing.
+   - **If the verdict carries `EXTERNAL-CHECK-UNAVAILABLE: notebooklm
+     tools absent`**, the NotebookLM server was disconnected when the
+     agent ran, so any prior-art-dependent claim is **unconfirmed, not
+     skipped**. Surface this to the user as a partial verification and
+     recommend restoring NotebookLM (`/mcp` or `nlm login`) then
+     re-running for the affected claims — do not present an internal-only
+     verdict as complete.
 
 The discipline's full narrative reference (for humans) is
 `docs/VERIFICATION-DISCIPLINE.md`; the operational form lives in the
