@@ -288,8 +288,13 @@ do not block, let them decide whether to act:
   suggest splitting into smaller PRs
 - **Non-obvious logic without comment**: complex expressions, subtle
   side-effects, workarounds — suggest adding a brief inline comment
-- **Unnecessary code added**: speculative abstractions, unused helpers,
-  over-engineered solutions — suggest simplifying before review
+- **Unnecessary code added**: for each non-trivial block the diff adds,
+  ask if a simpler option was passed over — already in this codebase, a
+  stdlib call, a built-in platform feature, an installed dependency, or a
+  one-liner. When so, flag the span (`file:line`) and name the simpler
+  option, as a concrete cut-or-simplify list, not general advice — e.g.
+  "`utils/date.ts:12-40` — hand-rolled formatter; the platform date API
+  covers this." Flag speculative abstractions and unused helpers too.
 
 Present findings concisely in text, then use `AskUserQuestion`:
 
