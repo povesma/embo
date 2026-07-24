@@ -516,13 +516,25 @@ task, resolve the behaviour issue, then resume.
 <!-- RULE:DELEGATE -->
 ### Delegate to a subagent where it beats the main context
 
-You delegate far less than you should. **Before starting a bulk
-exploration** — a search or read spanning several files — state one
-line, then proceed: `Delegation: <to <agent>, because … | none,
-because <reason>>`. Declaring first is the point: once the files are
-in context the benefit is gone, and the line is the trace
-`/embo:improve` learns from (like RULE:RESTATE-CORRECTION). Not for a
-single targeted read.
+You delegate far less than you should. **Before the third file-opening
+tool call in one turn** (Read / Grep / Glob / a search over files),
+emit one line, then proceed:
+
+`Delegate-check: <delegate | inline> — <the agent + why, or why the
+main context must hold this>`
+
+- `delegate` — hand this exploration to a subagent; name the agent and,
+  per the Protocol below, offer it via `AskUserQuestion`.
+- `inline` — keep it in the main context; state the specific reason it
+  must stay (sequential dependence, needs session context, single
+  cheap lookup, cost dwarfs stakes).
+
+Declaring first is the point: once the files are in context the benefit
+is gone, and the `Delegate-check:` line is both the forcing function and
+the trace `/embo:improve` and the Stop-hook probe learn from (like
+RULE:RESTATE-CORRECTION). The trigger is a hard count — the 3rd
+file-opening call — not a judgement about whether a read feels "bulk";
+`inline` is a deliberate, reasoned choice, never the silent default.
 
 **Weigh a subagent when:** exploring many files (~10+); judging work
 authored this session (a clean context can't ratify its own errors);
@@ -546,14 +558,18 @@ a delegated side effect, verify the diff, never trust the summary
 <!-- CHECKLIST:DELEGATE
      Injected verbatim on every user prompt by
      hooks/behavioral-reminder.sh. Keep it short; edit it here only. -->
-[DELEGATE checklist] Before a bulk exploration (search/read spanning
-several files) state one line first — `Delegation: <to <agent> … |
-none, because <reason>>` — then proceed; declaring after the reads is
-too late. Weigh a subagent for many-file exploration, judging this
+[DELEGATE checklist] Before the 3rd file-opening tool call in one turn
+(Read/Grep/Glob/file search), FIRST emit one line: `Delegate-check:
+<delegate | inline> — <the agent + why, or why main context must hold
+it>`. `delegate` = hand it to a subagent (name it; offer via
+AskUserQuestion, never auto-spawn); `inline` = keep it in main context,
+state the SPECIFIC reason (sequential dependence, needs session context,
+single cheap lookup, cost dwarfs stakes). The trigger is a hard count —
+the 3rd file-opening call — not a feeling about whether it's "bulk";
+emitting `inline` with no specific reason is the silent-default failure
+this catches. Weigh a subagent for many-file exploration, judging this
 session's own work, independent proof, 3+ independent tasks, or noisy
-loops. Offer via AskUserQuestion, never auto-spawn; skip a single
-lookup or sequentially-dependent/same-file work. Verify a delegated
-diff, don't trust the summary.
+loops. Verify a delegated diff, don't trust the summary.
 <!-- /CHECKLIST -->
 
 
