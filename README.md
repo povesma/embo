@@ -199,6 +199,20 @@ has both a persistent codebase index **and** cross-session memory.
 - you want **self-looping verification** (audit-fix-retry until a
   pass signal) — OMC (`ralph`) or shinpr's quality gates
 
+**Pairs well with:** [ponytail](https://github.com/DietrichGebert/ponytail)
+— a plugin that pushes the agent to write less code (a YAGNI check
+re-injected each turn, plus review/audit/debt commands). It governs
+*code volume*; embo governs *workflow*, so the two compose without
+overlap. Install it inside Claude Code:
+
+```
+/plugin marketplace add DietrichGebert/ponytail
+/plugin install ponytail
+```
+
+Then review and trust its hooks in `/hooks` (it runs two Node.js
+lifecycle hooks, so `node` must be on your PATH).
+
 ## Why this exists
 
 Three measurable failures of unstructured ("vibe") AI coding,
