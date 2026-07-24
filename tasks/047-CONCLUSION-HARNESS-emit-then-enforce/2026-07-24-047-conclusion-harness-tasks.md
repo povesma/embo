@@ -184,3 +184,26 @@ tests (3–4) → umbrella rollout (5) → adoption (6) → docs (7).
     → Confirmed: hooks.json has PreToolUse matcher=Bash (not *), no
       PostToolUse entry for custodian-halt.sh; CLASS 1/CLASS 2 disabled
       by construction [2026-07-24]
+
+- [X] 8.0 **User Story:** As an embo maintainer, I want the DELEGATE rule
+  brought up to the same enforcement standard as the other three artifacts,
+  so all four prompt-triggered rules are measurable and forced — not 3-of-4.
+  Origin: user reported DELEGATE "working significantly worse" in real use;
+  root cause is structural, not a one-off miss (dogfooding-as-backlog). [3/3]
+  - [X] 8.1 Diagnose why DELEGATE underperforms the other three
+    [verify: code-only]
+    → Three structural defects: (a) artifact `Delegation:` lacked the
+      `-check:` suffix so conclusion-probe.sh never measured it (invisible
+      emit-rate); (b) no forced decision axis — "none, because…" is a
+      trivial default, unlike hold|concede|partly; (c) fuzzy trigger
+      ("several files") always rationalizable as "single read". [2026-07-24]
+  - [X] 8.2 Redesign the artifact in start.md: rename to `Delegate-check:`
+    (measurable), add binary axis `<delegate | inline>`, sharpen trigger to
+    a hard count (3rd file-opening call/turn) [verify: code-only]
+    → RULE:DELEGATE prose + CHECKLIST:DELEGATE both rewritten; no
+      `Delegation:` references remain in plugin/ or tasks/047; behavioral-
+      reminder.sh unchanged (genericity — 30 tests still pass) [2026-07-24]
+  - [X] 8.3 Prove the probe now measures it [verify: auto-test]
+    → conclusion-probe.test.sh: 2 new cases assert `Delegate-check:`
+      (both arms) is captured as rule "delegate"; 40 passed, 0 failed
+      [live] (2026-07-24)

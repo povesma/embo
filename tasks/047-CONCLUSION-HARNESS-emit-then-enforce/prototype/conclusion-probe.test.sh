@@ -36,6 +36,12 @@ assert_eq "conc: case-insensitive" "objection" \
 # must NOT match a bare word "check" or "double-check" without the suffix
 assert_eq "conc: no false match on 'double check'" "" \
   "$(extract_conclusions 'let me double check the file')"
+# Delegate-check is a measurable artifact (renamed from the unmeasurable
+# `Delegation:` shape); the probe must capture it like the other rules.
+assert_eq "conc: delegate delegate-arm" "delegate" \
+  "$(extract_conclusions 'Delegate-check: delegate — to Explore, many files')"
+assert_eq "conc: delegate inline-arm" "delegate" \
+  "$(extract_conclusions 'Delegate-check: inline — single cheap lookup')"
 
 # ---- has_conclusion (per-rule presence) ----
 assert_eq "has: objection yes" "yes" \
