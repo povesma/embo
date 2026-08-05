@@ -71,14 +71,14 @@ see README §macOS / Linux Installation.
 
 Commands use MCP tools (requires plugin):
 - `mcp__plugin_claude-mem_mcp-search__search`
-- `mcp__plugin_claude-mem_mcp-search__save_memory`
+- `mcp__plugin_claude-mem_mcp-search__get_observations`
 
 Commands should **fail with clear error** if claude-mem unavailable.
 
 ### Runtime: stay on worker tools (do not migrate to server-beta yet)
 
 These commands target the **worker** runtime (`CLAUDE_MEM_RUNTIME=worker`)
-and use `search` / `get_observations` / `save_memory`. As of the
+and use `search` / `get_observations`. As of the
 2026-06-07 plugin update, claude-mem also exposes a `server-beta`
 runtime with a REST backend (`/v1/*`) and a new tool family
 (`observation_search`, `observation_context`, `observation_add`,

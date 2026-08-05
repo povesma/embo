@@ -1,10 +1,43 @@
 # 041: claude-mem write path is broken — `save_memory` no longer exists
 
-**Status**: Not started (seed). **Origin**: discovered 2026-07-15 while
-verifying visual-impl; split out so it gets a proper fix rather than a
-bundled wording patch.
+**Status**: [~] coded + dry-run verified, pending a live `/embo:improve`
+run (branch `feat/041-improve-curation-log`, commit 03266ee + follow-up).
+**Origin**: discovered 2026-07-15 while verifying visual-impl; split out
+so it gets a proper fix rather than a bundled wording patch.
 **Priority**: medium-high — `/embo:improve` is silently non-functional
 in the worker runtime.
+
+## Work log (2026-08-05/06)
+
+- Decision: option (a) — local `.claude/curation-log.json`
+  (`{"curated_ids": [...]}`), written per confirmed decision group so a
+  mid-session abort keeps already-reviewed work. User requirement: write
+  on confirmation, never on load.
+- `improve.md`: Step 1 reads the log instead of querying
+  `CORRECTION-STATUS`; Step 4 writes the log instead of `save_memory`;
+  added `project` scoping to the Step 1 search; gitignore-coverage guard
+  before first write. Known, accepted information loss vs the old
+  design: the log stores bare IDs, not the accepted/rejected decision.
+- CLAUDE.md §Claude-Mem Integration: `save_memory` removed from the
+  worker-tools list and the runtime description. The mention in the
+  037 migration mapping is intentional (forward guidance) and stays.
+- Audit: `grep -rn save_memory` across shipped files → only the 037
+  mapping line remains. Clean.
+- Closing-menu question resolved: the "offer to save to claude-mem"
+  menu option has NO shipped source — it is a model-improvised default.
+  The one shipped remnant was `tasks.md` Step 9 ("index in claude-mem"),
+  now reworded to file-save only.
+- `.gitignore` (this repo): added `.claude/curation-log.json`.
+- Dry-run verified: Step 1 read (file absent → `{}`, file present),
+  merge-write, `jq` parse, gitignore coverage. NOT yet verified: a live
+  `/embo:improve` run against real pending corrections.
+
+## Remaining
+
+- [ ] Live `/embo:improve` run with real pending corrections → then [X].
+- [ ] Follow-up (separate fix): `improve.md`'s category→file mapping
+  table references `develop/impl.md` — a path that does not exist in
+  the shipped plugin.
 
 ## Problem
 

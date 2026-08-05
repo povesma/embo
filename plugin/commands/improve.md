@@ -21,25 +21,27 @@ change proposal the user can submit upstream.
 
 ### Step 1: Query Pending Corrections
 
+Read the curation log to get already-reviewed correction IDs:
+
+```bash
+cat .claude/curation-log.json 2>/dev/null || echo "{}"
+```
+
+Parse the `curated_ids` array from the output (treat missing file or
+`{}` as an empty array).
+
+Then query claude-mem for corrections:
+
 ```
 mcp__plugin_claude-mem_mcp-search__search(
   query="[TYPE: CORRECTION] [STATUS: pending]",
+  project="<current-project>",
   limit=50
 )
 ```
 
 Fetch full observations via `get_observations` for all returned IDs.
-
-Also query for already-curated corrections:
-```
-mcp__plugin_claude-mem_mcp-search__search(
-  query="[TYPE: CORRECTION-STATUS]",
-  limit=100
-)
-```
-
-Extract curated IDs from `[ORIGINAL-ID: ...]` tags. Remove any
-correction whose ID appears in the curated set.
+Remove any correction whose ID appears in `curated_ids`.
 
 If zero pending corrections remain, output:
 `"No pending corrections to review."` and stop.
@@ -84,23 +86,27 @@ reference, not just the filename.
 
 ### Step 4: Mark Curated
 
-After user finishes reviewing all groups, save a curation log:
+After the user confirms a decision for a correction group (Accept,
+Edit, or Reject in Step 3), immediately append all IDs in that group
+to `.claude/curation-log.json`. Do not wait until all groups are done
+— write after each confirmed decision so a mid-session abort does not
+lose already-reviewed work.
 
-```
-mcp__plugin_claude-mem_mcp-search__save_memory(
-  title="Curation: {date} — {N} corrections reviewed",
-  text="[TYPE: CURATION-LOG]\n[DATE: {date}]\n[REVIEWED-IDS: {id1, id2, ...}]\n[ACCEPTED: {N}]\n[REJECTED: {M}]\n\nCorrection IDs reviewed: {list}\nAccepted groups: {summary}\nRejected groups: {summary}"
-)
+Read the current file first (or start from `{}`), merge in the new
+IDs, and write back:
+
+```json
+{
+  "curated_ids": [<existing ids>, <newly confirmed ids>]
+}
 ```
 
-Then for each reviewed correction, save a status observation:
+The file accumulates IDs across sessions. Duplicate IDs are harmless
+but should be avoided by checking before appending.
 
-```
-mcp__plugin_claude-mem_mcp-search__save_memory(
-  title="Correction status: curated — {original title}",
-  text="[TYPE: CORRECTION-STATUS]\n[ORIGINAL-ID: {id}]\n[STATUS: curated]\n[DECISION: accepted|rejected]\n[CURATION-DATE: {date}]"
-)
-```
+The file is per-user local state. Before the first write, check that
+`.claude/curation-log.json` is covered by the repo's `.gitignore`; if
+not, tell the user and offer to add it.
 
 ### Step 5: Assemble Proposal
 
@@ -169,6 +175,8 @@ Output directly to conversation. The user copies the text.
 2. **User is the curator** — every correction group must be
    explicitly accepted, edited, or rejected
 3. **Idempotent** — running twice without new corrections produces
-   "No pending corrections to review"
+   "No pending corrections to review". Curation state is persisted in
+   `.claude/curation-log.json`, written per confirmed decision so a
+   mid-session abort does not lose progress.
 4. **Project-scoped** — only shows corrections for the current
    project

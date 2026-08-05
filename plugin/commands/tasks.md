@@ -147,9 +147,9 @@ Based on the tasks and tech design, identify potential files that will need to
 be created or modified. List these under the `Relevant Files` section, including
 corresponding test files if applicable.
 
-### Step 9: Save to Claude-Mem and File
+### Step 9: Save the File
 
-Save the generated document in the task folder and index in claude-mem.
+Save the generated document in the task folder.
 
 ## Output Format
 
