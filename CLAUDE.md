@@ -40,8 +40,9 @@ measurement (047). Each replaces a "please remember to…" with a mechanism.
 extracts every `<!-- CHECKLIST:<RULE> -->` block from `start.md` at
 runtime and injects them verbatim into context unconditionally — no
 keyword gating. Each checklist requires the model to emit a one-line
-artifact before the governed action. The CLASS 1/CLASS 2 regex harness
-(task 046) ships disabled; task 047 is the active enforcement path.
+artifact before the governed action. (Task 046 explored a CLASS 1/CLASS 2
+regex harness for this and was cut before shipping — see
+`tasks/046-*/SUPERSEDED.md`; task 047 is the shipped enforcement path.)
 
 Two consequences, both load-bearing:
 
@@ -165,9 +166,7 @@ plugin/                          # THE PLUGIN ROOT (${CLAUDE_PLUGIN_ROOT})
 │   ├── embo-deliver             # one-shot stage+commit+push+(PR/merge);
 │   │                              # `release` mode adds tag+GitHub Release
 │   │                              # (tasks 038, 043)
-│   ├── embo-corrections         # /embo:improve list-pending/write/mode (task 042)
-│   └── embo-custodian           # clear/status the CLASS 2 halt marker
-│                                  # (task 046; hook-visible clear path)
+│   └── embo-corrections         # /embo:improve list-pending/write/mode (task 042)
 ├── agents/
 │   ├── rlm-subcall.md           # RLM chunk analysis subagent (Haiku)
 │   ├── examine-advisor.md       # /embo:research:examine agent
@@ -177,8 +176,6 @@ plugin/                          # THE PLUGIN ROOT (${CLAUDE_PLUGIN_ROOT})
 │   ├── visual-impl.md           # design-to-code loop (experimental)
 │   ├── enable-corrections.md    # opt-in correction capture (task 041)
 │   ├── disable-corrections.md   # reverse enable-corrections
-│   ├── custodian-clear.md       # /embo:custodian-clear — lift a CLASS 2
-│   │                              # halt (human-gated) (task 046)
 │   └── research/                # examine.md, verify.md
 ├── claude-mem/                  # claude-mem integration helpers
 │   ├── code-embo.build.jq       # jq: add `correction` type to code mode
@@ -190,20 +187,7 @@ plugin/                          # THE PLUGIN ROOT (${CLAUDE_PLUGIN_ROOT})
 │   ├── hooks.json               # registers the event handlers
 │   ├── context-guard.sh         # Context window warning hook
 │   ├── behavioral-reminder.sh   # Behavioral rule reminder hook
-│   ├── approve-compound.sh      # PreToolUse matcher-* : CLASS 2 hold
-│   │                              # (all tools) → CLASS 1 substitute +
-│   │                              # auto-approve/capture rewrite (Bash);
-│   │                              # deny-first avoids CC #75915 (task 046)
-│   ├── custodian-halt.sh        # PostToolUse matcher-* : CLASS 2
-│   │                              # detector → atomic halt marker +
-│   │                              # block(report) + violation log; also
-│   │                              # sources the hold/exempt/flap helpers
-│   │                              # (task 046)
-│   ├── harness-lib.sh           # sourceable rule loader + timestamp +
-│   │                              # signal-shape detector dispatch;
-│   │                              # rules are runtime config (task 046)
-│   ├── harness-rules.json       # shipped default rules, 2 per class,
-│   │                              # distinct signal shapes (task 046)
+│   ├── approve-compound.sh      # Auto-approve compound Bash + rewrite
 │   ├── embo-capture.sh          # Output capture wrapper (helper, not
 │   │                              # a registered hook)
 │   └── fix-hooks.sh             # migration doctor (+ tests for each)
