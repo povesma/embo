@@ -69,10 +69,10 @@ For each category group, present to the user via AskUserQuestion:
 
 | Category | Primary target file |
 |---|---|
-| `verification` | `develop/impl.md` |
-| `code-style` | `develop/impl.md` § Code Style |
+| `verification` | `plugin/commands/impl.md` |
+| `code-style` | `plugin/commands/impl.md` § Code Style |
 | `workflow` | Varies — depends on workflow step |
-| `approach` | `develop/impl.md` § Critical Evaluation |
+| `approach` | `plugin/commands/impl.md` § Critical Evaluation |
 | `process` | May require new section or command |
 
 Read the target file during curation to provide a specific section

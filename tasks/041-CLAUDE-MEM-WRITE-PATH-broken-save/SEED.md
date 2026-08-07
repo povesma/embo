@@ -35,9 +35,8 @@ in the worker runtime.
 ## Remaining
 
 - [ ] Live `/embo:improve` run with real pending corrections → then [X].
-- [ ] Follow-up (separate fix): `improve.md`'s category→file mapping
-  table references `develop/impl.md` — a path that does not exist in
-  the shipped plugin.
+- [X] Follow-up: `improve.md`'s category→file mapping table referenced
+  `develop/impl.md` — corrected to `plugin/commands/impl.md`.
 
 ## Problem
 
