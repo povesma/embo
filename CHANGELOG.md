@@ -4,6 +4,37 @@ All notable changes to the embo plugin are documented here.
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-08-08
+
+### Added
+
+- **Behavioral rules stay in view at the point of action.** Each rule
+  loaded at session start now carries a short checklist that the agent
+  restates as a one-line artifact before the action the rule governs —
+  the closing-choice decision, defending a position under questioning,
+  keeping a command simple, and handing work to a subagent. The
+  reminders are injected on every turn, so a rule is present when it is
+  needed rather than only at the top of the session.
+- **Delegation is a forced choice at a fixed point.** The agent commits
+  to delegate-or-inline on its third file-opening call and states which,
+  with a reason, instead of deciding by feel — so bulk exploration is
+  handed to a subagent when that is the better move.
+- **`/embo:prd` asks about the wider goal** the change serves before
+  writing, so the document reflects the surrounding context, not just
+  the stated feature.
+- **`/embo:research:verify` proves each acceptance criterion against a
+  source** and returns a per-criterion proof table.
+
+### Fixed
+
+- **`/embo:git`'s over-engineering check names what to cut.** The PR
+  review step returns a concrete file-and-line cut list rather than
+  general advice.
+- **`/embo:research:examine` and `/embo:research:verify` report an
+  external-source outage** instead of silently continuing with less
+  checking when NotebookLM is unavailable, so a partial verification is
+  visible as partial.
+
 ## [0.2.3] - 2026-07-22
 
 ### Added
