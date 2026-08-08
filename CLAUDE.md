@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 embo is a **Claude Code plugin** that combines:
 - **RLM**: Analyzes large codebases via persistent Python REPL
 - **Claude-Mem** (MANDATORY): Semantic memory of past decisions
-- **17 Commands**: Complete development workflow (`/embo:*`, incl.
+- **19 Commands**: Complete development workflow (`/embo:*`, incl.
   `/embo:research:examine` / `/embo:research:verify` and the
   experimental `/embo:visual-impl` design-to-code loop)
 - **Test Subagents**: Isolated testing agents invoked via Task tool
@@ -169,6 +169,9 @@ plugin/                          # THE PLUGIN ROOT (${CLAUDE_PLUGIN_ROOT})
 │   └── embo-corrections         # /embo:improve list-pending/write/mode (task 042)
 ├── agents/
 │   ├── rlm-subcall.md           # RLM chunk analysis subagent (Haiku)
+│   ├── session-scout.md         # /embo:start task-discovery digest
+│   │                              # (Haiku; keeps task-file bulk out of
+│   │                              # the main context)
 │   ├── examine-advisor.md       # /embo:research:examine agent
 │   ├── approach-validator.md    # /embo:research:verify agent
 │   └── visual-qa-reviewer.md    # /embo:visual-impl judge (experimental)
