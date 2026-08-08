@@ -1,6 +1,6 @@
 ---
 description: Start a coding session with comprehensive context from RLM code analysis and claude-mem historical knowledge. Use at the beginning of each coding session.
-allowed-tools: Bash(cat ~/.claude/active-profile.yaml *) Read(~/.claude/active-profile.yaml) Bash(rlm_repl *) Bash(git log *) Bash(git diff *)
+allowed-tools: Bash(cat ~/.claude/active-profile.yaml *) Bash(echo *) Read(~/.claude/active-profile.yaml) Bash(rlm_repl *) Bash(git log *) Bash(git diff *)
 ---
 
 # Start embo Coding Session
@@ -38,6 +38,11 @@ rlm=true, memory_backend=claude-mem, docs_first=strict. Otherwise
 parse the YAML for profile fields. Note the active profile name
 (or "default") in the session summary output.
 
+**Read depth** follows the profile: `fast`/`minimal` → **brief**
+(Step 2 memory search skipped; the task-scout returns names + counts
+only); anything else → **full**. Steps 2 and 3 apply it; note the depth
+in the summary.
+
 ## Session Behavioral Rules
 
 These rules apply for the entire session, across all commands and
@@ -74,6 +79,47 @@ as a **request for justification**, not an instruction to change.
 
 Capitulating to pressure without a reason produces worse outcomes and
 denies the user the explanation they were asking for.
+
+**Emit the conclusion before you respond (the enforcement artifact).**
+Prose alone has been violated. So when the user objects, challenges, or
+corrects, FIRST emit one line, then respond consistently with it:
+
+`Objection-check: <hold | concede | partly> — <the specific thing that
+was actually wrong or right, and why>`
+
+- `hold` — the position stands; give the reason and defend it.
+- `concede` — you were wrong; name the SPECIFIC defect (not "you're
+  right"). A concession with no specific stated defect is forbidden —
+  that is the reflexive cave this rule exists to stop.
+- `partly` — state exactly which part holds and which yields.
+
+A bare "you're right" / "good point" / "my mistake" with no
+`Objection-check:` line and no specific reason is a rule violation.
+
+**A question is not an instruction, and never a licence to act.** A user
+*question* ("why did you do X?", "do we need this?") is a request for
+justification only. It NEVER authorizes an action on its own — least of
+all a destructive or irreversible one (delete, revert, overwrite,
+force). Answer first; act only on an explicit instruction. Over-reacting
+to mild input with a large, unrequested action is the same failure as
+caving — a small signal amplified into a wrong, unsafe response.
+
+<!-- CHECKLIST:WITHSTAND-CRITICISM
+     This block is injected verbatim on every user prompt by
+     hooks/behavioral-reminder.sh. Keep it short; edit it here only. -->
+[WITHSTAND-CRITICISM checklist] If this turn the user objects,
+challenges, questions, or corrects: FIRST emit one line, then respond
+consistently with it — `Objection-check: <hold | concede | partly> —
+<the specific thing that was actually wrong or right, and why>`. hold =
+position stands, give the reason and defend it; concede = name the
+SPECIFIC defect (a bare "you're right" with no stated defect is the
+reflexive cave this forbids); partly = state which part holds, which
+yields. A user QUESTION is a request for justification, never a licence
+to act — never a destructive/irreversible action (delete/revert/
+overwrite/force) off a question alone. A challenge is not a
+counter-argument; do not treat tone as evidence.
+<!-- /CHECKLIST -->
+
 
 <!-- RULE:CLEAR-OPTIONS -->
 ### Present choices via AskUserQuestion
@@ -124,16 +170,19 @@ wrap up the session / tell me what to do.
 <!-- CHECKLIST:CLEAR-OPTIONS
      This block is injected verbatim on every user prompt by
      hooks/behavioral-reminder.sh. Keep it short; edit it here only. -->
-[CLOSING-CHOICE checklist — CLEAR-OPTIONS + DECIDE-OR-ASK] Decide
-yourself anything with an obvious best answer (state choice + one-line
-reason); ask only genuine forks. Every choice offered to the user —
-including the closing "what next?" — goes through AskUserQuestion:
-state the kind in the question text (exclusive: picking one drops the
-rest / combinable: any subset / ordering: all happen, order only), set
-multiSelect true only for combinable, give EVERY option a concise
-description, put a "(Recommended)" option first only when one genuinely
-is. Never join options with "or" in prose. A malformed choice makes the
-user decide on a false picture — that loses work.
+[CLOSING-CHOICE checklist — CLEAR-OPTIONS + DECIDE-OR-ASK] When this
+turn reaches a decision or offers the user a choice, FIRST emit one
+line: `Decide-check: <decide | ask> — <what, and one-line why>`.
+`decide` = you resolved it yourself (recoverable, obvious best answer:
+state the choice + reason and act); `ask` = a genuine fork only
+(preference / irreversible / info only the user has). Then, if `ask`,
+the choice goes through AskUserQuestion — never prose, never "X or Y":
+state the kind (exclusive: picking one drops the rest / combinable: any
+subset / ordering: all happen, order only), multiSelect true only for
+combinable, EVERY option a concise description, a "(Recommended)" first
+only when one genuinely is. Emitting `ask` for something you could have
+decided is the failure this catches; so is a prose choice with no
+AskUserQuestion.
 <!-- /CHECKLIST -->
 
 
@@ -329,6 +378,22 @@ This rule steers; it does not enforce. The repo's capture/approve
 hook is what actually reduces prompts. Use this rule on top of it,
 not instead of it.
 
+<!-- CHECKLIST:AVOID-APPROVAL
+     This block is injected verbatim on every user prompt by
+     hooks/behavioral-reminder.sh. Keep it short; edit it here only. -->
+[AVOID-APPROVAL checklist] Before a Bash call that uses a risky shape —
+`$(...)`, backticks, a redirect (`>`/`>>`/`2>`), a subshell, or a chain
+mixing a new/rare tool with others — FIRST emit one line:
+`Shape-check: <simple | reshaped | needed> — <one-line why>`. `simple`
+= already the plainest form (no emit needed for plain commands like
+`ls`/`git status`); `reshaped` = you simplified it (use a flag not
+`| head`; split a chain; drop a `>` wrapper and let the capture file
+hold output); `needed` = the risky shape is genuinely required, say
+why. Reaching for `$()`/redirects/chains by reflex when a simpler form
+exists is the failure this catches.
+<!-- /CHECKLIST -->
+
+
 <!-- RULE:RESEARCH-VERIFY -->
 ### Don't accept your own confidence as evidence
 
@@ -456,13 +521,25 @@ task, resolve the behaviour issue, then resume.
 <!-- RULE:DELEGATE -->
 ### Delegate to a subagent where it beats the main context
 
-You delegate far less than you should. **Before starting a bulk
-exploration** — a search or read spanning several files — state one
-line, then proceed: `Delegation: <to <agent>, because … | none,
-because <reason>>`. Declaring first is the point: once the files are
-in context the benefit is gone, and the line is the trace
-`/embo:improve` learns from (like RULE:RESTATE-CORRECTION). Not for a
-single targeted read.
+You delegate far less than you should. **Before the third file-opening
+tool call in one turn** (Read / Grep / Glob / a search over files),
+emit one line, then proceed:
+
+`Delegate-check: <delegate | inline> — <the agent + why, or why the
+main context must hold this>`
+
+- `delegate` — hand this exploration to a subagent; name the agent and,
+  per the Protocol below, offer it via `AskUserQuestion`.
+- `inline` — keep it in the main context; state the specific reason it
+  must stay (sequential dependence, needs session context, single
+  cheap lookup, cost dwarfs stakes).
+
+Declaring first is the point: once the files are in context the benefit
+is gone, and the `Delegate-check:` line is both the forcing function and
+the trace `/embo:improve` learns from (like
+RULE:RESTATE-CORRECTION). The trigger is a hard count — the 3rd
+file-opening call — not a judgement about whether a read feels "bulk";
+`inline` is a deliberate, reasoned choice, never the silent default.
 
 **Weigh a subagent when:** exploring many files (~10+); judging work
 authored this session (a clean context can't ratify its own errors);
@@ -486,14 +563,18 @@ a delegated side effect, verify the diff, never trust the summary
 <!-- CHECKLIST:DELEGATE
      Injected verbatim on every user prompt by
      hooks/behavioral-reminder.sh. Keep it short; edit it here only. -->
-[DELEGATE checklist] Before a bulk exploration (search/read spanning
-several files) state one line first — `Delegation: <to <agent> … |
-none, because <reason>>` — then proceed; declaring after the reads is
-too late. Weigh a subagent for many-file exploration, judging this
+[DELEGATE checklist] Before the 3rd file-opening tool call in one turn
+(Read/Grep/Glob/file search), FIRST emit one line: `Delegate-check:
+<delegate | inline> — <the agent + why, or why main context must hold
+it>`. `delegate` = hand it to a subagent (name it; offer via
+AskUserQuestion, never auto-spawn); `inline` = keep it in main context,
+state the SPECIFIC reason (sequential dependence, needs session context,
+single cheap lookup, cost dwarfs stakes). The trigger is a hard count —
+the 3rd file-opening call — not a feeling about whether it's "bulk";
+emitting `inline` with no specific reason is the silent-default failure
+this catches. Weigh a subagent for many-file exploration, judging this
 session's own work, independent proof, 3+ independent tasks, or noisy
-loops. Offer via AskUserQuestion, never auto-spawn; skip a single
-lookup or sequentially-dependent/same-file work. Verify a delegated
-diff, don't trust the summary.
+loops. Verify a delegated diff, don't trust the summary.
 <!-- /CHECKLIST -->
 
 
@@ -520,40 +601,33 @@ auto-approves under a `Bash(rlm_repl *)` rule with no prompt.
 
 ### Step 2: Query Claude-Mem for Historical Context
 
-**(Skip if profile `tools.memory_backend` is `none`)**
+**(Skip if `tools.memory_backend` is `none`, or in brief depth.)**
 
-**MANDATORY project scoping.** claude-mem uses ONE global database
-shared across every repo. A `search(...)` with no `project` argument
-reads observations from ALL projects, leaking unrelated (and possibly
-confidential) cross-repo context into this session. Every `search(...)`
-call below MUST pass `project` scoped to the current project. This is a
-correctness and confidentiality requirement, not a preference — do not
-omit it, and do not rely on a CLAUDE.md reminder to add it.
+Recent activity is already in context: claude-mem's SessionStart hook
+injects a "recent context" block (recent observations + stats) before
+this command runs. Read recent work, decisions, and in-progress items
+from that block — **do not re-search for recent work**, it double-pays
+for what is already present.
 
-The project name is the last path segment of the **working directory
-you were launched in** — already shown in your environment as
-`Primary working directory` (e.g. `/Users/.../embo` → `embo`). Take it
-from there directly; it needs no command. Use that string as `project`
-in every call. (claude-mem keys observations by this segment, so two
-repos with the same final segment — `/home/embo` and `/var/embo` —
-share one memory scope. This is a known claude-mem limitation; the read
-scope must match the segment used at capture, so do not substitute a
-full path here.)
+Issue only the one query that block does not cover — topical overview:
 
 ```
 mcp__plugin_claude-mem_mcp-search__search(query="project overview goals architecture", project="<project-name>", limit=5)
-mcp__plugin_claude-mem_mcp-search__search(query="implementation completed features recent work", project="<project-name>", limit=10, orderBy="created_at DESC")
-mcp__plugin_claude-mem_mcp-search__search(query="task list TODO in progress", project="<project-name>", limit=5)
 ```
-Fetch full observations for top results with `mcp__plugin_claude-mem_mcp-search__get_observations`.
 
-**If the scoped queries return little or nothing**, the project may have
-been renamed since its history was captured (claude-mem stores the
-directory basename used *at capture time*). Only in that case, retry
-once with the prior name if you can infer it, and note the rename in the
-session summary. Never fall back to an unscoped (all-projects) search.
+`project` is **mandatory** and is the launch directory's last path
+segment (`Primary working directory` in your environment, e.g. `embo`).
+Without it, `search` reads ALL projects and leaks cross-repo context —
+never omit it, never pass a full path. Fetch full observations
+(`get_observations`) only for a detail the index row lacks.
 
-Extract: project goals, completed features, active tasks, recent decisions, known issues.
+If NO SessionStart block is present (claude-mem absent, or a
+non-injecting runtime), then also run one recency query so recent
+activity is not empty:
+`search(query="recent work completed in progress", project="<project-name>", limit=8, orderBy="created_at DESC")`.
+If the overview query returns near-nothing, the project may have been
+renamed since capture — retry once with the inferable prior name, note
+the rename; never fall back to an unscoped search.
 
 ### Step 3: Codebase Context
 
@@ -565,18 +639,14 @@ directed; if Glob is unavailable, skip the step.
 - Docs: use the **Glob tool** (not Bash, not `find`) with pattern
   `**/README*.md`, then again with `**/CLAUDE*.md`. Read the
   matched files at the project root only.
-- Tasks: use the **Glob tool** (not Bash, not `find`) with pattern
-  `tasks/**/*-tasks.md`. Discard matches whose path contains
-  `/archive/`. For each surviving file:
-  - Read it.
-  - Count `[X]` markers vs all task markers (`[ ]`, `[~]`, `[X]`).
-  - If ≥80% are `[X]` (mostly complete): use only the file's header
-    block (title, status line, story titles) and lines containing
-    `[ ]` or `[~]`. Discard completed subtask bodies and their
-    evidence notes from context.
-  - Otherwise: use the full file content.
-  - When the user selects this task for active work, re-read the
-    full file.
+- Tasks: **do not read task files here — delegate.** Spawn the
+  `embo:session-scout` agent (Task tool) with the repo root and the
+  resolved depth. It reads `tasks/**/*-tasks.md` in ITS OWN context and
+  returns a compact digest (top active tasks by recency, open-marker
+  counts, a recommended next task); the task-file bulk never enters this
+  context. Use the digest verbatim for the summary's Active Tasks and
+  recommendation. Read a task file in full only when the user selects it
+  for active work.
 - Git: run these two commands exactly as shown. Do not change
   flags, count, or `HEAD` reference; they are pre-approved at
   these exact prefixes.
@@ -658,6 +728,9 @@ Based on:
 - ✅ RLM: Ready ({total_files} files indexed)
 - ✅ Claude-Mem: Ready ({obs_count} observations)
 - ✅ Git: {git_branch} ({git_status})
+- Read depth: {full|brief} — in brief, memory search skipped and the
+  task-scout returns names + counts only; label any skipped section
+  rather than omitting it.
 
 Ready to code! 🎉
 ```
