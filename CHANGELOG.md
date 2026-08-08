@@ -19,6 +19,11 @@ All notable changes to the embo plugin are documented here.
   to delegate-or-inline on its third file-opening call and states which,
   with a reason, instead of deciding by feel — so bulk exploration is
   handed to a subagent when that is the better move.
+- **`/embo:start` costs less context.** Session start no longer repeats
+  the recent-work memory that claude-mem already injects, and it reads
+  task files through a scout agent instead of pulling every task file
+  into the session in full. On `fast`/`minimal` profiles it stays
+  briefer still, so starting a session leaves more room for the work.
 - **`/embo:prd` asks about the wider goal** the change serves before
   writing, so the document reflects the surrounding context, not just
   the stated feature.
