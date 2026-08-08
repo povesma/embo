@@ -98,10 +98,73 @@ Based on files found in 3a and rlm-subcall analysis, explicitly list:
 
 **🚨 BEFORE writing the PRD, you MUST ask clarifying questions using the
 AskUserQuestion tool.** The goal is to understand the "what" and "why" of the
-feature. Adapt questions based on the prompt, but common areas to explore:
+feature.
 
-- **Problem/Goal:** "What problem does this feature solve for the user?" or
-  "What is the main business goal we want to achieve?"
+#### Step 4a: Wider context first (its own preceding call)
+
+Elicit the feature's *wider context* — the motivation, the parent goal,
+what the result is used for — as its **own `AskUserQuestion` call that
+precedes** the clarifying-questions call, so the user answers it first
+and it anchors every later answer. (This replaces the old "business
+goal" alternative.)
+
+**Evaluation order — run these in sequence:**
+
+1. **Redundancy check (first).** Treat the wider context as *already
+   known* only when the user's initial prompt or an earlier answer
+   states a motivation *distinct from the feature's own mechanism* —
+   signalled by a "so that" / "because" / "in order to" / "we need this
+   to…" clause, or an explicit reference to a parent goal or ticket. A
+   bare restatement of the feature's name or action does NOT count. If
+   already known: **skip** the question, restate the understood context
+   in one line for confirmation, and proceed to Step 4b.
+2. **JIRA-parent branch.** If not already known AND the task text
+   contains a JIRA-style ID (uppercase project key, hyphen, digits —
+   e.g. `AS-1234`): suggest the user consult the ticket's parent / epic
+   / linked higher-level tickets for the wider context before asking. If
+   a parent yields the context, treat it as known. Otherwise — the
+   ticket is a leaf (no parent), OR a parent exists but yields no usable
+   context (no access, or the parent itself states no "why") — fall
+   through to step 3. "Suggest the parent" never becomes "block on the
+   parent."
+3. **Ask.** Ask the wider-context question in its own preceding
+   `AskUserQuestion` call, wording drawn from the approved framing list.
+
+**One follow-up rule.** If the answer only restates the feature (no
+distinct motivation, same signal test as step 1), ask exactly ONE
+probing follow-up (e.g. "and what does that enable once it's built?"),
+then accept whatever is given. **Never block:** "skip" / "none" is always
+accepted and recorded as "None given" in the PRD. The redundancy skip
+(step 1) takes precedence over this follow-up — if the context is
+already known, do not ask, then do not follow up.
+
+**Approved framing list (positive test).** The asked question MUST use
+one of these framings (verbatim or a close paraphrase that keeps the
+framing):
+
+- "What is the result of this feature used for?"
+- "What is the motivation for this task?"
+- "What wider context does this fit into?"
+- "Once this is built, what does it enable?"
+- "What larger goal does this support?"
+
+**Blocklist (negative test).** The asked question MUST NOT contain:
+
+- "higher goal" (blunt — the named bad phrasing)
+- "why do you even want" / "why do you want this" (accusatory)
+- "your request is incomplete" / "this is under-specified" / any wording
+  implying the user's description is deficient
+
+**Header-vs-question note.** The generated PRD section is titled "Wider
+Context / Higher Goal" (Step 5) — that phrase is the *document header
+only*. Never reuse it as the spoken question; the question uses an
+approved framing.
+
+#### Step 4b: The remaining clarifying questions
+
+Adapt questions based on the prompt, but common areas to explore:
+
+- **Problem/Goal:** "What problem does this feature solve for the user?"
 - **Target Users:** "Who are the primary users of this feature?"
 - **Success Metrics:** "How will we measure success? What metrics matter most?"
 - **Use Cases:** "What are the main use cases this feature should support?"
@@ -136,6 +199,13 @@ Create PRD combining insights + user's clarifications:
 **Author**: Claude (via dev workflow analysis)
 
 ---
+
+## Wider Context / Higher Goal
+
+{The motivation / parent goal / what-the-result-is-used-for captured in
+Step 4a. If the user gave nothing: "None given — feature described in
+isolation." If drawn from a JIRA parent: state the context and cite the
+parent ticket.}
 
 ## Context
 

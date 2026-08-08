@@ -29,6 +29,9 @@ Desktop.ini
 .claude/rlm_state/
 *.pkl
 
+# Harness runtime state (halt marker, cleared log, violation log, diag)
+.claude/embo_state/
+
 # Correction curation bookkeeping (per-project, written by /embo:improve)
 .claude/correction-curation.json
 
@@ -37,3 +40,6 @@ tmp/
 
 # Logs
 *.log
+
+# GitHub CLI context
+.ghcontext

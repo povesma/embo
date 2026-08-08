@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 embo is a **Claude Code plugin** that combines:
 - **RLM**: Analyzes large codebases via persistent Python REPL
 - **Claude-Mem** (MANDATORY): Semantic memory of past decisions
-- **17 Commands**: Complete development workflow (`/embo:*`, incl.
+- **19 Commands**: Complete development workflow (`/embo:*`, incl.
   `/embo:research:examine` / `/embo:research:verify` and the
   experimental `/embo:visual-impl` design-to-code loop)
 - **Test Subagents**: Isolated testing agents invoked via Task tool
@@ -33,8 +33,16 @@ The task tree is this principle applied: docs-first *guard* (010),
 test-integrity (013), the behavioral-reminder and approval hooks
 (015/026/027/030), rule-salience with a `validate-askuser.sh` PreToolUse
 hook (039), mechanical correction capture (041), the deterministic
-`/embo:improve` flow (042). Each replaces a "please remember to…" with
-a mechanism.
+`/embo:improve` flow (042), per-rule conclusion checklists with Stop-hook
+measurement (047). Each replaces a "please remember to…" with a mechanism.
+
+**Rule compliance mechanism (task 047):** `behavioral-reminder.sh`
+extracts every `<!-- CHECKLIST:<RULE> -->` block from `start.md` at
+runtime and injects them verbatim into context unconditionally — no
+keyword gating. Each checklist requires the model to emit a one-line
+artifact before the governed action. (Task 046 explored a CLASS 1/CLASS 2
+regex harness for this and was cut before shipping — see
+`tasks/046-*/SUPERSEDED.md`; task 047 is the shipped enforcement path.)
 
 Two consequences, both load-bearing:
 
@@ -161,6 +169,9 @@ plugin/                          # THE PLUGIN ROOT (${CLAUDE_PLUGIN_ROOT})
 │   └── embo-corrections         # /embo:improve list-pending/write/mode (task 042)
 ├── agents/
 │   ├── rlm-subcall.md           # RLM chunk analysis subagent (Haiku)
+│   ├── session-scout.md         # /embo:start task-discovery digest
+│   │                              # (Haiku; keeps task-file bulk out of
+│   │                              # the main context)
 │   ├── examine-advisor.md       # /embo:research:examine agent
 │   ├── approach-validator.md    # /embo:research:verify agent
 │   └── visual-qa-reviewer.md    # /embo:visual-impl judge (experimental)
@@ -176,7 +187,7 @@ plugin/                          # THE PLUGIN ROOT (${CLAUDE_PLUGIN_ROOT})
 │   └── corrections-lib.test.sh  # fixture tests for corrections-lib.sh
 ├── profiles/                    # quality.yaml, fast.yaml, minimal.yaml
 ├── hooks/
-│   ├── hooks.json               # registers the 3 event handlers
+│   ├── hooks.json               # registers the event handlers
 │   ├── context-guard.sh         # Context window warning hook
 │   ├── behavioral-reminder.sh   # Behavioral rule reminder hook
 │   ├── approve-compound.sh      # Auto-approve compound Bash + rewrite

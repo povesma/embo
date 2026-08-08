@@ -199,6 +199,20 @@ has both a persistent codebase index **and** cross-session memory.
 - you want **self-looping verification** (audit-fix-retry until a
   pass signal) — OMC (`ralph`) or shinpr's quality gates
 
+**Pairs well with:** [ponytail](https://github.com/DietrichGebert/ponytail)
+— a plugin that pushes the agent to write less code (a YAGNI check
+re-injected each turn, plus review/audit/debt commands). It governs
+*code volume*; embo governs *workflow*, so the two compose without
+overlap. Install it inside Claude Code:
+
+```
+/plugin marketplace add DietrichGebert/ponytail
+/plugin install ponytail
+```
+
+Then review and trust its hooks in `/hooks` (it runs two Node.js
+lifecycle hooks, so `node` must be on your PATH).
+
 ## Why this exists
 
 Three measurable failures of unstructured ("vibe") AI coding,
@@ -320,6 +334,30 @@ makes the plan write silent — deliveries then run with **no approval at
 all** after you ask for one. Only add this if you consciously want
 unattended delivery; there is no way for the agent to warn you at
 delivery time that the gate is gone.
+
+## Behavioral rule reminders
+
+embo's primary mechanism for rule compliance is **per-rule conclusion
+checklists**: each behavioral rule in `plugin/commands/start.md` carries
+a `<!-- CHECKLIST:<RULE> -->` block with an explicit one-line artifact the
+model must emit before taking the governed action. The
+`behavioral-reminder.sh` UserPromptSubmit hook extracts every checklist
+block from `start.md` at runtime and injects them verbatim into the
+assistant's context before each response.
+
+How it works:
+- **Rule text** declares the requirement and the artifact format
+  (e.g. `Objection-check: <hold | concede | partly> — <reason>`)
+- **Checklist block** is injected unconditionally on every turn — not
+  gated on keywords — so the model sees the artifact format regardless
+  of prompt wording
+- **Stop-hook measurement** (`tasks/047-*/prototype/conclusion-probe.sh`,
+  registered in repo `.claude/settings.local.json`) logs each artifact
+  emission to `.claude/embo_state/conclusion-probe.log` for observability
+
+Adding a new rule: write the rule prose and its `CHECKLIST` block in
+`start.md`. The hook auto-injects it with zero code change — the
+genericity test (`behavioral-reminder.test.sh`) proves this.
 
 ## Test subagents
 
