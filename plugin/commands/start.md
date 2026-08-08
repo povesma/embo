@@ -531,7 +531,7 @@ main context must hold this>`
 
 Declaring first is the point: once the files are in context the benefit
 is gone, and the `Delegate-check:` line is both the forcing function and
-the trace `/embo:improve` and the Stop-hook probe learn from (like
+the trace `/embo:improve` learns from (like
 RULE:RESTATE-CORRECTION). The trigger is a hard count — the 3rd
 file-opening call — not a judgement about whether a read feels "bulk";
 `inline` is a deliberate, reasoned choice, never the silent default.

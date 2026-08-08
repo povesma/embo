@@ -18,7 +18,7 @@ tools:
   - WebSearch
   - WebFetch
   - mcp__context7__resolve-library-id
-  - mcp__context7__query-docs
+  - mcp__context7__get-library-docs
   - mcp__notebooklm-mcp__notebook_list
   - mcp__notebooklm-mcp__notebook_query
   - mcp__notebooklm-mcp__cross_notebook_query
@@ -66,7 +66,7 @@ verification needs something to prove against.
 2. **Prove each against an independent source — never your own memory or
    the author's confidence.** Sources, in rough order of preference:
    - **Authoritative current docs** for the exact tool/version — use
-     Context7 MCP (`resolve-library-id` → `query-docs`). Do not
+     Context7 MCP (`resolve-library-id` → `get-library-docs`). Do not
      recall an API from training; look it up.
    - **The live system's own report** — run a read-only command to ask
      the installed version/system what it actually supports or returns.
