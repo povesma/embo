@@ -1,6 +1,6 @@
 ---
 description: Start a coding session with comprehensive context from RLM code analysis and claude-mem historical knowledge. Use at the beginning of each coding session.
-allowed-tools: Bash(cat ~/.claude/active-profile.yaml *) Read(~/.claude/active-profile.yaml) Bash(rlm_repl *) Bash(git log *) Bash(git diff *)
+allowed-tools: Bash(cat ~/.claude/active-profile.yaml *) Bash(echo *) Read(~/.claude/active-profile.yaml) Bash(rlm_repl *) Bash(git log *) Bash(git diff *)
 ---
 
 # Start embo Coding Session
