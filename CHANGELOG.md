@@ -32,6 +32,9 @@ All notable changes to the embo plugin are documented here.
 
 ### Fixed
 
+- **`/embo:start` no longer asks to approve reading your profile.** The
+  command's profile-load step is pre-authorized, so starting a session
+  does not prompt for the `active-profile.yaml` read each time.
 - **`/embo:git`'s over-engineering check names what to cut.** The PR
   review step returns a concrete file-and-line cut list rather than
   general advice.
