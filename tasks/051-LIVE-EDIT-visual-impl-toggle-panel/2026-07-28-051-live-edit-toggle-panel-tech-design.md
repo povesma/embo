@@ -74,10 +74,18 @@ principles this design must not violate:
 
 ### Architecture
 
-Live-Edit Mode is a new section within the existing command file, not
-a new command, agent, or shared library file (per PRD Out of Scope:
-no standalone command). It has three responsibilities layered on top
-of the existing Playwright-CLI-driven render step:
+Live-Edit Mode ships as one file, `live-edit-panel.js` (alongside the
+command), which `visual-impl.md` loads and evals via the Playwright CLI —
+the panel is not re-derived from prose. The file is the single source of
+truth for the panel and carries its own spec as a header comment so it
+stays reproducible; this tech-design section is the authoritative record
+of that spec. `visual-impl.md` keeps only the conceptual material (the
+trust invariant, the registry data model needed to seed entries, the
+live-apply-per-kind table, export/lock-in) and points at the file for
+the panel mechanics. (This supersedes an earlier plan to carry the whole
+panel as prose inside the command: maintaining it in two places caused
+drift.) It has three responsibilities layered on top of the existing
+Playwright-CLI-driven render step:
 
 1. **Registry** — an in-page JS array the agent maintains via
    `eval`/injected-script calls through the Playwright CLI. Each entry:
@@ -296,8 +304,9 @@ test framework applies to a prompt/markdown contract), no `e2e`/`docker`
 - `plugin/agents/visual-qa-reviewer.md` — update the header/description
   to drop "EXPERIMENTAL" (FR-11 only; no contract change).
 
-**Create**: none. No new command, agent, or shared library file (per
-PRD Out of Scope).
+**Create**: `plugin/commands/live-edit-panel.js` — the shipped panel
+implementation the command loads and evals (single source of truth;
+carries its spec as a header comment). No new command or agent.
 
 ## Dependencies
 

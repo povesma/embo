@@ -20,12 +20,34 @@
   :: MODIFY only if task 5.2 decides a profile should opt out; default
      is `true` (mentioned) via absence of the key, no file edit needed
      otherwise
+- [plugin/commands/live-edit-panel.js](../../plugin/commands/live-edit-panel.js)
+  :: CREATE (shipped) — the Live-Edit panel implementation the command
+     loads and evals; single source of truth. Implements the registry,
+     the position:fixed panel (system-font design, explicit ON/OFF
+     badges + header count, one-line selectable labels, resize, drag),
+     per-row + bulk toggles, the three live-apply kinds, full change-set
+     export, lock-in payload, cleanup, and idempotent navigation
+     re-injection. Carries its spec as a header comment. Verified live.
 
 ## Notes
 
-- This is entirely a prompt-contract edit to two agent/command files,
-  plus documentation of one new (optional, default-on) profile key. No
-  new command, agent, or shared library file — per PRD Out of Scope.
+- The panel ships as one file, `plugin/commands/live-edit-panel.js`,
+  which `visual-impl.md` loads and evals (single source of truth; not
+  re-derived from prose). This supersedes the original plan to carry the
+  panel entirely as prose in the command file — maintaining it in two
+  places caused drift. See the tech-design Architecture section. The
+  other changes remain prompt-contract edits to the command/agent files
+  plus one optional profile key.
+- **Specificity (verified live):** a style candidate's `apply` must carry
+  its own specificity (`!important` or a specific selector) when the
+  target is already styled — a plain rule can lose the cascade to page
+  CSS and silently no-op. Injecting a rule is not proof it applied;
+  verify the computed style.
+- **Export is the full change set** (file + selector + literal `apply`
+  per ON entry), not an id list — a maintainer or the agent turns it
+  straight into a source edit. Lock-in then offers to write it, so the
+  feature reaches its goal: permanent backend changes, not a live-only
+  preview.
 - No existing automated test harness covers `visual-impl.md` (it's a
   markdown prompt contract, not executable code); verification is
   `code-only` (static presence/absence checks) or `manual-run-claude`
@@ -50,7 +72,7 @@
 
 ## Tasks
 
-- [ ] 1.0 **User Story:** As a developer, I want a floating toggle
+- [X] 1.0 **User Story:** As a developer, I want a floating toggle
   panel injected into the live page with a fix registry backing it,
   so that I can turn candidate changes on/off without touching
   devtools (FR-1, FR-2, FR-3, NFR-1, NFR-2, NFR-3).
@@ -119,11 +141,14 @@
   with all panel scaffolding removed afterward, so that the accepted
   result is traceable and nothing leaks into shipped code (FR-4,
   FR-5, FR-6).
-  - [X] 3.1 Write the export spec: a plain ON/OFF record (`ON: f2, f7`
-    / `OFF: f3, f4`), readable by both the human (visible/copyable)
-    and the agent (readable from page state) [verify: code-only]
-    → added clipboard-copy mechanism + visible confirmation, per the
-      user-provided proven reference implementation [live] (2026-07-28)
+  - [X] 3.1 Write the export spec: the full CHANGE SET for every ON
+    entry (file + selector + literal `apply`), readable by the human
+    (clipboard + visible confirmation) and the agent (from page state) —
+    NOT a bare id list, which tells a maintainer nothing about what to
+    change [verify: code-only]
+    → implemented in `plugin/commands/live-edit-panel.js`
+      (`__liveEditExport` / `__liveEditChangeSet`); clipboard copy +
+      "Copied change set" confirmation; verified live [live] (2026-08-10)
   - [X] 3.2 Write the lock-in spec: on explicit human instruction, the
     agent writes only the ON set's `apply` values to each entry's
     `sourceLocator` — a deterministic lookup-and-write against source
