@@ -20,6 +20,17 @@
  * targeting an arbitrary element (a form field's box-shadow, in this
  * case). Fixed to build each rule directly from the entry's own
  * `sourceLocator.selector` — the real target, not a proxy.
+ *
+ * Verification status by kind:
+ * - style: proven against a real production page (dev-www.artec3d.com) —
+ *   the box-shadow/underline-removal fixes above.
+ * - markup / logic: the dispatch above (window.__liveEditApplyKind) is
+ *   proven; the two example population blocks near the bottom of this
+ *   file (search "EXAMPLE: markup kind" / "EXAMPLE: logic kind") are the
+ *   worked, watched-live examples from earlier in task 051's session, run
+ *   only against a local scratch test page, not a production page. Wire
+ *   up window.__liveEditMarkupPatches / window.__liveEditLogicHandlers
+ *   the same way for a new markup/logic candidate.
  */
 (() => {
   if (window.__liveEditInjected) { window.__liveEditRenderPanel(); return 'already injected, re-rendered'; }
@@ -143,3 +154,52 @@
   window.__liveEditRenderPanel();
   return 'injected';
 })();
+
+/*
+ * EXAMPLE: markup kind — verified locally (CTA button text swap), not
+ * against a production page. Run AFTER the IIFE above and AFTER seeding
+ * window.__liveEditRegistry with an entry of kind 'markup' whose id
+ * matches the key used below (e.g. 'f2').
+ *
+ * (() => {
+ *   const ctaEl = document.getElementById('cta');
+ *   const originalText = ctaEl.textContent;
+ *   window.__liveEditMarkupPatches = window.__liveEditMarkupPatches || {};
+ *   window.__liveEditMarkupPatches['f2'] = {
+ *     apply: () => { ctaEl.textContent = 'NEW CTA TEXT'; },
+ *     revert: () => { ctaEl.textContent = originalText; },
+ *   };
+ * })();
+ *
+ * `apply` is literal replacement content (per FR-5's no-re-judgment
+ * guarantee), captured as a closure over the original value so `revert`
+ * is an exact original-value snapshot, not a guess.
+ */
+
+/*
+ * EXAMPLE: logic kind — verified locally (swapping which of two
+ * functions handles a click), not against a production page. Run AFTER
+ * the IIFE above and AFTER seeding window.__liveEditRegistry with an
+ * entry of kind 'logic' whose id matches the key used below (e.g. 'f3').
+ *
+ * (() => {
+ *   const ctaEl = document.getElementById('cta');
+ *   const oldHandler = () => { ctaEl.textContent = 'Clicked (old handler)'; };
+ *   const newHandler = () => { ctaEl.textContent = 'Clicked (NEW handler)'; };
+ *   window.__liveEditLogicState = window.__liveEditLogicState || {};
+ *   window.__liveEditLogicState['f3'] = { current: oldHandler };
+ *   ctaEl.removeEventListener('click', oldHandler);
+ *   ctaEl.addEventListener('click', (e) => window.__liveEditLogicState['f3'].current(e));
+ *   window.__liveEditLogicHandlers = window.__liveEditLogicHandlers || {};
+ *   window.__liveEditLogicHandlers['f3'] = (turningOn) => {
+ *     window.__liveEditLogicState['f3'].current = turningOn ? newHandler : oldHandler;
+ *   };
+ * })();
+ *
+ * Toggling never adds/removes the DOM listener itself — it swaps which
+ * of two functions the one installed delegator calls, so the "attach/
+ * detach" language in visual-impl.md's mechanism table can be either a
+ * literal listener swap or (as here) a delegator-and-swapped-target,
+ * whichever fits the candidate's actual behavior.
+ */
+
