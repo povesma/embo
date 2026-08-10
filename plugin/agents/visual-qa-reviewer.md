@@ -1,9 +1,8 @@
 ---
 name: visual-qa-reviewer
 description: >
-  EXPERIMENTAL (usable; output contract may change). Independent
-  visual-QA judge for design-to-code work. Reviews an implementation
-  against its
+  Independent visual-QA judge for design-to-code work. Reviews an
+  implementation against its
   Figma design baseline using a measured diff (image + numeric verdict)
   and a 7-category rubric — never having authored the code itself, so it
   cannot ratify its own errors. Returns measured findings ("gap is 32px,

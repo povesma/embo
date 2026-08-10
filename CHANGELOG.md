@@ -4,6 +4,14 @@ All notable changes to the embo plugin are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- `/embo:visual-impl` gains **Live-Edit Mode**: a floating toggle panel
+  injected into the live page lets you turn candidate fixes on/off (or
+  bulk on/off/invert) without touching devtools, then lock in only the
+  chosen ones — written back to the project's own source, never
+  auto-committed.
+
 ## [0.2.4] - 2026-08-08
 
 ### Added
