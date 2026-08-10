@@ -212,6 +212,18 @@ Note: the 5 test subagents (`test-backend`, `test-review`,
 
 - **Manual steps required alongside automation**: Any install script or automation must be accompanied by equivalent manual steps in the docs. If the script fails, the user must be able to complete the task by hand.
 
+## Tool Usage
+
+**Do not check tool availability, versions, or system configuration before using a tool.** Just use it. If it fails, stop and report the error loudly — do not preemptively probe with `--version`, existence checks, or preflight commands.
+
+## Verify Against the Current Source, Not Memory
+
+**Refresh state from its authoritative source before analyzing it — in
+the same turn.** Memory and a local checkout are both stale snapshots.
+`git fetch` the ref before diffing or judging a branch; re-read a file
+before reporting on it; check docs/Context7 for external facts. If you
+can't refresh, say so and mark the answer provisional.
+
 ## Key Constraints
 
 - **No dependencies**: REPL uses stdlib only

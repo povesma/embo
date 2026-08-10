@@ -364,10 +364,44 @@ visual judgment picks the target, but the code that ships is authored,
 diffed, reviewed, and reverted through the normal git flow — never
 auto-written by the panel itself.
 
-### Registry data model
+### Running the panel — load the shipped script
 
-Each candidate is one registry entry, an in-page JS object (runtime-only —
-nothing is written to disk until lock-in):
+The panel is one shipped file, `live-edit-panel.js`, in this plugin's
+`commands/` directory. Do **not** re-derive the panel markup/logic in
+prose — load and eval that file; it is the single source of truth. Its
+header comment carries the full spec (data model, live-apply mechanisms,
+UX requirements, the specificity rule, export/lock-in) so the behavior
+is reproducible.
+
+Resolve the file by its plugin-root path so it is found regardless of
+the working directory — the plugin installs into a version-keyed cache,
+not the project. The shell expands `$CLAUDE_PLUGIN_ROOT` INTO the
+run-code string (the string reaches playwright already containing the
+absolute path); `run-code` has no `process.env` access, so an env-var
+handoff does NOT work — the path must be a literal in the string. Keep
+the injection as ONE command (a `VAR=…; cmd` compound has been observed
+to hang here).
+
+1. **Seed the registry**, then **inject the file** — both against the
+   attached page:
+
+   ```bash
+   # seed window.__liveEditRegistry with your candidates (see data model)
+   playwright-cli eval "() => { window.__liveEditRegistry = [ /* entries */ ]; return 'seeded'; }"
+   # inject the panel from the plugin root (idempotent — re-run after
+   # navigation to re-render). $CLAUDE_PLUGIN_ROOT is expanded by the
+   # shell into the string before playwright sees it.
+   playwright-cli run-code "async (page) => { await page.addScriptTag({ path: '$CLAUDE_PLUGIN_ROOT/commands/live-edit-panel.js' }); }"
+   ```
+
+2. The file exposes `window.__liveEditToggle(id)`,
+   `__liveEditBulk('all-on'|'all-off'|'invert')`, `__liveEditExport()`,
+   `__liveEditLockInPayload()`, and `__liveEditCleanup()`. Drive them via
+   `playwright-cli eval` when scripting; the human drives the panel UI
+   directly.
+
+**Registry data model** — each candidate is one entry (runtime-only,
+nothing on disk until lock-in):
 
 ```js
 {
@@ -385,55 +419,29 @@ nothing is written to disk until lock-in):
 `sourceLocator` always names a location in the project's own source —
 never a CMS entry, a database row, or any other target kind. `kind`
 governs only which live-apply mechanism the panel uses to preview the
-candidate in the browser (see the mechanism table below); it never
-selects a different write-back target. One target, reached the same way
-every time.
+candidate (see the mechanism table below); it never selects a different
+write-back target. One target, reached the same way every time.
 
-### Panel injection
+**Specificity (verified bug):** a plain `.class { … }` style rule can
+lose the cascade to the page's own higher-specificity or `!important`
+rules — it injects but computes to no visible change. A style candidate
+targeting an already-styled element must raise its own specificity
+(add `!important`, or a more specific selector) in `apply`. Injecting a
+rule is not proof it applied — verify the **computed** style.
 
-Inject a single `position:fixed` panel div into the page once per page
-load, via `playwright-cli eval` — never author bespoke UI per entry. The
-panel body is generated entirely from the current registry: one toggle
-row per entry, rebuilt whenever the registry changes (a new entry added
-mid-session re-renders the panel, not just appends to it).
-
-Each row shows: a checkbox (current ON/OFF state), the entry's `label`,
-and highlights visually when checked (a background/border change) so the
-full ON set is readable at a glance without reading every checkbox
-individually.
-
-### Toggle application
-
-Flipping a row's checkbox updates exactly that entry's live-apply effect
-immediately — no page reload, no re-render of unrelated entries. The
-live page always reflects precisely the current ON set: toggling one row
-never changes another row's applied/unapplied state.
-
-### Bulk controls
-
-Three panel-level controls act on every row at once:
-
-- **All ON** — apply every entry's live-apply effect.
-- **All OFF** — remove every entry's live-apply effect.
-- **Invert** — flip every row's current state.
-
-Each acts on the live page the same way a single toggle does (immediate,
-no reload), just across the whole registry instead of one entry.
-
-### Drag handle
-
-The panel has a header bar that responds to `mousedown` → `mousemove` →
-`mouseup` to reposition the whole panel on the page. This is the only
-interactive chrome beyond the toggle rows and bulk controls — no
-persistence of position across page loads (see Constraints below).
+The panel gives each row an explicit **ON/OFF badge** and a header
+**count** ("N / M on") so state is unmistakable; labels are one-line and
+selectable, the panel is draggable and horizontally resizable, and
+toggling happens only via the badge (so selecting a label never toggles
+it).
 
 ### Constraints
 
 - **No persistence** — nothing about the panel, registry, or toggle
   state survives past the current browser session. A closed browser or
   a fresh page load with no re-injection starts from nothing.
-- **No new dependency** — the panel, registry, and every live-apply
-  mechanism are vanilla JS injected via `playwright-cli eval`. No new
+- **No new dependency** — the panel and every live-apply mechanism are
+  vanilla JS in `live-edit-panel.js`, injected via playwright-cli. No new
   npm package, no new MCP tool, no new binary.
 
 ### Live-apply mechanisms (per `kind`)
@@ -460,34 +468,48 @@ text at this location," never "re-derive code for this described
 behavior" — the latter would be re-judgment, which the no-re-judgment
 guarantee forbids for every kind uniformly, `logic` included.
 
-### Export
+### Export — the full change set, not an id list
 
-A panel button reads the registry's current ON/OFF split and writes it
-as plain text to the clipboard (`navigator.clipboard.writeText`):
+The point of Live-Edit is **permanent backend changes**, not a live
+preview that vanishes. So the Export button (`__liveEditExport()`) copies
+the full CHANGE SET for every ON entry — file, selector, and the literal
+`apply` text — to the clipboard, in a form a maintainer or the agent can
+turn straight into a source edit:
 
 ```
-ON: f2, f7
-OFF: f3, f4
+# Hero title → blue [style]
+styles/hero.scss — h1
+    color: #2563eb
+
+# Buy now → green [style]
+components/cta.scss — a.btn-primary
+    background: #16a34a; color: #fff
 ```
 
-The button gives a visible confirmation on click (e.g. its own label
-changes briefly to show what was copied) so the human can trust the
-copy happened. This is also readable directly from page state
-(`window`-scoped registry + ON set) without the clipboard, since the
-agent doing lock-in already has page access — the clipboard copy is for
-the human, not a required step for the agent.
+An id-only list (`ON: f2, f7`) is deliberately NOT the export: it tells a
+maintainer nothing about what to change. The button shows a visible
+confirmation on click. The same change set is available to the agent
+programmatically via `__liveEditChangeSet()` / `__liveEditLockInPayload()`
+without the clipboard.
 
-### Lock-in
+### Lock-in — offer to write the change set to source
 
-On explicit human instruction (never automatically, never inferred from
-an export copy alone), the agent:
+The ultimate goal is making the accepted changes permanent in the
+project's source. After the human is satisfied with the ON set, the
+agent **offers to write it** (never automatically, never inferred from an
+export copy alone — explicit human instruction). On approval, the agent:
 
-1. Reads the current ON set from the registry.
-2. For each ON entry, writes its `apply` value to its `sourceLocator` —
-   a deterministic lookup-and-write against source the agent already
-   authored earlier in the same session, never a search or
-   re-derivation.
+1. Reads the ON change set (`__liveEditLockInPayload()`).
+2. For each ON entry, writes its literal `apply` value at its
+   `sourceLocator` (file + selector) — a deterministic lookup-and-write
+   against source the agent already authored, never a search or
+   re-derivation. Style candidates carry their specificity (`!important`
+   / specific selector) into source exactly as previewed, so the shipped
+   result matches what the human saw live.
 3. Removes all injected panel/style/script scaffolding from the page.
+4. Surfaces the resulting diff for review — the code that ships is
+   authored, diffed, and reviewed through the normal git flow; the panel
+   never commits anything itself.
 
 This is a **single uniform write-back path with no branching by target
 kind** — `kind` governed only the live-preview mechanism above; it plays
