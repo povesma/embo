@@ -31,7 +31,7 @@
 
 ## Tasks
 
-- [ ] 1.0 **User Story:** As an embo user, I want each load-bearing claim
+- [X] 1.0 **User Story:** As an embo user, I want each load-bearing claim
   shown as a proof-table record with a reproducible methodology, so I can
   re-run the check and trust the conclusion (FR-1, FR-2). [4/0]
   - [X] 1.1 Replace the single verdict table in the Output section
@@ -46,14 +46,15 @@
     it MUST be a re-runnable command, not prose; a non-reproducible
     method counts as absent and lowers confidence. Keep the existing
     "Then advise" block after the proof-table blocks [verify: code-only]
-  - [~] 1.4 Live-run `/embo:research:verify` on a small claim; confirm
+  - [X] 1.4 Live-run `/embo:research:verify` on a small claim; confirm
     the output shows the summary table (with C-IDs) and at least one
     8-field block whose methodology is an actual re-runnable command
     [verify: manual-run-claude]
-    → pending fresh-session run at 0.2.4 after `marketplace update`
-      refreshes the cache (2026-07-27)
+    → verified 2026-08-08: run on `bin/rlm_repl` wrapper claim; summary
+      table with C1/C2/C3 appeared; C1 methodology was
+      `stat /Users/dnipro/home/AI/embo/plugin/bin/rlm_repl` (re-runnable)
 
-- [ ] 2.0 **User Story:** As an embo user, I want the agent to catch its
+- [X] 2.0 **User Story:** As an embo user, I want the agent to catch its
   own hedged claims and resolve them, so no guess is emitted as a fact
   (FR-3). [3/0]
   - [X] 2.1 Add the Hedge-check Process step (after current step 5): a
@@ -67,14 +68,15 @@
     ought to, in all likelihood, my sense is) plus the "and similar
     epistemic softeners" generalization clause; reference the existing
     load-bearing-claim definition (Process step 1) [verify: code-only]
-  - [~] 2.3 Live-run `/embo:research:verify` on a claim the agent would
+  - [X] 2.3 Live-run `/embo:research:verify` on a claim the agent would
     naturally hedge; confirm a `Hedge-check:` line appears with a
     resolution and the claim is not emitted as a bare fact
     [verify: manual-run-claude]
-    → pending fresh-session run at 0.2.4 after `marketplace update`
-      refreshes the cache (2026-07-27)
+    → verified 2026-08-08: two `Hedge-check:` lines emitted (C2: proven,
+      C3: needs-methodology); neither hedged claim passed through as a
+      bare fact
 
-- [ ] 3.0 **User Story:** As an embo user, I want confidence scored on
+- [X] 3.0 **User Story:** As an embo user, I want confidence scored on
   data-availability bands that force further investigation when low, so
   the number means something (FR-4). [4/0]
   - [X] 3.1 Add the 0-10 confidence definition with 4 bands (9-10
@@ -97,8 +99,10 @@
       live tests comes from re-running `marketplace update`, which
       re-copies the working tree into the 0.2.4 cache dir [live]
       (2026-07-27)
-  - [~] 3.4 Live-run `/embo:research:verify` producing a low-confidence
+  - [X] 3.4 Live-run `/embo:research:verify` producing a low-confidence
     (≤5) claim; confirm the block names the raising methodology or proves
     none is available [verify: manual-run-claude]
-    → pending fresh-session run at 0.2.4 after `marketplace update`
-      refreshes the cache (2026-07-27)
+    → verified 2026-08-08: C3 ("Bash(rlm_repl *) suppresses all approval
+      prompts") scored 4/10; block named raising methodology (live run of
+      `rlm_repl init-repo .` and `rlm_repl status` with allowlist active)
+      and stated why unavailable (init-repo modifies state)
