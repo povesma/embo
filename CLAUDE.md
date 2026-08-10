@@ -95,7 +95,9 @@ Two consequences, both load-bearing:
    - Each integrates RLM + claude-mem via Bash and MCP tools
    - Commands invoke RLM as a bare `rlm_repl` (the `plugin/bin/`
      wrapper) — never inline `${CLAUDE_PLUGIN_ROOT}/...rlm_repl.py`,
-     which Claude Code flags for an approval prompt
+     which triggers a Claude Code approval prompt (the expansion-
+     obfuscation classifier fires on brace+quote patterns; the bare
+     wrapper avoids this and matches a simple `Bash(rlm_repl *)` rule)
 
 ### Installation Flow
 
