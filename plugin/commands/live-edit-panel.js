@@ -49,9 +49,11 @@
  *   - Draggable by its header. No persistence across page loads.
  *
  * EXPORT / LOCK-IN (the point — permanent backend changes):
- *   - Export produces the full CHANGE SET for every ON entry (file +
- *     selector + literal apply), not just an id list — a maintainer or
- *     the agent can turn it straight into a source edit. Copied to
+ *   - Export produces the full CHANGE SET for every ON entry (all
+ *     sourceLocator fields spread + id + label + kind + apply), not just
+ *     an id list — a maintainer or the agent can turn it straight into a
+ *     source edit. Extra fields (component, state, breakpoint, …) added
+ *     to sourceLocator by the caller survive lock-in verbatim. Copied to
  *     clipboard and returned.
  *   - Lock-in (window.__liveEditLockInPayload) returns the same ON change
  *     set for the agent to WRITE into real source, then cleanup removes
@@ -115,7 +117,7 @@
   // literal apply) — what a maintainer or the agent turns into source.
   window.__liveEditChangeSet = () => window.__liveEditRegistry
     .filter(f => window.__liveEditOn.has(f.id))
-    .map(f => ({ id: f.id, label: f.label, kind: f.kind, file: f.sourceLocator.file, selector: f.sourceLocator.selector, apply: f.apply }));
+    .map(f => ({ ...f.sourceLocator, id: f.id, label: f.label, kind: f.kind, apply: f.apply }));
 
   // Human-readable export of the full change set (not just ids).
   window.__liveEditExport = () => {
