@@ -1,19 +1,16 @@
 ---
 description: >
-  EXPERIMENTAL design-to-code loop: implement a Figma node as frontend
-  code and verify it against the design by token/property conformance and
+  Design-to-code loop: implement a Figma node as frontend code and
+  verify it against the design by token/property conformance and
   an independent visual-qa-reviewer agent (pixel diff is a weak,
   mockup-only fallback). Drives the Figma MCP (design source) and the
-  Playwright CLI for capture + live CSS reads. Argument and output
-  contract may still change.
+  Playwright CLI for capture + live CSS reads. Also supports Live-Edit
+  Mode: a live toggle panel for tuning candidate fixes before lock-in.
 ---
 
-# Visual Design Implementation (EXPERIMENTAL)
+# Visual Design Implementation
 
-**Status: experimental — usable, but the argument and output contract
-may change.** Not yet validated end-to-end enough to promise stability;
-pin a plugin version if you script around it. This command
-orchestrates a design-to-code loop that implements a Figma node and
+This command orchestrates a design-to-code loop that implements a Figma node and
 verifies it against the design by **conformance** (token / component /
 behavior) and an independent review agent. It drives the **Figma MCP**
 (design source) and the **Playwright CLI** (render / capture / live CSS
@@ -45,6 +42,10 @@ caveated (see Step 4).
   implement it to the pixel in HTML/CSS/JS.
 - You want the build gated against the design, not against the author's
   own opinion of the build.
+- You want to let a human toggle candidate fixes on/off live in the
+  browser before locking any of them into source — see Live-Edit Mode
+  below (usable independent of the Loop/Gate; not shown for
+  `tools.visual_impl.live_edit_mention: false` in the active profile).
 
 ## Arguments
 
@@ -337,6 +338,219 @@ reviewer's PASS.**
 This command answers "match the design". It is NOT a regression tool;
 the baseline is the Figma frame, not a prior build.
 
+## Live-Edit Mode
+
+A parallel capability, usable independent of the Loop/Gate above: before
+generation, after a PASS, or after a FAIL. It lets you inject a floating
+toggle panel into the live-rendered page, backed by a **fix registry**
+you populate as you author candidate changes, so a human can turn each
+candidate on/off live and lock in the chosen combination.
+
+There is exactly one write-back target: **the project's own source
+code** — the same source the deploy pipeline turns into what's live.
+Every registry entry's `sourceLocator` names a place in that source; there
+is no per-target dispatch (CMS/DB/etc.) — that framing does not apply to
+this project's architecture.
+
+**The invariant that makes this trustworthy**: the panel never edits the
+page's real CSS files or DOM structure. Every candidate lives only as a
+scoped in-page rule/patch generated from the in-memory registry — nothing
+here is persisted, nothing here is committed. The only path from "human
+accepted this in the browser" to "this exists in source" is the agent
+reading the registry's ON entries and manually transcribing their `apply`
+values into the real source file — a deliberate, separate, reviewable
+step (Lock-in, below). This is what keeps the loop safe: the human's
+visual judgment picks the target, but the code that ships is authored,
+diffed, reviewed, and reverted through the normal git flow — never
+auto-written by the panel itself.
+
+### Registry data model
+
+Each candidate is one registry entry, an in-page JS object (runtime-only —
+nothing is written to disk until lock-in):
+
+```js
+{
+  id: "f3",                 // stable within a session
+  label: "Hero padding",    // shown in the panel row
+  kind: "style",            // style | markup | logic — decides the live-apply mechanism
+  apply: "padding: 24px",   // literal replacement source text for this kind
+  sourceLocator: {
+    file: "styles/hero.scss",
+    selector: ".hero"        // or a line number for markup/logic
+  }
+}
+```
+
+`sourceLocator` always names a location in the project's own source —
+never a CMS entry, a database row, or any other target kind. `kind`
+governs only which live-apply mechanism the panel uses to preview the
+candidate in the browser (see the mechanism table below); it never
+selects a different write-back target. One target, reached the same way
+every time.
+
+### Panel injection
+
+Inject a single `position:fixed` panel div into the page once per page
+load, via `playwright-cli eval` — never author bespoke UI per entry. The
+panel body is generated entirely from the current registry: one toggle
+row per entry, rebuilt whenever the registry changes (a new entry added
+mid-session re-renders the panel, not just appends to it).
+
+Each row shows: a checkbox (current ON/OFF state), the entry's `label`,
+and highlights visually when checked (a background/border change) so the
+full ON set is readable at a glance without reading every checkbox
+individually.
+
+### Toggle application
+
+Flipping a row's checkbox updates exactly that entry's live-apply effect
+immediately — no page reload, no re-render of unrelated entries. The
+live page always reflects precisely the current ON set: toggling one row
+never changes another row's applied/unapplied state.
+
+### Bulk controls
+
+Three panel-level controls act on every row at once:
+
+- **All ON** — apply every entry's live-apply effect.
+- **All OFF** — remove every entry's live-apply effect.
+- **Invert** — flip every row's current state.
+
+Each acts on the live page the same way a single toggle does (immediate,
+no reload), just across the whole registry instead of one entry.
+
+### Drag handle
+
+The panel has a header bar that responds to `mousedown` → `mousemove` →
+`mouseup` to reposition the whole panel on the page. This is the only
+interactive chrome beyond the toggle rows and bulk controls — no
+persistence of position across page loads (see Constraints below).
+
+### Constraints
+
+- **No persistence** — nothing about the panel, registry, or toggle
+  state survives past the current browser session. A closed browser or
+  a fresh page load with no re-injection starts from nothing.
+- **No new dependency** — the panel, registry, and every live-apply
+  mechanism are vanilla JS injected via `playwright-cli eval`. No new
+  npm package, no new MCP tool, no new binary.
+
+### Live-apply mechanisms (per `kind`)
+
+`kind` decides only how the browser previews a candidate live — never
+the write-back target (there is one target: source, see above).
+
+| kind | Live-apply mechanism | What toggling does |
+|---|---|---|
+| `style` | Single injected `<style>` tag, rebuilt from all ON entries' CSS text, each rule built as `${sourceLocator.selector} { ${apply} }` — the entry's own real target selector, not a body-wide class | Adds the rule to the injected tag (ON) or omits it on rebuild (OFF) |
+| `markup` | A DOM patch function stored per entry (e.g. swap `outerHTML`/an attribute on a targeted element), paired with its inverse or an original-value snapshot taken before the first apply | Runs the patch (ON) or the inverse/original snapshot (OFF) |
+| `logic` | A named function or `<script>` block injected once; toggling attaches/detaches it as an event listener, or swaps which of two functions currently handles an event | Attaches (ON) or detaches (OFF) the handler |
+
+All three share the same registry shape, panel row, export contract, and
+lock-in path — only the "what happens when you flip this toggle" step
+differs.
+
+For **all three kinds**, `apply` holds **literal replacement source
+text** — never a behavioral description the agent would have to
+re-derive later. For `logic` specifically, this means the full function
+body/diff, captured verbatim when the candidate is authored, exactly as
+`style` stores literal CSS text. Lock-in is always "write this literal
+text at this location," never "re-derive code for this described
+behavior" — the latter would be re-judgment, which the no-re-judgment
+guarantee forbids for every kind uniformly, `logic` included.
+
+### Export
+
+A panel button reads the registry's current ON/OFF split and writes it
+as plain text to the clipboard (`navigator.clipboard.writeText`):
+
+```
+ON: f2, f7
+OFF: f3, f4
+```
+
+The button gives a visible confirmation on click (e.g. its own label
+changes briefly to show what was copied) so the human can trust the
+copy happened. This is also readable directly from page state
+(`window`-scoped registry + ON set) without the clipboard, since the
+agent doing lock-in already has page access — the clipboard copy is for
+the human, not a required step for the agent.
+
+### Lock-in
+
+On explicit human instruction (never automatically, never inferred from
+an export copy alone), the agent:
+
+1. Reads the current ON set from the registry.
+2. For each ON entry, writes its `apply` value to its `sourceLocator` —
+   a deterministic lookup-and-write against source the agent already
+   authored earlier in the same session, never a search or
+   re-derivation.
+3. Removes all injected panel/style/script scaffolding from the page.
+
+This is a **single uniform write-back path with no branching by target
+kind** — `kind` governed only the live-preview mechanism above; it plays
+no role here. Every entry, regardless of `kind`, is transcribed the same
+way: literal `apply` text written to its `sourceLocator`.
+
+An abandoned session (browser closed, no lock-in) needs no cleanup:
+nothing was ever persisted, so there is nothing to roll back.
+
+**Failure mode**: if any ON entry's `sourceLocator` no longer resolves
+at lock-in time, halt before writing anything, report which entry and
+why, and leave source untouched. This reuses this file's existing
+principle verbatim (see Notes: "Error always stops; only clean absence
+degrades") — no new mechanism.
+
+### Navigation re-injection
+
+Live-Edit's injection is idempotent: it does not check for or preserve
+any prior state, it just builds the panel and registry fresh from
+whatever entries currently exist. This makes re-injection after a real
+page navigation simple — re-run the exact same injection call after
+every navigation the agent observes, with the current registry
+contents. No `MutationObserver`, no `addInitScript`, no SPA-persistence
+trick is needed; re-running the same snippet is sufficient. There is a
+brief panel-absent gap between navigation and re-injection — an
+accepted, documented limitation, not a defect to engineer around.
+
+### Registry population and mid-session use
+
+The registry can start from either source, and both are equally valid
+starting points — Live-Edit has no dependency on the Loop/Gate having
+run:
+
+- **From a reviewer result** — after a Gate run, convert each of
+  `visual-qa-reviewer`'s `recommended_fixes` (plain ordered strings)
+  into a registry entry: pick a `kind`, write its `apply` value, and
+  record the `sourceLocator` for where you would make that fix.
+- **From scratch** — an empty registry, populated ad hoc as you author
+  candidates directly, with no reviewer run at all.
+
+A new entry can be registered **at any point in the session** — before
+generation, mid-session, after a PASS or a FAIL — without reloading the
+page or losing existing toggle state. Re-run the panel-render step (not
+the full injection) so the new row appears alongside the existing ones,
+already reflecting the rest of the registry's current ON/OFF state.
+
+Live-Edit Mode has **no conditional dependency on Gate state** anywhere
+in this section: it is equally usable before any generation has
+happened, after a PASS, or after a FAIL.
+
+### Discoverability flag
+
+`tools.visual_impl.live_edit_mention` (boolean, default `true`) in a
+profile YAML controls whether the "When to Use" mention above appears.
+When absent (the common case — no profile currently sets this key), it
+defaults to `true`. Set to `false` in a profile to omit the mention.
+
+**Decision (this feature)**: none of the four shipped profiles (`fast`,
+`minimal`, `quality`, `research`) opts out. `fast` is a speed mode for
+routine coding turnaround, not a signal against an optional one-line
+capability mention; `minimal` disables RLM/memory specifically, not
+visual tooling. No profile file needs editing for this default.
+
 ## Output
 
 Report: iterations run, the conformance result (SYSTEM MODE:
@@ -347,9 +561,6 @@ result can be re-checked without re-running.
 
 ## Notes
 
-- This is experimental. Once it has enough end-to-end runs to trust its
-  guarantees, promote it to stable (freeze the arg/output contract) and
-  drop the experimental note.
 - **Error always stops; only clean absence degrades.** A tool that
   ERRORS, or a required input that is missing, halts the run — report it
   and stop, never fall back to a lesser path to paper over a broken

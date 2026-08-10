@@ -4,6 +4,34 @@ All notable changes to the embo plugin are documented here.
 
 ## [Unreleased]
 
+## [0.2.4] - Unreleased
+
+### Added
+
+- `/embo:prd` asks what the feature is *for* first, and records it — the
+  PRD carries the motivation, not just the mechanism.
+- `/embo:research:verify` backs each claim with a re-runnable proof and a
+  0–10 confidence, and refuses to state a hedged claim as fact.
+- `/embo:visual-impl` gains **Live-Edit Mode**: a floating toggle panel
+  injected into the live page lets you turn candidate fixes on/off (or
+  bulk on/off/invert) without touching devtools, then lock in only the
+  chosen ones — written back to the project's own source, never
+  auto-committed.
+
+### Changed
+
+- `/embo:research:verify` and `:examine` build the NotebookLM notebook
+  themselves, so they work on a topic you haven't researched yet.
+- Behavioral rules (delegation, decide-or-ask, and others) hold under
+  load — enforced by forced checkpoints, not prose.
+- `/embo:git pr` names over-built code as a `file:line` cut list, not
+  vague advice.
+
+### Fixed
+
+- The research commands flag a NotebookLM outage instead of passing off a
+  half-check as complete.
+
 ## [0.2.3] - 2026-07-22
 
 ### Added
