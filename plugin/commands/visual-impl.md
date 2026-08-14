@@ -1,20 +1,33 @@
 ---
 description: >
-  Design-to-code loop: implement a Figma node as frontend code and
-  verify it against the design by token/property conformance and
-  an independent visual-qa-reviewer agent (pixel diff is a weak,
-  mockup-only fallback). Drives the Figma MCP (design source) and the
-  Playwright CLI for capture + live CSS reads. Also supports Live-Edit
-  Mode: a live toggle panel for tuning candidate fixes before lock-in.
+  Implement a task with a visual component (HTML or Figma). Unlike plain
+  impl, it can SEE (analyses screenshots) and ships a Live-Edit WYSIWYG
+  panel to tune style/markup/logic live and lock accepted changes into
+  source (front-end or server-side); the accepted result becomes the
+  spec. Optionally verifies against a reference (Figma/image/code).
 ---
 
 # Visual Design Implementation
 
-This command orchestrates a design-to-code loop that implements a Figma node and
-verifies it against the design by **conformance** (token / component /
-behavior) and an independent review agent. It drives the **Figma MCP**
-(design source) and the **Playwright CLI** (render / capture / live CSS
-reads / interaction probes), plus the `visual-qa-reviewer` agent.
+This command implements a **task that has a visual component** — it
+produces visual output (HTML/CSS/JS that renders to a page, Figma in its
+own language, or similar). The task's reference may be anything suitable:
+a Figma node, an image, a live example, existing code, or just a written
+task. Two capabilities set it apart:
+
+1. **It can SEE** — it captures screenshots and analyses them as input,
+   not just the code.
+2. **It ships a Live-Edit WYSIWYG panel** — tune candidate style / markup
+   / logic changes on the running page and lock the accepted ones into
+   source (front-end or server-side). The accepted result becomes part of
+   the spec — the exact look and behavior, not the user's words. (Full
+   detail in the Live-Edit Mode section below.)
+
+When the task carries a design reference, it also **verifies** the result
+against it by **conformance** (token / component / behavior) and an
+independent `visual-qa-reviewer` agent. It drives the **Playwright CLI**
+(render / capture / live CSS reads / interaction probes) and, when a Figma
+design is the source, the **Figma MCP**.
 
 Browser automation uses the **Playwright CLI** for capture, not the
 Playwright MCP: the CLI keeps screenshots and DOM state on disk instead
@@ -386,13 +399,28 @@ to hang here).
    attached page:
 
    ```bash
-   # seed window.__liveEditRegistry with your candidates (see data model)
-   playwright-cli eval "() => { window.__liveEditRegistry = [ /* entries */ ]; return 'seeded'; }"
-   # inject the panel from the plugin root (idempotent — re-run after
-   # navigation to re-render). $CLAUDE_PLUGIN_ROOT is expanded by the
-   # shell into the string before playwright sees it.
-   playwright-cli run-code "async (page) => { await page.addScriptTag({ path: '$CLAUDE_PLUGIN_ROOT/commands/live-edit-panel.js' }); }"
+   # read the installed embo version so the panel can flag a stale script
+   embo_ver=$(jq -r '.version' "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json")
+   # seed the registry AND tell the panel which embo is installed. The panel
+   # bakes its OWN version and shows a warning if the two differ (stale
+   # script after an embo upgrade). Register both as an addInitScript so the
+   # value survives navigation too.
+   playwright-cli eval "() => { window.__liveEditRegistry = [ /* entries */ ]; window.__liveEditInstalledVersion = '$embo_ver'; return 'seeded'; }"
+   # register the panel via addInitScript so the browser re-runs it on
+   # EVERY document load — this is what makes the panel survive a
+   # USER-driven navigation (a plain addScriptTag would NOT survive). Also
+   # re-seed the installed version on every load via addInitScript so the
+   # stale-check keeps working across navigations. $CLAUDE_PLUGIN_ROOT is
+   # expanded by the shell into the string before playwright sees it.
+   playwright-cli run-code "async (page) => { await page.addInitScript('window.__liveEditInstalledVersion = \"'$embo_ver'\";'); await page.addInitScript({ path: '$CLAUDE_PLUGIN_ROOT/commands/live-edit-panel.js' }); await page.addScriptTag({ path: '$CLAUDE_PLUGIN_ROOT/commands/live-edit-panel.js' }); }"
    ```
+
+   The panel persists its registry and ON-state in `localStorage`, so
+   after a user click navigates the page the init script re-reads them
+   and rebuilds automatically. **Style** candidates re-apply on their
+   own; **markup/logic** rows reappear but their seed blocks must be
+   re-run on the new page to re-attach their closures (until then,
+   toggling such a row is a no-op).
 
 2. The file exposes `window.__liveEditToggle(id)`,
    `__liveEditBulk('all-on'|'all-off'|'invert')`, `__liveEditExport()`,
@@ -525,17 +553,41 @@ why, and leave source untouched. This reuses this file's existing
 principle verbatim (see Notes: "Error always stops; only clean absence
 degrades") — no new mechanism.
 
-### Navigation re-injection
+### Navigation survival
 
-Live-Edit's injection is idempotent: it does not check for or preserve
-any prior state, it just builds the panel and registry fresh from
-whatever entries currently exist. This makes re-injection after a real
-page navigation simple — re-run the exact same injection call after
-every navigation the agent observes, with the current registry
-contents. No `MutationObserver`, no `addInitScript`, no SPA-persistence
-trick is needed; re-running the same snippet is sufficient. There is a
-brief panel-absent gap between navigation and re-injection — an
-accepted, documented limitation, not a defect to engineer around.
+The panel must survive a **user-driven** navigation (the human clicks a
+link in the page), not only an agent-triggered one — a real tuning
+session is multi-page and the human, not the agent, does the clicking.
+
+Four mechanisms deliver this, all in-page (the panel does NOT rely on the
+agent/controller re-injecting — that is racy: the SPA paints before
+Playwright's navigation event arrives). The injection call above sets them
+all up:
+
+- **`addInitScript`** registers the panel file to run on **every** hard
+  document load, so the browser re-injects it on any full navigation with
+  no agent involvement. A one-shot `addScriptTag`/`eval` does not survive
+  — `addInitScript` is required.
+- **Deferred DOM work.** All DOM work waits for `DOMContentLoaded`, because
+  `addInitScript` runs at document-start when `document.head`/`body` are
+  still null.
+- **History hooks.** `history.pushState`/`replaceState` + `popstate` are
+  patched so a client-side SPA route change (no page load) re-boots the
+  panel.
+- **MutationObserver self-heal.** When a framework removes/replaces the
+  panel node, an observer on `<body>` re-appends it.
+
+State (registry + ON-set) lives in **`localStorage`** (not
+`sessionStorage`, which Playwright `storageState` ignores). Each load
+re-reads it and rebuilds; the ON **style** set re-applies automatically.
+
+**Scope by kind.** `style` fully survives (CSS text is serializable).
+`markup`/`logic` rows reappear from persisted metadata, but their live
+closures cannot be serialized — re-run their seed blocks against the new
+page to re-attach them; until then, toggling such a row is a no-op.
+There is a brief panel-absent gap during the load itself — an accepted,
+documented limitation. `__liveEditCleanup()` clears the `localStorage`
+state so a post-lock-in load starts clean.
 
 ### Registry population and mid-session use
 

@@ -140,9 +140,30 @@ python3 ~/.claude/rlm_scripts/rlm_repl.py status
 ```
 
 ### Modify Commands
-Edit `plugin/commands/<name>.md` directly. With the plugin installed
-from a local marketplace, run `/plugin marketplace update embo` +
-`/reload-plugins` to pick up changes.
+Edit `plugin/commands/<name>.md` directly.
+
+**Picking up local edits (dogfood, directory-source install).** What it
+takes to activate an edit depends on the component (per Claude Code
+docs, verified 2026-08-13):
+
+| Edited | Activates on |
+|---|---|
+| Command / skill `.md` | next prompt, no reload |
+| Agent, hook, `bin/` wrapper, plugin `description` | `/reload-plugins` (same session, no restart) |
+
+`/plugin marketplace update` targets git/URL sources; a directory
+source is meant to read from disk, so `/reload-plugins` is the operative
+step. **Caveat:** we have observed a stale `~/.claude/plugins/cache/
+embo/embo/<version>/` copy shadowing the working tree despite the
+directory source (see claude-mem obs #34749). If a change does not take
+effect after `/reload-plugins`, check that cache directory — it may need
+a full `/plugin marketplace update embo` or a restart to resync.
+
+**Dogfood setup.** To develop against this working copy instead of
+GitHub, install from the local directory (README Step 1 tip:
+`/plugin marketplace add /path/to/embo`). To switch back to the
+published source: `/plugin marketplace remove embo` then
+`/plugin marketplace add povesma/embo` + `/plugin install embo@embo`.
 
 ### Add Language Support
 Edit `rlm_repl.py` → `LANGUAGE_MAP` dict.

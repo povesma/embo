@@ -60,27 +60,94 @@
  *     all injected scaffolding. If a sourceLocator no longer resolves,
  *     halt before writing anything and report — error always stops.
  *
- * IDEMPOTENT RE-INJECTION. Re-running this file just re-renders from the
- * current registry (window.__liveEditInjected guard) — so re-injecting
- * after a real page navigation needs no extra machinery.
+ * NAVIGATION SURVIVAL (FR-7, verified 2026-08-14). The panel must survive
+ * a USER-driven navigation (the human clicks a link), not only an
+ * agent-triggered one, AND an SPA re-render that replaces document.body.
+ * Four mechanisms, all in-page (no controller re-injection — that path is
+ * racy: the SPA paints before Playwright's framenavigated event arrives):
+ *   - Register THIS file via Playwright `page.addInitScript`, so the
+ *     browser re-runs it on EVERY hard document load. (A one-shot
+ *     `eval`/`addScriptTag` does NOT survive; addInitScript is required.)
+ *   - All DOM work is DEFERRED to DOMContentLoaded. addInitScript runs at
+ *     document-start when document.head/body are null; the original defect
+ *     was `head.appendChild` throwing there, which also aborted the
+ *     end-of-run state save and wiped the ON-set.
+ *   - SPA client-side navigation: `history.pushState`/`replaceState` +
+ *     `popstate` are hooked to re-boot the panel (no page load fires).
+ *   - SPA body replacement: a MutationObserver on <body> re-appends the
+ *     panel when the framework removes it (disconnect-before-reappend to
+ *     avoid an infinite loop; guarded by panel id).
+ * Registry + ON-state live in `localStorage` (NOT sessionStorage, which
+ * Playwright storageState ignores). Persisted on the FIRST run after
+ * load/seed and on each mutation; a re-run never blindly re-saves (that
+ * was a second ON-set-wipe cause). Scope by kind: `style` fully survives
+ * (CSS text is serializable). `markup`/`logic` rows reappear from
+ * persisted metadata, but their live closures cannot be serialized — they
+ * are re-seeded by re-running their seed blocks against the new page;
+ * until then, toggling them is a no-op. `__liveEditCleanup()` clears the
+ * localStorage keys so a post-lock-in load starts clean. This persistence
+ * does NOT violate NFR-2, which scopes "nothing persisted" to
+ * cross-session state and to durable SOURCE change (only lock-in writes).
  *
- * Verified live against a real production page (dev-www.artec3d.com):
- * style kind (incl. the specificity fix). markup/logic dispatch proven;
- * their example population blocks (bottom of file) were run on a local
- * scratch page only.
+ * Verified live 2026-08-14 on a clean Playwright session against a real
+ * client-side SPA (localhost Artec site): panel + ON-set + style survived
+ * multiple real navigations (screenshot captured); MutationObserver
+ * self-heal re-appended the panel after node removal. style kind incl. the
+ * specificity fix. markup/logic dispatch proven; their example population
+ * blocks (bottom of file) were run on a local scratch page only.
  */
 (() => {
-  if (window.__liveEditInjected) { window.__liveEditRenderPanel(); return 'already injected, re-rendered'; }
-  window.__liveEditInjected = true;
-  window.__liveEditOn = new Set();
+  // Version this script was shipped with. Keep in lockstep with the plugin
+  // manifest (plugin/.claude-plugin/plugin.json) on every release. The panel
+  // shows it in the title, and warns if the INSTALLED embo differs (the
+  // caller passes the installed version as window.__liveEditInstalledVersion
+  // at inject time). This catches the stale-script trap: a user tunes with an
+  // old panel still live in the browser, upgrades embo, and the running
+  // script silently no longer matches the installed one.
+  const PANEL_VERSION = '0.2.5';
 
-  const styleEl = document.createElement('style');
-  styleEl.id = '__live-edit-style';
-  document.head.appendChild(styleEl);
+  // Persisted state (localStorage — survives navigation AND is captured by
+  // Playwright storageState, unlike sessionStorage). One namespaced key per
+  // slice. Registry may be pre-seeded on `window` by the caller before this
+  // runs (fresh session); otherwise it is restored from storage.
+  const REG_KEY = '__liveEditRegistry', ON_KEY = '__liveEditOn';
+  const loadReg = () => { try { return JSON.parse(localStorage.getItem(REG_KEY)) || []; } catch { return []; } };
+  const loadOn = () => { try { return new Set(JSON.parse(localStorage.getItem(ON_KEY)) || []); } catch { return new Set(); } };
+  const saveReg = () => { try { localStorage.setItem(REG_KEY, JSON.stringify(window.__liveEditRegistry || [])); } catch {} };
+  const saveOn = () => { try { localStorage.setItem(ON_KEY, JSON.stringify([...window.__liveEditOn])); } catch {} };
+  window.__liveEditPersist = () => { saveReg(); saveOn(); };
+
+  // The functions below (toggle/bulk/export/lock-in/render) are (re)defined
+  // on every run — cheap and keeps them current. The guard only protects the
+  // one-time SETUP (history patch, observer) and initial state load. Callers
+  // that re-inject after a navigation get a working API either way.
+  const firstRun = !window.__liveEditSetup;
+
+  // State load: safe at document-start (no DOM touched). On the very first
+  // run, honor a caller-seeded registry; afterwards always trust storage so a
+  // re-injection never clobbers persisted entries.
+  if (firstRun) {
+    if (!window.__liveEditRegistry) window.__liveEditRegistry = loadReg();
+    if (!window.__liveEditOn) window.__liveEditOn = loadOn();
+  }
+
+  // Style tag is created lazily by ensureStyleEl() so NO DOM is touched at
+  // document-start (where document.head is still null — the original defect).
+  function ensureStyleEl() {
+    let el = document.getElementById('__live-edit-style');
+    if (!el && document.head) {
+      el = document.createElement('style');
+      el.id = '__live-edit-style';
+      document.head.appendChild(el);
+    }
+    return el;
+  }
 
   function rebuildStyleRules() {
+    const el = ensureStyleEl();
+    if (!el) return;
     const on = window.__liveEditRegistry.filter(f => window.__liveEditOn.has(f.id) && f.kind === 'style');
-    styleEl.textContent = on.map(f => `${f.sourceLocator.selector} { ${f.apply} }`).join('\n');
+    el.textContent = on.map(f => `${f.sourceLocator.selector} { ${f.apply} }`).join('\n');
   }
 
   window.__liveEditApplyKind = (entry, turningOn) => {
@@ -102,6 +169,7 @@
     const turningOn = !window.__liveEditOn.has(id);
     turningOn ? window.__liveEditOn.add(id) : window.__liveEditOn.delete(id);
     window.__liveEditApplyKind(entry, turningOn);
+    saveOn();
     window.__liveEditRenderPanel();
   };
 
@@ -134,11 +202,21 @@
 
   window.__liveEditCleanup = () => {
     document.getElementById('__live-edit-panel')?.remove();
-    styleEl.remove();
+    document.getElementById('__live-edit-style')?.remove();
+    // Stop self-healing so the panel does not resurrect after cleanup.
+    if (window.__liveEditObserver) { window.__liveEditObserver.disconnect(); window.__liveEditObserver = null; }
     window.__liveEditInjected = false;
+    window.__liveEditSetup = false;
+    // End persistence so a later load starts clean (the change set has
+    // been locked into real source; nothing should re-apply).
+    try { localStorage.removeItem(REG_KEY); localStorage.removeItem(ON_KEY); } catch {}
   };
 
   window.__liveEditRenderPanel = () => {
+    // Persist the registry on every render so a mid-session add (caller
+    // pushes to __liveEditRegistry, then re-renders) survives navigation.
+    saveReg();
+    if (!document.body) return; // deferred boot calls this again once body exists
     const reg = window.__liveEditRegistry, on = window.__liveEditOn;
     let p = document.getElementById('__live-edit-panel');
     if (!p) {
@@ -146,7 +224,8 @@
       p.id = '__live-edit-panel';
       p.style.cssText = 'position:fixed;top:20px;left:20px;z-index:999999;background:#1e1e24;color:#e8e8ea;font:13px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.35);min-width:240px;width:max-content;max-width:520px;resize:horizontal;overflow:auto;';
       p.innerHTML =
-        '<div id="__le-hd" style="display:flex;justify-content:space-between;align-items:center;font-weight:600;padding:8px 12px;cursor:move;background:#2a2a32;border-radius:10px 10px 0 0;user-select:none;"><span>Live-Edit</span><span id="__le-count" style="font-weight:500;font-size:11px;color:#9aa;"></span></div>' +
+        '<div id="__le-hd" style="display:flex;justify-content:space-between;align-items:center;font-weight:600;padding:8px 12px;cursor:move;background:#2a2a32;border-radius:10px 10px 0 0;user-select:none;"><span>Embo Live-Edit <span style="font-weight:400;font-size:11px;color:#9aa;">(v.' + PANEL_VERSION + ')</span></span><span id="__le-count" style="font-weight:500;font-size:11px;color:#9aa;"></span></div>' +
+        '<div id="__le-stale" style="display:none;padding:6px 12px;background:#4a2f13;color:#ffd08a;font-size:11px;line-height:1.35;border-bottom:1px solid #38383f;"></div>' +
         '<div style="padding:6px 10px;display:flex;gap:6px;border-bottom:1px solid #38383f;">' +
         '<button id="__le-on" style="flex:1;cursor:pointer;font:12px sans-serif;padding:4px;border:0;border-radius:6px;background:#3a3a44;color:#e8e8ea;">All on</button>' +
         '<button id="__le-off" style="flex:1;cursor:pointer;font:12px sans-serif;padding:4px;border:0;border-radius:6px;background:#3a3a44;color:#e8e8ea;">All off</button>' +
@@ -169,6 +248,21 @@
       document.addEventListener('mouseup', () => { drag = false; });
     }
 
+    // Staleness check: if the caller told us the installed embo version and
+    // it differs from the version baked into this running script, warn — the
+    // user is tuning with an out-of-date panel (e.g. they upgraded embo after
+    // injecting). Re-injecting from the current install clears it.
+    const stale = p.querySelector('#__le-stale');
+    if (stale) {
+      const installed = window.__liveEditInstalledVersion;
+      if (installed && installed !== PANEL_VERSION) {
+        stale.textContent = '⚠ This panel is v' + PANEL_VERSION + ', but embo v' + installed + ' is installed. Re-inject the panel to update.';
+        stale.style.display = 'block';
+      } else {
+        stale.style.display = 'none';
+      }
+    }
+
     const onCount = reg.filter(f => on.has(f.id)).length;
     p.querySelector('#__le-count').textContent = onCount + ' / ' + reg.length + ' on';
 
@@ -184,8 +278,72 @@
     });
   };
 
-  window.__liveEditRenderPanel();
-  return 'injected';
+  // Build + apply everything that touches the DOM. Idempotent: safe to call
+  // repeatedly (on load, after an SPA route change, after a body swap).
+  window.__liveEditBoot = () => {
+    if (!document.body) return;
+    rebuildStyleRules();        // re-apply the ON style set
+    window.__liveEditRenderPanel();
+  };
+
+  // Run boot now if the DOM is ready, else defer to DOMContentLoaded. This
+  // is the fix for the original defect: addInitScript runs at document-start
+  // when document.head/body are null, so DOM work MUST wait for the parse.
+  const bootWhenReady = () => {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => window.__liveEditBoot(), { once: true });
+    } else {
+      window.__liveEditBoot();
+    }
+  };
+
+  // Persist ONLY on the first run, right after state was loaded/seeded — this
+  // captures a caller-seeded registry. On a re-run (firstRun false) window
+  // state may be empty/stale, so re-saving here would overwrite good
+  // persisted state with nothing (this was the ON-set-wipe defect). Mutations
+  // (__liveEditToggle) persist themselves, so no data is lost by skipping.
+  if (firstRun) { saveReg(); saveOn(); }
+
+  // ── One-time self-healing setup (survives navigation without a controller) ──
+  if (firstRun) {
+    window.__liveEditSetup = true;
+    window.__liveEditInjected = true;
+
+    // (a) SPA client-side navigation: history.pushState/replaceState do not
+    //     fire a page load, so hook them (+ popstate) to re-boot the panel.
+    const hookHistory = (type) => {
+      const orig = history[type];
+      if (orig && !orig.__liveEditHooked) {
+        const wrapped = function (...args) { const r = orig.apply(this, args); try { window.__liveEditBoot(); } catch {} return r; };
+        wrapped.__liveEditHooked = true;
+        history[type] = wrapped;
+      }
+    };
+    hookHistory('pushState');
+    hookHistory('replaceState');
+    window.addEventListener('popstate', () => window.__liveEditBoot());
+
+    // (b) SPA body replacement: a framework can remove/replace the panel
+    //     node. Watch body and re-append when our panel disappears. Guard
+    //     against the infinite loop (disconnect before re-append, reconnect
+    //     after) and by panel id.
+    const startObserving = () => {
+      if (!document.body || window.__liveEditObserver) return;
+      const obs = new MutationObserver(() => {
+        if (!document.getElementById('__live-edit-panel')) {
+          obs.disconnect();
+          try { window.__liveEditBoot(); } finally { if (document.body) obs.observe(document.body, { childList: true }); }
+        }
+      });
+      obs.observe(document.body, { childList: true });
+      window.__liveEditObserver = obs;
+    };
+    if (document.body) startObserving();
+    else document.addEventListener('DOMContentLoaded', startObserving, { once: true });
+  }
+
+  bootWhenReady();
+  return firstRun ? 'injected' : 'already injected, re-rendered';
 })();
 
 /*
