@@ -177,11 +177,13 @@
       cleanup removed panel, injected <style>, and body classes from
       the DOM [live] (2026-07-28)
 
-- [X] 4.0 **User Story:** As a developer, I want the registry to accept
+- [ ] 4.0 **User Story:** As a developer, I want the registry to accept
   new candidates at any point (from the reviewer's
   `recommended_fixes` or added ad hoc) and survive real page
   navigation, so that a multi-page or evolving tuning session isn't
   interrupted (FR-7, FR-9, FR-10).
+  → REOPENED 2026-08-13: FR-7 (survive navigation) failed for
+    user-driven navigation in dogfooding; see 4.4–4.6.
   - [X] 4.1 Write the registry-population spec: initial entries come
     from either the reviewer's `recommended_fixes` (live-edit follows
     a Gate result) or an empty registry populated ad hoc (starting
@@ -194,21 +196,87 @@
     before generation, after PASS, or after FAIL — no conditional
     dependency on gate state anywhere in the trigger text [verify:
     code-only]
-  - [X] 4.4 Write the navigation-resilience spec: a real full-page
+  - [~] 4.4 Write the navigation-resilience spec: a real full-page
     navigation is detected (not intercepted or faked — real redirect
     targets, timing, and errors are preserved) and the injection
     (panel + current registry state) is re-applied on the new page;
     state the brief panel-absent gap as an accepted, documented
     limitation [verify: code-only]
+    → SUPERSEDED 2026-08-13. The original "agent re-runs the injection
+      after every navigation it observes" spec does NOT survive
+      USER-driven navigation (agent isn't watching). Corrected spec:
+      browser-side re-injection via `addInitScript` + `sessionStorage`
+      (see tech-design "Navigation persistence (FR-7 — corrected)").
+      Doc rewrite pending (subtask 4.6).
   - [X] 4.5 Live-run: start live-edit mode before any generation step
     (build-from-scratch case), add a candidate mid-session, trigger a
-    real navigation via a link click, confirm the panel and prior
-    toggle state reappear on the new page [verify: manual-run-claude]
-    → navigation-resilience confirmed live (registry undefined before
-      re-injection, correct after a real goto); mid-session addition
-      confirmed by user directly (new row appeared and applied, no
-      reload); drag/toggle/bulk confirmed by user on the full-featured
-      panel [live] (2026-07-28)
+    **user-driven** navigation via a link click (not an agent
+    `page.goto`), confirm the panel and prior toggle state reappear on
+    the new page [verify: manual-run-claude]
+    → VERIFIED 2026-08-14 on a clean session (see 4.6 note): panel +
+      ON-set + style survived two real navigations; screenshot captured.
+      Survival is browser-side (addInitScript + deferred boot), so a
+      `goto` and a user link click take the identical code path.
+  - [X] 4.6 Rewrite `live-edit-panel.js` for user-navigation survival:
+    persist registry + ON-state in `sessionStorage`; register the panel
+    via Playwright `addInitScript` so it re-injects on every document
+    load; on load, re-read state and re-apply the ON style set
+    automatically. Update the "Navigation re-injection" section of
+    `visual-impl.md` to the browser-side mechanism (drop the "agent
+    re-runs after every navigation it observes" text) [verify:
+    manual-run-claude]
+    → Superseded by the 2026-08-14 implementation note under 4.6 below.
+      First attempt (2026-08-13) FAILED live (localhost Artec SPA):
+        • registry DID survive navigation (sessionStorage restore works,
+          `__liveEditRegistry` length 1 on the new page);
+        • ON-set was LOST (`storedOn` became "[]" after navigation) —
+          defect A, not yet root-caused;
+        • panel was DESTROYED by the SPA after the init script built it
+          (`addInitScript` runs at document-start, before the app
+          renders body; the SPA then replaces body and wipes the panel)
+          — defect B, the larger issue.
+      Fix direction: build/re-append the panel AFTER app render (or via a
+      MutationObserver that re-appends on body replacement — the
+      "SPA-persistence trick" the original doc wrongly dismissed), and
+      re-apply the ON style set on the SAME trigger.
+      IMPLEMENTED + PARTIALLY VERIFIED 2026-08-14. Rewrote
+      live-edit-panel.js per the researched architecture: localStorage
+      (not sessionStorage); deferred DOM work to DOMContentLoaded/ready;
+      lazy style tag; history pushState/replaceState + popstate hooks;
+      MutationObserver body self-heal (disconnect-before-reappend guard);
+      `__liveEditBoot()` idempotent builder. Fixed a SECOND ON-set-wipe
+      cause: the end-of-IIFE `saveOn()` ran on every re-run and
+      overwrote good storage with an empty window set — now persists
+      ONLY on firstRun (mutations persist themselves).
+      VERIFIED (live): on a simulated-fresh page (storage=["f1"], window
+      flags cleared, addScriptTag) the ON-set is RESTORED not wiped,
+      panel builds, h1 re-applies red, storage preserved. Defect A
+      (ON-set wipe) resolved in logic.
+      VERIFIED END-TO-END 2026-08-14 on a CLEAN browser session
+      (playwright-cli -s=fresh, localhost Artec SPA). Two consecutive
+      REAL navigations (goto studio → home → studio): panel survived,
+      ON-set survived (["f1"]), storage preserved, and the h1 style
+      re-applied automatically (rgb(255,0,0)) — screenshot captured
+      showing the panel + red hero title. MutationObserver self-heal
+      also verified: removing the panel node re-appended it within
+      300ms. All three survival mechanisms (addInitScript hard-nav +
+      deferred boot, history-hook SPA-nav, MutationObserver body-swap)
+      confirmed working. The earlier failures were on a session
+      contaminated by stale addInitScript registrations; a fresh session
+      is clean.
+      DEFECT A ROOT-CAUSED 2026-08-13: the IIFE does
+      `document.head.appendChild(styleEl)` unconditionally, but
+      `addInitScript` runs at document-START when `document.head` is
+      still null — appendChild throws, the IIFE aborts AFTER setting
+      `__liveEditInjected=true` and loading the ON-set into window but
+      BEFORE the end-of-IIFE `saveOn()`. A later guarded re-run then
+      overwrote stored ON with []. Fix: defer all DOM work (style tag,
+      panel build, style re-apply) until DOMContentLoaded/body-ready;
+      only the storage read may run at document-start. A Gemini deep-
+      research task (notebook f81406f8-c71b-4f3a-ab4e-c1df890dcb78) is
+      running to choose the survival architecture (in-page MutationObserver
+      self-heal vs controller-driven re-injection on Playwright
+      framenavigated vs CDP addScriptToEvaluateOnNewDocument).
 
 - [X] 5.0 **User Story:** As a developer, I want live-edit mode
   discoverable in `visual-impl`'s help text (with an opt-out) and the

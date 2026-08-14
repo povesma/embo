@@ -183,6 +183,72 @@ ON: f2, f7
 OFF: f3, f4
 ```
 
+### Navigation persistence (FR-7 — corrected 2026-08-13)
+
+**Defect found in dogfooding.** The original design re-injected the panel
+only when the AGENT observed a navigation and re-ran the injection call.
+A **user-driven** navigation (the human clicks a link in the page) tears
+down the JS context and nothing re-injects — the panel disappears and
+stays gone. FR-7 had been verified only against agent-triggered
+navigation, which is weaker than the real use case.
+
+**Corrected mechanism.** Re-injection is browser-side, not agent-driven.
+The authoritative, verified design is in the "Survival architecture"
+subsection below (four in-page mechanisms + `localStorage`). In summary:
+`addInitScript` re-runs the file on every hard load; history hooks +
+`popstate` handle SPA route changes; a MutationObserver re-appends the
+panel after a body swap; all DOM work is deferred to DOMContentLoaded.
+
+**Persistence scope by kind** (a real limit of serialization):
+
+- **style** — fully survives. `apply` is CSS text; the ON style set is
+  serializable, re-read from `localStorage`, and re-applied automatically
+  on the new page.
+- **markup / logic** — the registry *metadata* survives (the rows
+  reappear), but the live closures (`__liveEditMarkupPatches` /
+  `__liveEditLogicHandlers`) cannot be serialized. They are re-seeded by
+  re-running their seed blocks against the new page's DOM. Until
+  re-seeded, toggling such a row is a no-op.
+
+**NFR-2 refinement.** NFR-2 ("runtime-only, nothing persisted") is scoped
+to *cross-session* persistence. The panel now persists registry + ON-state
+in `localStorage` under a single namespaced key, so a fresh tab still
+starts empty *of panel UI* until injected, and lock-in remains the only
+path to durable SOURCE change. `__liveEditCleanup()` clears the key.
+
+**Survival architecture (decided 2026-08-14 from Gemini deep research,
+notebook f81406f8-…, 45 cited sources).** Fully in-page self-healing; NO
+controller-driven re-injection (that path is racy — the SPA paints before
+Playwright's `framenavigated` event crosses the WebSocket; research ranked
+it worst). Four parts:
+
+1. **Deferred DOM work.** `addInitScript` runs at document-start when
+   `document.head`/`body` are null (this was defect A's root cause —
+   `head.appendChild` threw). All DOM work (style tag, panel build, style
+   re-apply) MUST run on `DOMContentLoaded`, or immediately if
+   `document.readyState !== 'loading'`. Only the `localStorage` read may
+   run at document-start.
+2. **Hard navigation** → `addInitScript` re-runs the file on every real
+   load; it restores state from `localStorage` and (deferred) rebuilds.
+3. **SPA client-side navigation** → monkey-patch `history.pushState` /
+   `replaceState` + a `popstate` listener; each re-invokes the panel
+   builder (idempotent — skip if the panel id already exists).
+4. **SPA body replacement** → a `MutationObserver` on `document.body`
+   that re-appends the panel when the framework removes it. It MUST
+   `disconnect()` before re-appending and reconnect after (else infinite
+   loop), scope tightly, and guard by panel id. Re-apply the ON style set
+   on the same trigger.
+
+**Storage choice: `localStorage`, not `sessionStorage`** — Playwright's
+`storageState` ignores `sessionStorage`, so it is fragile under
+automation; `localStorage` is captured and survives. Save inside the
+toggle / mutation handlers; load in the `addInitScript` block.
+
+**Reference implementations to model:** `yazanbaker94/AntiGravity-
+AutoAccept` (heartbeat self-heal, single-pass O(D) scanner, `expandedOnce`
+loop guard) and SocialSpotify/ETHGlobal (Shadow-DOM overlay + pushState/
+replaceState hook on a React SPA).
+
 ### API Design
 
 Not applicable — no new HTTP/CLI surface. The "interface" is the
@@ -238,7 +304,7 @@ follows the same `code-only` / `manual-run-claude` split used in task
 | FR-4: export ON/OFF record | `manual-run-claude` | live session | captured export string matches panel state |
 | FR-5: source-locator lock-in | `manual-run-claude` | live session | diff of the actual source file matches the ON set's `apply` values |
 | FR-6: scaffolding removed post-lock-in | `manual-run-claude` | live session | page DOM/style after lock-in has no injected panel elements |
-| FR-7: re-injection after navigation | `manual-run-claude` | live session | panel present with prior toggle state after a real link click |
+| FR-7: survives navigation | `manual-run-claude` | live session | panel present with prior toggle state after a **user-driven** link click (not only an agent-triggered one) — style ON-set re-applied automatically; markup/logic rows present, re-seeded by their blocks |
 | FR-8: mention in static help only | `code-only` | — | grep `visual-impl.md` help/usage text vs. output-after-verdict sections |
 | FR-9: usable independent of gate outcome | `code-only` | — | Live-Edit section has no conditional gate-state dependency in its trigger text |
 | FR-10: registry population + mid-session add | `manual-run-claude` | live session | a fix added after the panel first renders appears as a new row without reload |
