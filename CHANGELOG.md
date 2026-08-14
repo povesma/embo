@@ -2,7 +2,7 @@
 
 All notable changes to the embo plugin are documented here.
 
-## [Unreleased]
+## [0.2.5] - Unreleased
 
 ### Added
 
@@ -11,6 +11,18 @@ All notable changes to the embo plugin are documented here.
   bulk on/off/invert) without touching devtools, then lock in only the
   chosen ones — written back to the project's own source, never
   auto-committed.
+- The Live-Edit panel shows its version in the title (`Embo Live-Edit
+  (v.X.Y.Z)`) and warns when it is older than the embo you have
+  installed — so a panel you injected before upgrading embo no longer
+  drifts out of sync silently; the warning tells you to re-inject.
+
+### Fixed
+
+- The Live-Edit panel survives a real page navigation — a link you click
+  yourself, on a server-rendered page or a client-side single-page app.
+  The panel, your toggle state, and any live style re-appear on the new
+  page automatically, and the panel restores itself if the app replaces
+  the page body. Previously it vanished the moment you navigated away.
 
 ## [0.2.4] - 2026-08-08
 
