@@ -19,48 +19,58 @@ change proposal the user can submit upstream.
 
 ## Process
 
-### Step 0: Check correction capture is enabled
+### Step 0: Read source states
 
-Corrections are only saved if `/embo:enable-corrections` was run. Read
-the active claude-mem mode with one bare command:
+Two capture paths feed corrections into this command:
+
+- **claude-mem observations** — saved when correction capture is
+  enabled (`/embo:enable-corrections`).
+- **marker JSONL** — `.claude/corrections.jsonl` in the project root,
+  populated by the `[correction]` marker hook regardless of whether
+  claude-mem capture is on.
+
+Read the active claude-mem mode:
 
 ```bash
 embo-corrections mode
 ```
 
-If it prints anything other than `code-embo`, correction capture was
-never turned on. Output exactly this and stop (do not say "nothing
-found"):
+This tells you whether the claude-mem path is active (`code-embo`) or
+off. It does NOT gate Step 1 — the marker JSONL path works
+independently.
 
-> Correction capture is not turned on, so there are no corrections to
-> review. Run `/embo:enable-corrections` first, then use Claude
-> normally — corrections you give it will be saved for next time.
+### Step 1: Query corrections from both sources
 
-This distinguishes "never enabled" from "enabled but nothing to
-review" (the latter is handled in Step 1).
-
-### Step 1: Query pending corrections
-
-List the corrections for this project that have NOT already been
-reviewed, with one bare command:
+Fetch all pending corrections, aggregated from both paths and
+deduplicated by content hash:
 
 ```bash
-embo-corrections list-pending
+embo-corrections merged-list
 ```
 
 `embo-corrections` is a plain command on PATH (the plugin's `bin/`
 wrapper). It derives the project name from the working-directory
-basename, reads the corrections from claude-mem's relational store,
-subtracts the IDs recorded in `.claude/correction-curation.json`, and
-prints only the not-yet-reviewed rows as a JSON array (id, title,
-subtitle, narrative, created_at), newest first. Parse that array
-directly — the subtraction is done for you, not in your head.
+basename, reads corrections from both the claude-mem relational store
+and the marker JSONL file, deduplicates by hash, and prints a combined
+JSON array. Each entry records a `sources` field listing which paths
+captured it (`"claude-mem"`, `"jsonl"`, or both). Subtract IDs already
+reviewed by reading `.claude/correction-curation.json`; the
+`merged-list` subcommand returns all corrections — the curation
+subtraction is handled by the surrounding flow, not the command.
 
-Being a bare command, it auto-approves under a `Bash(embo-corrections
-*)` rule with no prompt and needs no `${CLAUDE_PLUGIN_ROOT}` expansion
-(RULE:AVOID-APPROVAL). If the array is empty, output
-`"No corrections to review."` and stop (the "enabled but nothing new"
-case).
+Parse the array directly. Being a bare command, it auto-approves under
+a `Bash(embo-corrections *)` rule (RULE:AVOID-APPROVAL).
+
+If the array is empty, report the state of BOTH paths and stop:
+
+> No corrections to review.
+> claude-mem correction capture: {on (`code-embo`) / off} — {N}
+> observations found.
+> Marker JSONL (`.claude/corrections.jsonl`): {found / not found} —
+> {M} entries.
+
+This replaces the old binary "never enabled" message. A user with
+claude-mem off but a populated JSONL still gets a useful review.
 
 > **Why the DB and not the MCP `search` tool** — the MCP `type=` filter
 > is broken for custom types on the worker runtime (issue #3279, fix PR

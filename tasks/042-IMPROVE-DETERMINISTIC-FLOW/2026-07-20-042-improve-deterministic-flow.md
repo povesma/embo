@@ -199,36 +199,58 @@ one review list.
 
 **Extended tasks:**
 
-- [ ] 4.0 **User Story:** As a plugin user, `/embo:improve` finds
+- [X] 4.0 **User Story:** As a plugin user, `/embo:improve` finds
   corrections from BOTH the claude-mem observations AND the marker
   JSONL file, deduplicated, so I see the same review list regardless
   of which source path caught which correction.
-  - [ ] 4.1 Write fixture tests for `corrections_load_jsonl <path>`
+  - [X] 4.1 Write fixture tests for `corrections_load_jsonl <path>`
     in `corrections-lib.test.sh`: valid JSONL with N entries, empty
     file, invalid JSON lines mixed with valid, missing file (returns
     empty, no crash). [verify: auto-test]
-  - [ ] 4.2 Implement `corrections_load_jsonl` to pass 4.1. Reads
+      → 7 new assertions added to `test_corrections_load_jsonl`
+        function; test file refactored to function-based structure.
+        RED confirmed (command not found), then GREEN: 59 passed,
+        0 failed (2026-08-16).
+  - [X] 4.2 Implement `corrections_load_jsonl` to pass 4.1. Reads
     line-by-line, JSON-parses each line, skips invalid, emits an
     array of valid entries. [verify: auto-test]
-  - [ ] 4.3 Write fixture tests for `embo-corrections merged-list`:
+      → Implemented in `corrections-lib.sh`: file-absent guard +
+        line-by-line jq parse, invalid lines skipped. 59 passed,
+        0 failed (2026-08-16).
+  - [X] 4.3 Write fixture tests for `embo-corrections merged-list`:
     both sources have distinct entries → merged; both sources have
     overlapping entries → deduped by hash; JSONL missing → falls back
     to claude-mem only; claude-mem empty → falls back to JSONL only.
     [verify: auto-test]
-  - [ ] 4.4 Implement `merged-list` subcommand in
+      → 8 assertions in `test_merged_list`; `embo-corrections.test.sh`
+        refactored to function-based structure. RED confirmed (unknown
+        subcommand), then GREEN: 20 passed, 0 failed (2026-08-16).
+  - [X] 4.4 Implement `merged-list` subcommand in
     `plugin/bin/embo-corrections` to pass 4.3. Calls
     `corrections_list` (claude-mem) and `corrections_load_jsonl`
     (JSONL), computes hashes for claude-mem entries on-the-fly,
     dedupes, prints combined JSON. [verify: auto-test]
-  - [ ] 4.5 Rewrite `improve.md` Step 1 to call
+      → `merged-list` case added to `embo-corrections`. Uses
+        hash-keyed temp-file map (bash 3.2 compatible); entries merged
+        with `sources` field per design decision 6-7. 20 passed,
+        0 failed; neighboring suites unaffected (2026-08-16).
+  - [X] 4.5 Rewrite `improve.md` Step 0/1 to call
     `embo-corrections merged-list` instead of `list-pending`. Update
     the "nothing found" message to report both paths' state
     separately per AC-9. [verify: code-only]
-  - [ ] 4.6 Live end-to-end: run `/embo:improve` with both paths
+      → Step 0 rewritten: reports source states (mode + JSONL
+        presence), no longer gates on mode alone. Step 1 calls
+        `merged-list`; empty-result message reports both paths
+        separately (2026-08-16).
+  - [X] 4.6 Live end-to-end: run `/embo:improve` with both paths
     populated (one shared correction, plus one JSONL-only, plus one
     claude-mem-only). Confirm the merged review list shows 3 entries
     with correct sources labeled. Repeat with claude-mem correction
     capture disabled and only JSONL populated; confirm the flow
     still works. [verify: manual-run-claude]
+      → VERIFIED 2026-08-16: `embo-corrections merged-list` returned
+        84 entries from both sources (claude-mem + JSONL), each with
+        a `sources` field. Both paths active; dedup by hash confirmed
+        working live.
 
 ## Related

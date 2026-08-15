@@ -399,6 +399,13 @@ When referencing any library, framework, or external API — use the Context7 MC
   permission-allowlist prefix matching and force prompts on every
   run; a plain invocation stays prompt-free even where no
   approval/capture hook is installed.
+- **Function-based structure for shell and test scripts**: wrap logic
+  in named functions. Keep top-level code minimal and justified —
+  setup (sourcing, temp dirs, traps), a runner list that calls the
+  functions, and the summary. Do not leave logic as a flat procedural
+  tail. In `.test.sh` files specifically, each test case is its own
+  function, and a runner list at the end invokes them; never append
+  test cases as top-level statements.
 
 ## Testing Guidelines
 
