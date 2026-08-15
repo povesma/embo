@@ -15,6 +15,14 @@ All notable changes to the embo plugin are documented here.
   (v.X.Y.Z)`) and warns when it is older than the embo you have
   installed — so a panel you injected before upgrading embo no longer
   drifts out of sync silently; the warning tells you to re-inject.
+- **Correction capture now works without enabling claude-mem's
+  `correction` observations.** A hook records Claude's one-line
+  acknowledgment of each steer (and an unacknowledged rejection note as
+  a fallback) to a project-local `.claude/corrections.jsonl`, so
+  capture no longer depends on `/embo:enable-corrections`.
+- `/embo:improve` now reads that marker file as its primary source and
+  the claude-mem observations as secondary, merging and deduplicating
+  the two.
 
 ### Fixed
 
