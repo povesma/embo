@@ -35,11 +35,20 @@ Desktop.ini
 # Correction curation bookkeeping (per-project, written by /embo:improve)
 .claude/correction-curation.json
 
+# Correction capture JSONL (per-project, written by the capture-correction hook)
+.claude/corrections.jsonl
+
 # Scratch dir for redirected command output (read back via the Read tool)
 tmp/
 
 # Logs
 *.log
 
-# GitHub CLI context
+# Playwright CLI session artifacts (screenshots + console logs)
+.playwright-cli/
+
+# Personal git-context marker (gh-context account switcher; per-user, never shared)
 .ghcontext
+
+# Author mapping (personal; not tracked in the repo)
+.mailmap

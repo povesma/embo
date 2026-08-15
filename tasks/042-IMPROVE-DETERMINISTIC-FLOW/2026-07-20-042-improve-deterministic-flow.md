@@ -145,8 +145,90 @@ model. G3 is a missing-input edge case.
       - [ ] 3.4 Commit task 042 (wrapper, lib+tests, improve.md,
         CLAUDE.md tree, this doc). [verify: manual]
 
-## Related
+## Extension (2026-08-15): Aggregate corrections from BOTH sources
 
-- Task 041 (correction capture) — shipped the command this hardens; now
-  closed. This task fixes robustness defects found by running it.
-- `plugin/bin/rlm_repl` — the wrapper pattern to follow.
+**Problem the extension addresses.** Task 041's extension of the same
+date adds a second capture path — a project-local `.corrections.jsonl`
+file populated by the marker hook independently of claude-mem's
+observer. `/embo:improve` in its current form only reads the claude-mem
+observer path (`corrections_list`). To gain the value of the marker
+path, `/embo:improve` must aggregate both sources: the JSONL file AND
+the observer's correction observations, deduplicated by content, into
+one review list.
+
+**Additional design decisions:**
+
+6. **The bin wrapper owns aggregation too** — `embo-corrections`
+   gains a new `merged-list` subcommand that reads both sources,
+   dedupes by content hash, and prints the combined list as JSON.
+   `/embo:improve` reads `merged-list` instead of `list-pending`.
+   Rationale: the wrapper already owns the mechanical steps (per
+   decision 1 above); adding aggregation to it keeps `/embo:improve`
+   free of source-selection logic.
+7. **Deduplication is by content hash on the rule text** — the JSONL
+   file's `hash` field is sha256 of the rule text (defined in task
+   041's tech-design extension). For claude-mem observations, an
+   equivalent hash is computed on the observation's title. Entries
+   with matching hashes are collapsed to one; each collapsed entry
+   records which sources it came from (`sources: ["claude-mem",
+   "jsonl"]`) so the reviewer can see whether both paths caught it.
+8. **State reporting distinguishes source paths** — `/embo:improve`'s
+   "nothing found" message reports the state of BOTH paths separately:
+   "claude-mem correction capture: on/off, N observations; marker
+   JSONL: found/not-found, M entries." This replaces the current
+   binary "correction capture never turned on" message.
+9. **Fixture-tested** — `corrections_load_jsonl` and the new
+   `merged-list` subcommand get tests in `corrections-lib.test.sh`
+   and `embo-corrections.test.sh` respectively, running against
+   synthetic temp files.
+
+**Extended acceptance criteria:**
+
+- **AC-6 (both sources aggregated):** `embo-corrections merged-list`
+  returns entries from both the JSONL file and the claude-mem
+  observations, with each entry's source(s) recorded.
+- **AC-7 (dedup by hash):** if the same rule text appears in both
+  sources, the merged list contains exactly one entry for it, with
+  `sources: ["claude-mem", "jsonl"]`.
+- **AC-8 (JSONL-only path works):** with claude-mem correction capture
+  disabled, `merged-list` still returns entries from the JSONL file;
+  `/embo:improve` produces its normal review flow using only that
+  data.
+- **AC-9 (state reporting):** `/embo:improve`'s "nothing found"
+  message reports both paths' state separately.
+
+**Extended tasks:**
+
+- [ ] 4.0 **User Story:** As a plugin user, `/embo:improve` finds
+  corrections from BOTH the claude-mem observations AND the marker
+  JSONL file, deduplicated, so I see the same review list regardless
+  of which source path caught which correction.
+  - [ ] 4.1 Write fixture tests for `corrections_load_jsonl <path>`
+    in `corrections-lib.test.sh`: valid JSONL with N entries, empty
+    file, invalid JSON lines mixed with valid, missing file (returns
+    empty, no crash). [verify: auto-test]
+  - [ ] 4.2 Implement `corrections_load_jsonl` to pass 4.1. Reads
+    line-by-line, JSON-parses each line, skips invalid, emits an
+    array of valid entries. [verify: auto-test]
+  - [ ] 4.3 Write fixture tests for `embo-corrections merged-list`:
+    both sources have distinct entries → merged; both sources have
+    overlapping entries → deduped by hash; JSONL missing → falls back
+    to claude-mem only; claude-mem empty → falls back to JSONL only.
+    [verify: auto-test]
+  - [ ] 4.4 Implement `merged-list` subcommand in
+    `plugin/bin/embo-corrections` to pass 4.3. Calls
+    `corrections_list` (claude-mem) and `corrections_load_jsonl`
+    (JSONL), computes hashes for claude-mem entries on-the-fly,
+    dedupes, prints combined JSON. [verify: auto-test]
+  - [ ] 4.5 Rewrite `improve.md` Step 1 to call
+    `embo-corrections merged-list` instead of `list-pending`. Update
+    the "nothing found" message to report both paths' state
+    separately per AC-9. [verify: code-only]
+  - [ ] 4.6 Live end-to-end: run `/embo:improve` with both paths
+    populated (one shared correction, plus one JSONL-only, plus one
+    claude-mem-only). Confirm the merged review list shows 3 entries
+    with correct sources labeled. Repeat with claude-mem correction
+    capture disabled and only JSONL populated; confirm the flow
+    still works. [verify: manual-run-claude]
+
+## Related

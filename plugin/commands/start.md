@@ -187,42 +187,64 @@ AskUserQuestion.
 
 
 <!-- RULE:RESTATE-CORRECTION -->
-### Restate a correction before acting on it
+### Acknowledge a user steer — acknowledging is not agreeing
 
-When the user corrects how you work — redirects your approach, fixes
-your style, tells you to verify externally, or names a workflow habit
-to change — **restate your understanding of it as a general do/don't
-rule in your next message, then act on it.** State the rule in one
-line ("Rule I'll follow: <do/don't>"), then carry out the corrected
-work.
+When the user steers how you work — redirects your approach, fixes
+your style, questions a choice, names a workflow habit — **state
+your understanding of it as a general do/don't rule in one line**,
+starting the line with the exact marker `[correction]` at column 0
+(no leading whitespace, no leading bullet), in your next message.
 
-Why this matters beyond good manners: claude-mem's observer records
-observations from your tool activity, not from the user's raw message.
-A correction you answer with pure conversation leaves no trace for
-`/embo:improve` to learn from. Restating it and then acting produces a
-tool-adjacent turn that carries the correction, so it is captured as a
-`correction` observation. If you never restate, the correction is lost.
+Example (a line by itself):
+
+    [correction] check Context7 before asserting an API signature
+
+The start-of-line requirement is load-bearing: the capture hook
+matches only lines whose FIRST character is `[correction]`, which
+is what stops your own docs or examples that mention the marker in
+prose (like this sentence) from being recorded as corrections. When
+you write about the marker without emitting one, keep the token
+inside prose or a code fence, never at column 0.
+
+The acknowledgment is your understanding, NOT a commitment to
+comply. Whether the behavior actually changes is decided outside
+this rule, by the normal process — you may adopt the steer, or
+defend your current position with reasoning. Emit the `[correction]`
+line either way.
+
+Why two things at once:
+1. Showing the user your understanding lets a misreading be caught
+   immediately — before it shapes any further work.
+2. The `[correction]` marker is deterministic and machine-parseable:
+   a plugin hook records each marked line to a project-local
+   `.corrections.jsonl` so `/embo:improve` has a reliable data
+   source, independent of whether claude-mem correction capture is
+   enabled.
 
 **Do:**
-- Name the general rule, not just the one incident ("Rule I'll follow:
-  check Context7 before asserting an API signature", not "ok I'll check
-  the docs for this one")
-- Restate then act in the same turn — the acting is what makes it stick
+- State the general principle, not just the incident (a line by
+  itself: `[correction] check Context7 before asserting an API
+  signature`; not the wishy-washy "ok I'll check the docs for this
+  one")
+- Emit the marker even when you disagree — then defend your position
+- Put the marker at column 0 (no indentation, no bullet, no quote
+  block); one line per steer
 
 **Do not:**
-- Acknowledge a correction with conversation only and no restatement
-- Announce that you are saving it — capture is automatic and silent
+- Treat acknowledgment as capitulation, or skip assessing whether
+  the steer is right
+- Acknowledge with vague conversation only ("ok, sure") and no
+  marker line
+- Announce the capture — the hook is silent
 
 <!-- CHECKLIST:RESTATE-CORRECTION
      This block is injected verbatim on every user prompt by
      hooks/behavioral-reminder.sh. Keep it short; edit it here only. -->
-[RESTATE-CORRECTION checklist] If this turn corrects how you work
-(approach, style, verify-externally, a workflow habit): restate it as
-a general do/don't rule in one line ("Rule I'll follow: <do/don't>"),
-then act on it in the same turn. State the general rule, not just the
-one incident. Do not acknowledge a correction with conversation only —
-the restatement + acting is what makes claude-mem capture it as a
-correction for /embo:improve. Never announce the capture.
+[RESTATE-CORRECTION checklist] If this turn steers how you work:
+output ONE line starting at column 0 with `[correction] <do/don't>`
+— the general rule, not the incident. No indent, no bullet, no
+quoting. Acknowledgment shows understanding, not agreement: comply
+or defend per the normal process. Never announce the capture.
 <!-- /CHECKLIST -->
 
 
