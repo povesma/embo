@@ -1,5 +1,5 @@
 {
-  "description": "embo workflow hooks: context guard + behavioral reminders on prompt, compound-Bash auto-approve + output capture on tool use, statusline refresh on session start",
+  "description": "embo workflow hooks: context guard + behavioral reminders on prompt, compound-Bash auto-approve + output capture on tool use, statusline refresh on session start, correction marker capture on tool-use and end-of-turn",
   "hooks": {
     "SessionStart": [
       {
@@ -32,6 +32,26 @@
           {
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/approve-compound.sh\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/capture-correction.sh\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/capture-correction.sh\""
           }
         ]
       }

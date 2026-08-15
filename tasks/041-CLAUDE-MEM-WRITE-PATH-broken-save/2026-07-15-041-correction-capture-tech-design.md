@@ -637,6 +637,263 @@ requirement that turn-off "fully reverses" turn-on. If
 `disable-corrections` itself fails partway, the enable-record file
 (only deleted as the last step) makes it safely re-runnable.
 
+---
+
+## Extension (2026-08-15): Marker-based capture — technical design
+
+Per the PRD extension of 2026-08-15, this section adds a second
+capture path that runs in parallel to the claude-mem observer path.
+The existing components (enable-corrections, disable-corrections,
+observer configuration) are unchanged; only new components are added.
+
+### Marker contract
+
+The model emits acknowledgments to user steers as a one-line prefix in
+its normal response text:
+
+```
+[correction] <general do/don't rule, one line>
+```
+
+The marker `[correction]` is chosen because:
+- It matches the observation type name in claude-mem, the skill name
+  (`embo-corrections`), and the file name (`.corrections.jsonl`) —
+  one word, one meaning end-to-end.
+- Square-bracket tokens do not occur naturally in prose the model
+  writes, so a grep for the literal string is deterministic. False
+  positives (from quoted user text or documentation) are addressed
+  under "Deduplication" below.
+- The prefix appears at the start of a line, which lets the parser
+  find markers with a single regex without full-message parsing.
+
+The rule text after the marker is the actionable general principle,
+not the incident. RULE:RESTATE-CORRECTION (in `plugin/commands/start.md`)
+governs when and how the model emits the marker.
+
+### Capture hook
+
+Registered via `plugin/hooks/hooks.json` for two events:
+
+- **PostToolUse (primary)**: fires after every tool call. Each of the
+  model's text messages that precedes a tool call becomes visible in
+  the transcript. Running on `PostToolUse` catches markers even when
+  the turn is later interrupted (per Claude Code hook contract:
+  interrupt skips `Stop` entirely; verified via Context7 lookup of the
+  `Stop` hook semantics, 2026-08-15).
+- **Stop (belt-and-braces)**: fires at end-of-turn when the model
+  finishes emitting output normally. Runs the same script — a final
+  sweep that catches any markers emitted after the last tool call.
+
+The script is one shared bash file — `plugin/hooks/capture-correction.sh`
+— dispatched from both event handlers. Rationale: both events execute
+the same read-transcript-and-append-markers logic; a shared script
+avoids code duplication and keeps behavior identical.
+
+**Interrupt safety**. Because `PostToolUse` fires per tool call, a
+mid-turn marker is recorded before any subsequent interrupt can
+happen. A marker emitted with no subsequent tool call AND before the
+`Stop` hook is silenced by interrupt is the residual gap; this is a
+Claude Code harness limitation (documented as "known limitation" in
+the hook contract) and cannot be closed inside the plugin.
+
+### Transcript reading
+
+Every hook invocation receives, via JSON stdin, the `transcript_path`
+field pointing to the current session's transcript file (a JSONL file,
+one message per line, one JSON object per line). The script:
+
+1. Reads `transcript_path` from stdin.
+2. Streams the transcript file, filtering to `role="assistant"` lines.
+3. For each assistant message, extracts the `text` content and greps
+   for lines matching `^\[correction\] (.+)$`.
+4. Computes a content hash (sha256 of the whole marker line, trimmed)
+   for each match.
+5. Appends new entries to `.corrections.jsonl` (see storage), skipping
+   those whose content hash already appears in the file.
+
+The script exits 0 on success and on all recoverable errors (missing
+transcript, permission denied, unparseable JSON) — a broken hook must
+never break the harness. On unexpected errors, it logs to stderr and
+exits 0 anyway.
+
+### Storage
+
+**Location**: `./.claude/corrections.jsonl` in the project's working
+directory (the same tree that already hosts `.claude/settings.json`
+and `.claude/rlm_state/`). Rationale:
+
+- **Project-scoped by design**: a correction on repo A should not
+  surface when the user runs `/embo:improve` in repo B. The CWD-based
+  path is the same scope claude-mem uses when the observer keys
+  observations by directory basename.
+- **Gitignored by default**: the existing `.claude/` entry in the repo's
+  `.gitignore` already excludes local plugin state (`rlm_state/`, etc.).
+  A `.claude/corrections.jsonl` entry will need to be added to
+  `.gitignore` templates so the file is not accidentally committed.
+
+**Format**: JSONL, one JSON object per line. Fields:
+
+```json
+{
+  "ts": "2026-08-15T14:23:11.523Z",
+  "session_id": "abc123-def456",
+  "rule": "check Context7 before asserting an API signature",
+  "hash": "sha256-hex-digest-of-rule",
+  "source": "PostToolUse|Stop"
+}
+```
+
+- `ts`: ISO-8601 timestamp of the hook invocation.
+- `session_id`: from the hook's stdin payload; scopes deduplication and
+  lets `/embo:improve` correlate corrections to sessions.
+- `rule`: the marker line text with the `[correction]` prefix stripped.
+- `hash`: sha256 hex digest of the trimmed rule text (content-only
+  hash, session-independent). Used for cross-source deduplication in
+  `/embo:improve`.
+- `source`: which hook event captured this entry. Useful for debugging
+  which path is doing the work.
+
+**Append safety**: single-writer per hook invocation, one line per
+correction. No file locking needed because Claude Code hooks run
+serially for a given session (verified via hook contract).
+
+### Deduplication
+
+Within `.corrections.jsonl`, dedup is by `hash` field. When the same
+marker line is emitted more than once (for example, the user gives the
+same steer twice in different sessions), only the first occurrence in
+each session is recorded — the hash check makes the second occurrence
+in a later hook invocation of the same session a no-op. Occurrences
+across different sessions ARE recorded (each as a separate entry) —
+that repetition is data `/embo:improve` uses to rank recurring
+corrections.
+
+In `/embo:improve` (see task 042 extension), records from
+`.corrections.jsonl` and claude-mem correction observations are
+merged. Deduplication across the two sources is by `hash` on one side
+and a comparable hash on the observation title on the other. Exact
+merge algorithm defined in task 042.
+
+### Rejection-transport handling — resolved 2026-08-16
+
+The claude-mem observer misses steers arriving via tool-rejection
+feedback (empirical: 2026-08-14, 2/2 rejection-turn steers not
+captured). The investigation planned in story 9.0 was completed
+2026-08-16 against this session's own transcript file.
+
+**Empirical finding.** Rejection text IS present in the transcript.
+Shape:
+
+- `role`: `user`
+- `content[].type`: `tool_result`
+- `is_error`: `true`
+- `content`: begins with `"The user doesn't want to proceed with this
+  tool use. The tool use was rejected…"` (standard boilerplate), and
+  if the user typed a rejection note, appends `"To tell you how to
+  proceed, the user said:\n<the user's actual message>"`.
+- Also visible under the top-level `toolUseResult` field of the same
+  JSONL entry.
+- `sourceToolAssistantUUID` links the rejection back to the
+  assistant tool_use it rejected.
+
+Bare-click rejections carry the boilerplate only. Rejections with a
+typed note carry the full user text after the marker phrase. The
+observer misses these steers because it scans `role=user + content
+type=text` messages, not `type=tool_result`.
+
+**Design consequence: two-pass hook.** The previously-hypothesized
+"rejection-transport gap" does not exist at the transcript level.
+The hook CAN reach the rejection text. `capture-correction.sh`
+therefore runs two passes:
+
+1. **Pass 1 (primary path B, acknowledgment).** Walks the transcript
+   for `role=assistant` messages containing a start-of-line
+   `[correction] <rule>` marker. Extracts the rule, hashes it,
+   appends a record with `source_type: "acknowledgment"`.
+2. **Pass 2 (fallback path A, rejection_unacknowledged).**
+   Classifies every transcript entry into one of six kinds
+   (`ACK` / `ASSIST_NOACK` / `USER_PROMPT` / `USER_TOOLRES_OK` /
+   `REJECT_BARE` / `REJECT_NOTE`). For each `REJECT_NOTE`, looks
+   ahead in the classified stream until it finds either an `ACK`
+   (skip — the model already condensed the steer via path B) or a
+   `USER_PROMPT` / EOF (capture — the model missed it). Captured
+   records get `source_type: "rejection_unacknowledged"` and store
+   the user's full rejection text as the `rule` field verbatim.
+
+**Why lookahead is strict (up to the next USER_PROMPT, not
+indefinitely).** A genuine acknowledgment to a rejection lands in
+the assistant's immediate reply. If a `[correction]` marker only
+appears after a subsequent user prompt, it is a response to a
+different steer and does not rescue the earlier rejection from
+fallback capture. The classification treats `USER_TOOLRES_OK`
+(non-rejection tool results) and `REJECT_BARE` (rejections without
+a note) as NON-boundary — they are just intervening events during
+the same assistant reply cycle.
+
+**Transcript-line encoding subtlety.** Rejection notes can be
+multi-line. To keep the classification stream line-oriented, the
+extracted note text is JSON-encoded via jq's `@json` filter before
+being written to the classification tempfile. The lookahead loop
+decodes each note via `jq -r .` before hashing and recording. This
+lets multi-paragraph rejection text pass through the pipeline
+without breaking line-based reading.
+
+**What is NOT covered.** The residual gap is a rejection with a note
+where the model neither acknowledges via `[correction]` in the
+immediate reply AND the raw rejection text is later determined to be
+uninformative (personal, incident-specific, un-generalizable). Those
+records land in `.corrections.jsonl` with the raw text and
+`source_type: "rejection_unacknowledged"`; `/embo:improve` (task
+042 story 4.0) treats them as lower-signal input for aggregation.
+
+### Integration with existing components
+
+- `plugin/hooks/hooks.json`: adds two entries pointing to
+  `capture-correction.sh` for `PostToolUse` and `Stop`.
+- `plugin/claude-mem/corrections-lib.sh`: adds a new function
+  `corrections_load_jsonl <path>` that reads a `.corrections.jsonl`
+  file and emits its entries as JSON. Consumed by the task-042
+  aggregation logic.
+- `plugin/bin/embo-corrections`: adds a `merged-list` subcommand that
+  calls both `corrections_list` (claude-mem side) and the new JSONL
+  reader, dedupes, and prints the combined list. `/embo:improve` uses
+  this instead of raw `list-pending`.
+- `.gitignore`: adds `.claude/corrections.jsonl` so the file is not
+  committed. Existing `.claude/` entries already exclude other plugin
+  state files.
+
+### Testing strategy for the extension
+
+- **Fixture test for `capture-correction.sh`**: fed a synthetic
+  transcript file with N assistant messages, some containing
+  `[correction]` markers, verify the correct number of entries are
+  appended to a target `.corrections.jsonl` file. Includes cases:
+  empty transcript, transcript with no markers, transcript with N
+  markers, transcript with M duplicate markers (only first per
+  session recorded).
+- **Fixture test for `corrections_load_jsonl`**: synthetic JSONL file
+  with mixed valid/invalid lines, verify all valid entries returned,
+  invalid lines skipped without crashing.
+- **Live test**: emit a `[correction]` marker in a real session, run
+  a tool call, verify a new line appears in `.corrections.jsonl`
+  within one hook invocation. Repeat with the marker emitted after
+  the last tool call, verify `Stop` hook catches it.
+
+### Files to add/modify (extension only)
+
+- ADD: `plugin/hooks/capture-correction.sh`
+- ADD: `plugin/hooks/capture-correction.test.sh`
+- MODIFY: `plugin/hooks/hooks.json` (register new hook)
+- MODIFY: `plugin/claude-mem/corrections-lib.sh` (add
+  `corrections_load_jsonl`)
+- MODIFY: `plugin/claude-mem/corrections-lib.test.sh` (add tests)
+- MODIFY: `plugin/bin/embo-corrections` (add `merged-list` subcommand)
+- MODIFY: `plugin/bin/embo-corrections.test.sh` (add tests)
+- MODIFY: `.gitignore` (add `.claude/corrections.jsonl`)
+- MODIFY: `plugin/commands/start.md` — RULE:RESTATE-CORRECTION already
+  rewritten to require the `[correction]` marker (2026-08-15).
+- MODIFY: `plugin/commands/improve.md` — extended in task 042.
+
 ## References
 
 ### Code (RLM):

@@ -297,9 +297,166 @@
     principle. The behavioral rule is load-bearing; the already-
     broadened observer prompt only catches what it produces.
 
+## Extension (2026-08-15) — marker-based capture as second line of defense
+
+- [X] 8.0 **User Story:** As an embo user, I want the model's own
+  acknowledgment of every correction I give it captured to a
+  project-local file, so `/embo:improve` has data even when
+  claude-mem correction capture is turned off. Per the PRD extension
+  and tech-design extension of 2026-08-15. [verified live 2026-08-15
+  end-to-end: 100% precision after the column-0 anchor fix; 4 real
+  acknowledgments captured, 0 false positives]
+  - [X] 8.1 Rewrite RULE:RESTATE-CORRECTION in `plugin/commands/start.md`
+    (body + CHECKLIST block) to require the exact marker
+    `[correction] <do/don't>` at the start of the acknowledgment line;
+    make it clear the acknowledgment is understanding, not agreement
+    (comply or defend per the normal process). Update
+    `plugin/hooks/behavioral-reminder.test.sh` for the new asserted
+    phrase. All 13 tests pass. [verify: auto-test]
+      → applied 2026-08-15; grep confirms marker + new phrasing; test
+        suite: 13 passed, 0 failed.
+  - [X] 8.2 Write fixture tests for `capture-correction.sh`: fed a
+    synthetic JSONL transcript file, verify the correct number of
+    `[correction]` marker lines are appended to a target
+    `.corrections.jsonl` file, dedup by content hash, no crash on
+    missing/unparseable transcript. Cases: empty transcript, no
+    markers, N markers, M duplicates in one session, invalid JSONL
+    lines, user-role markers ignored, multi-line messages, empty
+    stdin, missing transcript. [verify: auto-test]
+      → `plugin/hooks/capture-correction.test.sh` (12 test functions,
+        25 assertions, plain-bash test convention). RED verified
+        against absent script.
+  - [X] 8.3 Implement `plugin/hooks/capture-correction.sh` to pass 8.2.
+    It reads `transcript_path` from stdin, filters assistant messages,
+    greps for `[correction]` in each text block (no start-of-line
+    anchor per design decision), extracts the rule text after the
+    first marker occurrence, computes sha256 of the trimmed rule,
+    appends new entries to `./.claude/corrections.jsonl` in the
+    current CWD's `.claude/`, dedupes by hash via a file-based seen
+    set (bash 3.2 compatible), exits 0 on all recoverable errors.
+    [verify: auto-test]
+      → GREEN: 25 assertions pass; neighboring test suites
+        (behavioral-reminder, corrections-lib) still pass.
+  - [X] 8.4 Register the hook in `plugin/hooks/hooks.json` for both
+    `PostToolUse` (primary) and `Stop` (belt-and-braces). Both point
+    to the same script. [verify: code-only]
+      → added both event entries pointing to
+        `${CLAUDE_PLUGIN_ROOT}/hooks/capture-correction.sh`; jq
+        validation passes.
+  - [X] 8.5 Add `.claude/corrections.jsonl` to the repo's `.gitignore`
+    (and to the installer templates so a fresh user's `.gitignore`
+    also excludes it). Confirm the file is not staged when created.
+    [verify: code-only]
+      → repo `.gitignore` updated (sits next to
+        `.claude/correction-curation.json` from task 041 story 5).
+        Installer-template propagation not needed: no `.gitignore`
+        template ships with the plugin today. Confirmed 2026-08-15
+        after 8.6 created the runtime file:
+        `git status --short .claude/corrections.jsonl` returns
+        nothing — the file is correctly ignored.
+  - [X] 8.6 Live end-to-end: in a real session with claude-mem
+    correction capture DISABLED, emit `[correction] test rule text`
+    in a normal turn, call any tool, verify a JSONL entry appears in
+    `./.claude/corrections.jsonl` within one hook invocation. Repeat
+    with the marker emitted after the last tool call to verify the
+    `Stop` sweep. [verify: manual-run-claude]
+      → VERIFIED 2026-08-15. First e2e run against the real session
+        transcript captured 42 records for 1 real correction — the
+        hook grep matched every `[correction]` mention in doc prose
+        and examples, not just acknowledgments. Root-caused: original
+        design lacked a start-of-line anchor (dismissed earlier as
+        over-engineering; that judgment was wrong). Fixed by (a)
+        strengthening RULE:RESTATE-CORRECTION to require the marker
+        at column 0, (b) changing the hook regex from
+        `grep -F '[correction]'` to `grep -E '^\[correction\] '`,
+        (c) adding fixture test
+        `test_marker_not_at_column_zero_is_ignored` (27 assertions
+        pass now, was 25). Re-run against the same transcript: 4
+        records captured, all 4 are real acknowledgments emitted
+        this session — 100% precision, 0 false positives.
+        Full pipeline (RULE emit → transcript → hook grep →
+        JSONL write → hash dedup → source/session fields recorded)
+        works end-to-end.
+
+- [X] 9.0 **User Story:** As an embo user, corrections I deliver via
+  tool-rejection feedback (typed into a rejection dialog) are not
+  silently dropped — either captured, or the limitation is documented
+  precisely. Live evidence 2026-08-14: 2/2 rejection-turn steers in a
+  real session produced no correction observation while regular-prompt
+  steers in the same session did. [resolved 2026-08-16: rejection
+  text confirmed present in the transcript; hook Pass 2 captures it
+  as a fallback when the model fails to acknowledge via marker]
+  - [X] 9.1 Investigate a real Claude Code session transcript file
+    after a tool-rejection with a user message: read the JSONL file
+    directly, determine whether the rejection text appears in the
+    transcript at all (and if so, under what `role` and message
+    shape). [verify: manual-run-claude]
+      → INVESTIGATED 2026-08-15 against this session's own
+        transcript at
+        `~/.claude/projects/-Users-dnipro-home-AI-embo/7e2aa6a2-…​.jsonl`.
+        Rejection text IS present. Shape:
+          `role`: "user"
+          `content[].type`: "tool_result"
+          `is_error`: true
+          `content` string: begins with the standard boilerplate
+          `"The user doesn't want to proceed with this tool use…"`
+          and, if the user typed a rejection note, appends
+          `"To tell you how to proceed, the user said:\n<msg>"`.
+          Bare-click rejections (no user note) have the boilerplate
+          only; noted rejections carry the full user text.
+        Also visible under top-level `toolUseResult` field of the
+        same object; `sourceToolAssistantUUID` links back to the
+        rejected assistant tool_use.
+        CONSEQUENCE: the previously-hypothesized "rejection-transport
+        gap" does NOT exist at the transcript level. The claude-mem
+        observer simply doesn't parse this content shape (it
+        probably scans role=user + content type=text). The hook can
+        reach this text if desired.
+  - [X] 9.2 If rejection text is present in the transcript, extend
+    `capture-correction.sh` to grep the user's rejection messages for
+    a heuristic pattern (or a distinctive marker the model could emit
+    on the next turn) and record what it finds. Fixture-test the
+    extension. [verify: auto-test]
+      → IMPLEMENTED 2026-08-16 as approach "C" (both paths active):
+        primary path B (marker) records `source_type:
+        "acknowledgment"`; new fallback pass records raw rejection
+        text as `source_type: "rejection_unacknowledged"` ONLY when
+        no `[correction]` marker appears between the rejection and
+        the next user prompt. Pass 2 classifies every transcript
+        entry (ACK / ASSIST_NOACK / USER_PROMPT / USER_TOOLRES_OK /
+        REJECT_BARE / REJECT_NOTE), then walks the classification
+        looking ahead per REJECT_NOTE. Note text is JSON-encoded
+        through the classify file so embedded newlines don't break
+        line-oriented reading. Six new fixture test functions:
+        bare rejection ignored; rejection+ack deduped; rejection
+        no-ack captured as fallback; multiline note stored verbatim;
+        lookahead ignores marker after a user-turn boundary;
+        multiple rejections dispatched correctly. All existing
+        marker tests updated to assert `source_type:
+        "acknowledgment"`. 43 assertions pass, 0 fail (was 27).
+        Neighboring suites still pass (13 + 52). Also backfilled
+        existing 4 records in `.claude/corrections.jsonl` with
+        `source_type: "acknowledgment"`.
+  - [X] 9.3 If rejection text is NOT present in the transcript,
+    document the limitation in `plugin/commands/start.md` (near
+    RULE:RESTATE-CORRECTION) and in
+    `plugin/commands/enable-corrections.md`'s help text, so users
+    understand the residual gap. [verify: code-only]
+      → OBSOLETED by 9.1's finding. Rejection text IS present in
+        the transcript; no limitation to document. Story does not
+        apply to the actual reality.
+
 ## Summary
-7 user stories. Stories 1-3 carry the implementation (a sourceable
-`corrections-lib.sh`, two new commands, and the improve.md rewrite);
-story 4 is the jq safety test; story 5 is docs/ignore hygiene; story 6
-is upstream follow-up; story 7 (designed, not built) fixes mid-session
-correction visibility via a restate-the-correction behavioral rule.
+9 user stories. Stories 1-3 carry the original implementation (a
+sourceable `corrections-lib.sh`, two new commands, and the improve.md
+rewrite); story 4 is the jq safety test; story 5 is docs/ignore
+hygiene; story 6 is upstream follow-up; story 7 (built) fixes
+mid-session correction visibility via a restate-the-correction
+behavioral rule; story 8 (2026-08-15 extension) adds a second capture
+path via a `[correction]` marker + hook + project-local JSONL, so
+`/embo:improve` has data independent of claude-mem correction capture
+state; story 9 (2026-08-15, closed 2026-08-16) resolves the
+rejection-transport capture gap: rejection text was confirmed
+present in the transcript, and hook Pass 2 now captures rejection
+notes as a `rejection_unacknowledged` fallback when the model
+fails to acknowledge them via the marker.

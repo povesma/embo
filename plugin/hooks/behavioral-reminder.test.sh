@@ -59,8 +59,8 @@ assert_contains "checklist keeps decide-first test" \
 # CHECKLIST region, not just the first.
 assert_contains "restate-correction checklist injected" \
   "RESTATE-CORRECTION checklist" "$OUT"
-assert_contains "restate checklist carries the restate instruction" \
-  "Rule I'll follow" "$OUT"
+assert_contains "restate checklist carries the [correction] marker instruction" \
+  "[correction]" "$OUT"
 assert_contains "restate checklist keeps both blocks (closing-choice still present)" \
   "CLOSING-CHOICE checklist" "$OUT"
 

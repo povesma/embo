@@ -177,7 +177,7 @@
       cleanup removed panel, injected <style>, and body classes from
       the DOM [live] (2026-07-28)
 
-- [ ] 4.0 **User Story:** As a developer, I want the registry to accept
+- [X] 4.0 **User Story:** As a developer, I want the registry to accept
   new candidates at any point (from the reviewer's
   `recommended_fixes` or added ad hoc) and survive real page
   navigation, so that a multi-page or evolving tuning session isn't
@@ -196,7 +196,7 @@
     before generation, after PASS, or after FAIL — no conditional
     dependency on gate state anywhere in the trigger text [verify:
     code-only]
-  - [~] 4.4 Write the navigation-resilience spec: a real full-page
+  - [X] 4.4 Write the navigation-resilience spec: a real full-page
     navigation is detected (not intercepted or faked — real redirect
     targets, timing, and errors are preserved) and the injection
     (panel + current registry state) is re-applied on the new page;

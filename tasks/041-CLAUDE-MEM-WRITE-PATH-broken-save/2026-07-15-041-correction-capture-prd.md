@@ -215,13 +215,130 @@ configuring claude-mem works.
 
 ---
 
+## Extension (2026-08-15): marker-based capture as second line of defense
+
+Live use of the shipped feature over four weeks surfaced three practical
+gaps in the observer-only design above. This extension adds a **second
+capture path** — the model itself acknowledges each correction with a
+distinctive text marker, and a plugin hook records marked lines to a
+project-local file — WITHOUT removing the observer path. Both paths run
+in parallel; `/embo:improve` reads both and deduplicates.
+
+### Why the earlier rejection was right then and wrong now
+
+The original PRD rejected "embo writes its own corrections file" on the
+grounds that it would duplicate claude-mem's observer. That reasoning
+assumed the observer path is (a) always enabled and (b) always sees the
+steer. Neither holds in practice:
+
+- **Correction capture in claude-mem is opt-in.** A user who never runs
+  the turn-on command has no correction observations, so `/embo:improve`
+  has nothing to work with. Marker-based capture works from the moment
+  the plugin is enabled, independent of the turn-on state.
+- **The observer misses corrections that arrive outside the
+  `UserPromptSubmit` transport.** Live evidence 2026-08-14: two steers
+  delivered via tool-rejection feedback ("less showing off. it's just
+  ticking off — oneliner is enough" and "why not use `/embo:git`
+  deliver?") produced no correction observation, though regular-prompt
+  steers in the same session were captured. The observer sees the user's
+  message via one transport; the marker approach captures the model's
+  understanding regardless of how the steer arrived.
+- **The model's understanding is more directly relevant than the
+  observer's inference.** The observer reads the user's message and
+  guesses the general rule. The model has the whole context of what it
+  was doing when steered — including its own reasoning that the steer
+  corrected — so the general rule it emits is closer to the actionable
+  do/don't than a rule inferred from message text alone.
+
+The two paths are complementary, not redundant: the observer catches
+steers even when the model fails to acknowledge them (its safety net);
+the marker catches steers even when observer capture is off or misses
+the transport (its safety net).
+
+### What the extension adds
+
+- **A model behavior rule** in `plugin/commands/start.md`
+  (RULE:RESTATE-CORRECTION, rewritten). The model must acknowledge every
+  user steer with a one-line "[correction] <general rule>" in its next
+  message. The acknowledgment shows understanding — it is NOT a
+  commitment to comply; whether behavior changes is decided by the
+  normal process (other rules, direct instructions, discussion).
+- **A capture hook** registered via `plugin/hooks/hooks.json`. It runs
+  on `PostToolUse` (primary, catches mid-turn markers before any
+  interrupt) and `Stop` (belt-and-braces, catches end-of-turn markers).
+  The hook reads the session transcript, greps for `[correction]` lines
+  in assistant messages, and appends new lines to a project-local
+  `.corrections.jsonl` file. It is idempotent: markers already recorded
+  are not re-recorded.
+- **An `/embo:improve` extension** that reads both the JSONL file AND
+  the claude-mem correction observations, deduplicates by content hash
+  of the rule text, and produces one aggregated review list. Design in
+  task 042.
+
+### The new user stories (added to the "supporting stories" section
+above)
+
+**Model-emitted markers are captured to a local file.**
+
+When the user gives Claude a steer, the model's acknowledgment (a
+`[correction] <do/don't>` line) is recorded to `.corrections.jsonl` in
+the project's `.claude/` directory, keyed by session and timestamp.
+Acceptance criteria:
+- The hook fires on every tool call and at end-of-turn; markers are
+  captured within one hook invocation of being emitted.
+- The same marker line is never recorded twice (idempotency, verified
+  by content-hash dedup).
+- The JSONL file is project-local (in the current project's `.claude/`
+  directory), gitignored by default, and readable by
+  `/embo:improve`.
+- The hook does not fail loudly when the transcript is unavailable — it
+  no-ops silently and logs to stderr.
+
+**Corrections are recorded even when claude-mem correction capture is
+off.**
+
+If the user has never run the turn-on command (or has run the turn-off
+command), corrections are still recorded via the marker path and are
+available to `/embo:improve`. Acceptance criteria:
+- With correction capture disabled in claude-mem, the marker path still
+  produces `.corrections.jsonl` entries.
+- `/embo:improve` reports corrections found via the marker path even
+  when it finds zero via claude-mem.
+- The "correction capture never turned on" message from the original
+  PRD is replaced with a more nuanced state report: claude-mem path
+  status + marker path status separately.
+
+### Known limitation retirement
+
+The original limitation "A correction buried inside a message that is
+mostly about something else may not be recorded" partially retires
+under this extension: the model can emit a `[correction]` marker for
+any steer it recognizes, regardless of where in the user's message it
+appeared, so multi-topic messages no longer lose the correction. The
+limitation still applies to the claude-mem observer path.
+
+### Failure modes not yet closed
+
+- **The model fails to emit the marker.** If the model does not
+  recognize a turn as a correction, no marker is emitted and the hook
+  has nothing to record. The claude-mem observer path remains the
+  fallback for this case.
+- **Both paths miss.** A steer arriving via a transport the observer
+  skips AND unrecognized by the model produces no correction. Today's
+  evidence (the two rejection-feedback misses) shows this is a real
+  category; a dedicated investigation into rejection-transport
+  handling is added as a separate story in the tasks file.
+
+---
+
 ## Known limitations (must be stated in the command's help text)
 
 - **A correction is caught when the user says it as its own chat
   message.** A correction buried inside a message that is mostly about
-  something else may not be recorded. (This is because claude-mem's
-  background program only receives the user's message text at the start
-  of each turn.)
+  something else may not be recorded via the claude-mem observer path
+  (its background program only receives the user's message text at the
+  start of each turn). The marker-based path (extension above) records
+  it if the model recognizes it as a correction.
 - **claude-mem's search has a bug**: asking it for notes "of category
   correction" returns nothing, even though the corrections are saved.
   `/embo:improve` works around this by searching the note text instead
