@@ -183,6 +183,23 @@ corrections_list() {
      ORDER BY created_at DESC"
 }
 
+# corrections_load_jsonl <path>
+#   Read the marker-hook JSONL file at <path> and emit a JSON array of
+#   entries. Each line must be a valid JSON object; invalid or empty lines
+#   are silently skipped. A missing or empty file emits []. Never errors.
+corrections_load_jsonl() {
+  local path="$1" line acc
+  [ -f "$path" ] || { printf '[]'; return 0; }
+  acc='[]'
+  while IFS= read -r line || [ -n "$line" ]; do
+    [ -z "$line" ] && continue
+    if printf '%s' "$line" | jq -e 'type == "object"' >/dev/null 2>&1; then
+      acc="$(printf '%s\n%s' "$acc" "$line" | jq -sc '.[0] + [.[1]]')"
+    fi
+  done < "$path"
+  printf '%s' "$acc"
+}
+
 # corrections_list_pending <project> <curation-file>
 #   Print the corrections for <project> that have NOT yet been reviewed,
 #   as a JSON array (same shape as corrections_list), newest first. The

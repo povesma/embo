@@ -20,6 +20,13 @@
 #       Print the not-yet-reviewed corrections for the current project as
 #       a JSON array, newest first. Project = basename of $PWD. Curation
 #       file defaults to ./.claude/correction-curation.json.
+#   merged-list
+#       Aggregate corrections from both the claude-mem DB and the marker
+#       JSONL file (.claude/corrections.jsonl in CWD), deduplicated by
+#       content hash. Each entry records which source(s) it came from.
+#       Entries present in both sources are collapsed into one with
+#       sources: ["claude-mem","jsonl"]. Falls back gracefully when either
+#       source is absent or empty.
 #   write [<curation-file>] <id>...
 #       Record the given correction IDs as reviewed (merged, deduped,
 #       atomic). Curation file defaults as above.
@@ -61,6 +68,95 @@ case "$cmd" in
     curation="${1:-$DEFAULT_CURATION}"
     corrections_list_pending "$(project_name)" "$curation"
     ;;
+  merged-list)
+    # Portable sha256: prefer shasum (macOS), then sha256sum.
+    sha256_of() {
+      if command -v shasum >/dev/null 2>&1; then
+        printf '%s' "$1" | shasum -a 256 | awk '{print $1}'
+      else
+        printf '%s' "$1" | sha256sum | awk '{print $1}'
+      fi
+    }
+
+    project="$(project_name)"
+    jsonl_file=".claude/corrections.jsonl"
+
+    # Load claude-mem corrections. corrections_list validates the project
+    # name and returns rc 2 on a bad one; treat any error as empty.
+    cm_raw="$(corrections_list "$project" 2>/dev/null)" || cm_raw='[]'
+    [ -n "$cm_raw" ] || cm_raw='[]'
+
+    # Load marker JSONL corrections.
+    jl_raw="$(corrections_load_jsonl "$jsonl_file")"
+
+    # Build a merged array. Strategy: collect all entries keyed by hash,
+    # tracking which sources contributed each. We use a temp file as an
+    # associative-map substitute (bash 3.2 compatible).
+    map_dir="$(mktemp -d)"
+    trap 'rm -rf "$map_dir"' EXIT
+
+    # Process claude-mem entries. Hash is sha256 of the title (the rule text
+    # for claude-mem observations).
+    while IFS= read -r entry; do
+      rule="$(printf '%s' "$entry" | jq -r '.title // ""')"
+      [ -z "$rule" ] && continue
+      h="$(sha256_of "$rule")"
+      [ -z "$h" ] && continue
+      # Serialize the entry as a JSONL record normalized to the merged shape.
+      norm="$(printf '%s' "$entry" | jq -c \
+        --arg h "$h" \
+        '{rule: (.title // ""), hash: $h, id: .id, created_at: .created_at, sources: ["claude-mem"]}')"
+      printf '%s\n' "$norm" >> "$map_dir/$h.claude-mem"
+    done < <(printf '%s' "$cm_raw" | jq -c '.[]' 2>/dev/null)
+
+    # Process JSONL entries. Hash is already stored in the record.
+    while IFS= read -r entry; do
+      rule="$(printf '%s' "$entry" | jq -r '.rule // ""')"
+      h="$(printf '%s' "$entry" | jq -r '.hash // ""')"
+      [ -z "$rule" ] || [ -z "$h" ] && continue
+      norm="$(printf '%s' "$entry" | jq -c \
+        '{rule: .rule, hash: .hash, source_type: .source_type, sources: ["jsonl"]}')"
+      printf '%s\n' "$norm" >> "$map_dir/$h.jsonl"
+    done < <(printf '%s' "$jl_raw" | jq -c '.[]' 2>/dev/null)
+
+    # Collect all unique hashes.
+    hashes=()
+    for f in "$map_dir"/*/; do true; done  # ensure glob doesn't fail
+    for f in "$map_dir"/*; do
+      [ -f "$f" ] || continue
+      base="$(basename "$f")"
+      h="${base%.*}"
+      # Add to list only once per hash.
+      already=0
+      for existing in "${hashes[@]+"${hashes[@]}"}"; do
+        [ "$existing" = "$h" ] && { already=1; break; }
+      done
+      [ "$already" -eq 0 ] && hashes+=("$h")
+    done
+
+    # Build the final JSON array.
+    result='[]'
+    for h in "${hashes[@]+"${hashes[@]}"}"; do
+      # Determine which sources are present.
+      has_cm=0; has_jl=0
+      [ -f "$map_dir/$h.claude-mem" ] && has_cm=1
+      [ -f "$map_dir/$h.jsonl" ]      && has_jl=1
+
+      if [ "$has_cm" -eq 1 ] && [ "$has_jl" -eq 1 ]; then
+        # Shared: take base fields from claude-mem entry, merge sources.
+        base="$(head -1 "$map_dir/$h.claude-mem")"
+        entry="$(printf '%s' "$base" | jq -c '.sources = ["claude-mem","jsonl"]')"
+      elif [ "$has_cm" -eq 1 ]; then
+        entry="$(head -1 "$map_dir/$h.claude-mem")"
+      else
+        entry="$(head -1 "$map_dir/$h.jsonl")"
+      fi
+
+      result="$(printf '%s\n%s' "$result" "$entry" | jq -sc '.[0] + [.[1]]')"
+    done
+
+    printf '%s' "$result"
+    ;;
   write)
     # Optional leading curation-file arg: if the first arg is not a bare
     # integer, treat it as the curation-file path; otherwise use the
@@ -79,7 +175,7 @@ case "$cmd" in
     project_name
     ;;
   *)
-    printf 'usage: embo-corrections {list-pending|write|mode|project} [args]\n' >&2
+    printf 'usage: embo-corrections {list-pending|merged-list|write|mode|project} [args]\n' >&2
     exit 2
     ;;
 esac
