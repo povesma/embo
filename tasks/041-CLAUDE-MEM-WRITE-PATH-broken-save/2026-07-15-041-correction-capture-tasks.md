@@ -360,23 +360,14 @@
     `./.claude/corrections.jsonl` within one hook invocation. Repeat
     with the marker emitted after the last tool call to verify the
     `Stop` sweep. [verify: manual-run-claude]
-      → VERIFIED 2026-08-15. First e2e run against the real session
-        transcript captured 42 records for 1 real correction — the
-        hook grep matched every `[correction]` mention in doc prose
-        and examples, not just acknowledgments. Root-caused: original
-        design lacked a start-of-line anchor (dismissed earlier as
-        over-engineering; that judgment was wrong). Fixed by (a)
-        strengthening RULE:RESTATE-CORRECTION to require the marker
-        at column 0, (b) changing the hook regex from
-        `grep -F '[correction]'` to `grep -E '^\[correction\] '`,
-        (c) adding fixture test
-        `test_marker_not_at_column_zero_is_ignored` (27 assertions
-        pass now, was 25). Re-run against the same transcript: 4
-        records captured, all 4 are real acknowledgments emitted
-        this session — 100% precision, 0 false positives.
-        Full pipeline (RULE emit → transcript → hook grep →
-        JSONL write → hash dedup → source/session fields recorded)
-        works end-to-end.
+      → VERIFIED 2026-08-15. Load-bearing finding: the marker MUST be
+        anchored to column 0 in both the rule and the hook regex.
+        Without the anchor, doc prose that mentions `[correction]`
+        matches (42:1 noise-to-signal on the real transcript). With
+        `grep -E '^\[correction\] '` and a rule that mandates
+        no-indent, the pipeline runs at 100% precision — 4/4 real
+        acknowledgments captured from the same transcript, 0 false
+        positives.
 
 - [X] 9.0 **User Story:** As an embo user, corrections I deliver via
   tool-rejection feedback (typed into a rejection dialog) are not
@@ -417,26 +408,19 @@
     a heuristic pattern (or a distinctive marker the model could emit
     on the next turn) and record what it finds. Fixture-test the
     extension. [verify: auto-test]
-      → IMPLEMENTED 2026-08-16 as approach "C" (both paths active):
-        primary path B (marker) records `source_type:
-        "acknowledgment"`; new fallback pass records raw rejection
-        text as `source_type: "rejection_unacknowledged"` ONLY when
-        no `[correction]` marker appears between the rejection and
-        the next user prompt. Pass 2 classifies every transcript
-        entry (ACK / ASSIST_NOACK / USER_PROMPT / USER_TOOLRES_OK /
-        REJECT_BARE / REJECT_NOTE), then walks the classification
-        looking ahead per REJECT_NOTE. Note text is JSON-encoded
-        through the classify file so embedded newlines don't break
-        line-oriented reading. Six new fixture test functions:
-        bare rejection ignored; rejection+ack deduped; rejection
-        no-ack captured as fallback; multiline note stored verbatim;
-        lookahead ignores marker after a user-turn boundary;
-        multiple rejections dispatched correctly. All existing
-        marker tests updated to assert `source_type:
-        "acknowledgment"`. 43 assertions pass, 0 fail (was 27).
-        Neighboring suites still pass (13 + 52). Also backfilled
-        existing 4 records in `.claude/corrections.jsonl` with
-        `source_type: "acknowledgment"`.
+      → Design decision: approach C (both paths active, dedup by
+        lookahead). Marker records get `source_type:
+        "acknowledgment"`; rejection notes get
+        `source_type: "rejection_unacknowledged"` ONLY when no
+        `[correction]` marker appears between the rejection and the
+        next user prompt. Pass 2 classifies entries into six kinds
+        (ACK / ASSIST_NOACK / USER_PROMPT / USER_TOOLRES_OK /
+        REJECT_BARE / REJECT_NOTE) then walks looking ahead per
+        REJECT_NOTE. Constraint: note text must be JSON-encoded
+        through the classify file so embedded newlines do not break
+        line-oriented reading. Verified: 43 assertions pass,
+        neighboring suites still pass (13 + 52). Existing 4 records
+        backfilled with `source_type: "acknowledgment"`.
   - [X] 9.3 If rejection text is NOT present in the transcript,
     document the limitation in `plugin/commands/start.md` (near
     RULE:RESTATE-CORRECTION) and in
