@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+# embo-profile — wrapper that owns every operation on the embo workflow
+# profile, run as a plain command. For /embo:start (load-once) and the
+# /embo:profile manager.
+#
+# Why: commands used to read ~/.claude/active-profile.yaml directly (via
+# cat/Read), which triggers an approval gate — and the only way to
+# pre-approve a raw file read is to whitelist reading all of ~/.claude,
+# far too broad. Like bin/rlm_repl and bin/embo-corrections, this wrapper
+# is shipped in the plugin's bin/ (on the Bash tool PATH while the plugin
+# is enabled), so commands call a bare `embo-profile ...` — no expansion
+# in the command string, so no prompt, and a single narrow
+# `Bash(embo-profile *)` allow rule matches.
+#
+# The wrapper resolves its own location so it works wherever the plugin
+# is installed. It hard-requires `yq` for YAML parsing and fails loudly
+# with an install hint when yq is absent — yq is a standard tool and
+# there is no dependency-free fallback that parses nested YAML reliably.
+#
+# Subcommands:
+#   show          Print the active profile's contents, or the literal
+#                 NO_PROFILE when no active profile exists.
+#   get <field>   Print one field, dotted for nesting (e.g. tools.rlm,
+#                 git.commit_style). Empty output when the field is absent.
+#   set <name>    Make the named profile active (copy <name>.yaml from a
+#                 profiles search dir to the active-profile path).
+#   reset         Remove the active profile so built-in defaults apply.
+#                 Idempotent.
+#   list          List available profiles (name + description) and mark
+#                 the active one.
+#
+# Overridable for tests (never touches the real ~/.claude when set):
+#   EMBO_PROFILE_ACTIVE  active-profile file path
+#                        (default: ~/.claude/active-profile.yaml)
+#   EMBO_PROFILE_DIRS    colon-separated profiles search dirs
+#                        (default: .claude/profiles:~/.claude/profiles)
+
+set -uo pipefail
+
+# Resolve this script's real directory, following symlinks.
+src="${BASH_SOURCE[0]}"
+while [ -h "$src" ]; do
+  dir="$(cd -P "$(dirname "$src")" >/dev/null 2>&1 && pwd)"
+  src="$(readlink "$src")"
+  case "$src" in /*) ;; *) src="$dir/$src" ;; esac
+done
+bin_dir="$(cd -P "$(dirname "$src")" >/dev/null 2>&1 && pwd)"
+
+# yq is a hard requirement. Fail loudly rather than degrade.
+require_yq() {
+  command -v yq >/dev/null 2>&1 && return 0
+  printf 'embo-profile: yq is required but not found.\n' >&2
+  printf '  Install it: https://github.com/mikefarah/yq (e.g. `brew install yq`).\n' >&2
+  exit 3
+}
+
+ACTIVE="${EMBO_PROFILE_ACTIVE:-$HOME/.claude/active-profile.yaml}"
+# Search dirs: project scope first, then user scope, then the plugin's
+# shipped built-ins (bin/ sits at the plugin root; profiles/ is a sibling).
+DIRS="${EMBO_PROFILE_DIRS:-.claude/profiles:$HOME/.claude/profiles:$bin_dir/../profiles}"
+
+# Locate <name>.yaml across the colon-separated search dirs; echo the path.
+find_profile() {
+  local name="$1" dir path
+  local IFS=:
+  for dir in $DIRS; do
+    path="$dir/$name.yaml"
+    [ -f "$path" ] && { printf '%s' "$path"; return 0; }
+  done
+  return 1
+}
+
+cmd="${1:-list}"
+[ "$#" -gt 0 ] && shift
+
+case "$cmd" in
+  show)
+    # Active profile if set; else the canonical default.yaml; else the
+    # NO_PROFILE sentinel (only when even default.yaml is unreachable).
+    if [ -f "$ACTIVE" ]; then
+      cat "$ACTIVE"
+    elif def_path="$(find_profile default)"; then
+      cat "$def_path"
+    else
+      printf 'NO_PROFILE\n'
+    fi
+    ;;
+  get)
+    require_yq
+    field="${1:-}"
+    [ -z "$field" ] && { printf 'usage: embo-profile get <field>\n' >&2; exit 2; }
+    # Read the active profile if set, else the canonical default.yaml.
+    src="$ACTIVE"
+    [ -f "$src" ] || src="$(find_profile default)" || exit 0
+    # Dotted field → yq path (.a.b.c). Print nothing for null/absent.
+    val="$(yq -r ".${field} // \"\"" "$src" 2>/dev/null)"
+    [ "$val" = "null" ] && val=""
+    printf '%s' "$val"
+    ;;
+  set)
+    require_yq
+    name="${1:-}"
+    [ -z "$name" ] && { printf 'usage: embo-profile set <name>\n' >&2; exit 2; }
+    path="$(find_profile "$name")" || {
+      printf 'embo-profile: profile not found: %s\n' "$name" >&2
+      exit 1
+    }
+    # Validate it has a name field before activating.
+    if [ -z "$(yq -r '.name // ""' "$path" 2>/dev/null)" ]; then
+      printf 'embo-profile: invalid profile (missing name): %s\n' "$path" >&2
+      exit 1
+    fi
+    mkdir -p "$(dirname "$ACTIVE")" 2>/dev/null || true
+    cp "$path" "$ACTIVE"
+    printf 'Profile activated: %s\n' "$name"
+    ;;
+  reset)
+    rm -f "$ACTIVE"
+    printf 'Profile deactivated. Commands will use built-in defaults.\n'
+    ;;
+  list)
+    require_yq
+    active_name=""
+    [ -f "$ACTIVE" ] && active_name="$(yq -r '.name // ""' "$ACTIVE" 2>/dev/null)"
+    seen=""
+    local_ifs="$IFS"; IFS=:
+    for dir in $DIRS; do
+      IFS="$local_ifs"
+      [ -d "$dir" ] || { IFS=:; continue; }
+      for f in "$dir"/*.yaml; do
+        [ -f "$f" ] || continue
+        n="$(yq -r '.name // ""' "$f" 2>/dev/null)"
+        [ -z "$n" ] && continue
+        case ":$seen:" in *":$n:"*) continue ;; esac
+        seen="$seen:$n"
+        d="$(yq -r '.description // ""' "$f" 2>/dev/null)"
+        mark=""
+        [ "$n" = "$active_name" ] && mark=" (active)"
+        printf '%s — %s%s\n' "$n" "$d" "$mark"
+      done
+      IFS=:
+    done
+    IFS="$local_ifs"
+    ;;
+  *)
+    printf 'usage: embo-profile {show|get <field>|set <name>|reset|list}\n' >&2
+    exit 2
+    ;;
+esac

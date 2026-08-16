@@ -17,9 +17,9 @@ operational. Renders a combined summary table with fix instructions.
 
 ## Process
 
-**Read `~/.claude/active-profile.yaml` if it exists.** Use its values
-to determine which checks to run and which MCPs to validate.
-If no profile, use defaults (rlm=true, memory_backend=claude-mem).
+**Get the profile via `embo-profile show`** (or reuse it from session
+context if already loaded). Use its values to determine which checks to
+run and which MCPs to validate. (claude-mem is always on.)
 
 **Delegation checkpoint (per RULE:DELEGATE trigger 5).** Fixed checks
 run inline; if a failure becomes an open-ended troubleshooting loop,
@@ -45,7 +45,7 @@ rlm_repl status
 
 ### Check 2 — claude-mem Plugin
 
-**(Skip if profile `tools.memory_backend` is `none` — mark as "skipped")**
+claude-mem is a mandatory core system; this check always runs.
 
 ```
 mcp__plugin_claude-mem_mcp-search__search(query="health check probe", limit=1)

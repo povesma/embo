@@ -31,17 +31,16 @@ historical velocity for realistic estimates.
 
 ### Step 0: Load Profile
 
-Read `~/.claude/active-profile.yaml` if it exists. If not present,
-use defaults: rlm=true, memory_backend=claude-mem. Skip claude-mem
-velocity search (Step 2) if `tools.memory_backend` is `none`. Skip
-RLM complexity estimation (Step 3) if `tools.rlm` is `false`.
+Use the profile already loaded this session (from `/embo:start`). If
+it is not in context, run `embo-profile show`. Skip RLM complexity
+estimation (Step 3) if `tools.rlm` is `false`. (claude-mem is always
+on.)
 
 ### Step 1: Load Context
 
 **Read Tech Design / PRD**:
 - From file: `tasks/{jira-id}-{feature}/...-tech-design.md`
 - Or search claude-mem for recent tech design
-  (skip if profile `tools.memory_backend` is `none`)
 - Optionally also load PRD for business context
 
 **Extract Jira ID**: From tech design filename or folder name. If not found,

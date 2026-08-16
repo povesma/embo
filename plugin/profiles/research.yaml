@@ -25,8 +25,7 @@ git:
 
 tools:
   rlm: true
-  memory_backend: claude-mem
 
 mcps:
-  required: [context7, notebooklm-mcp]
+  required: [context7, gemini-notebook-mcp]
   optional: [playwright]

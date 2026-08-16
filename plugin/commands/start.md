@@ -1,6 +1,6 @@
 ---
 description: Start a coding session with comprehensive context from RLM code analysis and claude-mem historical knowledge. Use at the beginning of each coding session.
-allowed-tools: Bash(cat ~/.claude/active-profile.yaml *) Bash(echo *) Read(~/.claude/active-profile.yaml) Bash(rlm_repl *) Bash(git log *) Bash(git diff *)
+allowed-tools: Bash(embo-profile *) Bash(rlm_repl *) Bash(git log *) Bash(git diff *)
 ---
 
 # Start embo Coding Session
@@ -23,20 +23,20 @@ Start a coding session with comprehensive context from both RLM code analysis an
 
 ## Process
 
-### Step 0: Load Profile
-
-Run this exact command — do not paraphrase, do not rewrite the
-shape. The skill's pre-approved permission entry matches this
-line literally:
+### Step 0: Load Profile (once per session)
 
 ```bash
-cat ~/.claude/active-profile.yaml 2>/dev/null || echo "NO_PROFILE"
+embo-profile show
 ```
 
-If the output is the literal string `NO_PROFILE`, use defaults:
-rlm=true, memory_backend=claude-mem, docs_first=strict. Otherwise
-parse the YAML for profile fields. Note the active profile name
-(or "default") in the session summary output.
+`embo-profile show` returns the active profile, or the canonical
+`default.yaml` when none is set; parse the YAML. (claude-mem is always
+on — there is no memory toggle.)
+
+This is the session's single profile load. Echo the profile (or
+"default") into the session summary so later commands read it from
+context — re-invoke `embo-profile show` only after an `embo-profile
+set`/`reset` changes it mid-session.
 
 **Read depth** follows the profile: `fast`/`minimal` → **brief**
 (Step 2 memory search skipped; the task-scout returns names + counts
@@ -623,7 +623,7 @@ auto-approves under a `Bash(rlm_repl *)` rule with no prompt.
 
 ### Step 2: Query Claude-Mem for Historical Context
 
-**(Skip if `tools.memory_backend` is `none`, or in brief depth.)**
+**(Skip in brief depth.)**
 
 Recent activity is already in context: claude-mem's SessionStart hook
 injects a "recent context" block (recent observations + stats) before
