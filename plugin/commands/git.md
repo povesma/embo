@@ -522,6 +522,64 @@ suggest adding it as a convenience.
 Do NOT add a confirmation question anywhere in this flow — the plan-file
 Write approval in Step 2 is the single gate.
 
+#### Step 4: Delivery state recovery
+
+A `release` (or `pr-merge`) delivery makes several remote side effects
+in sequence: commit + push, PR create, PR merge, tag create, tag push,
+GitHub Release create. Any of them can fail — a network blip, a race
+with a human merging the PR by hand, an already-existing tag from an
+aborted earlier attempt. When that happens the delivery halts with a
+non-zero exit code (see the codes below) and everything before that
+step is already durable on the remote. **The executor never rolls
+back** — there is no "undo a merge" step.
+
+**Recovery contract: re-run the same plan through a new plan file.**
+Each side-effect step first checks the remote for its output and
+treats "already-done" as success. So on a re-run:
+
+- If the PR was already opened and merged, the create+merge steps
+  are skipped and the executor picks up at "fetch base + tag".
+- If the tag was already created (locally or on the remote), it is
+  not re-created; the push step is skipped if the remote already has
+  it.
+- If the GitHub Release already exists for the tag, it is not
+  re-created.
+
+Write a new plan file (new timestamp, same fields) rather than
+editing the old one; the fresh Write dialog is the fresh single
+approval and the new file makes the recovery attempt visible in the
+`tmp/` audit trail.
+
+**When you should NOT just re-run:**
+
+- Exit code 7 (branch reconcile refused): the working tree or a
+  protected-branch guard blocked the commit. Fix the working tree
+  or the plan first.
+- Exit code 5 with `PR is CLOSED (unmerged)`: someone closed the PR
+  without merging. Investigate manually before any re-run.
+- The local files or the release-notes body have changed since the
+  merged commit went to `<base>`: you are not resuming, you are
+  releasing something different — write a new plan against a new
+  feature branch and a new version.
+
+**Exit code map (script → what's durable → what's left):**
+
+| Code | Failed at | Durable on remote | Left to do on re-run |
+|---|---|---|---|
+| 2 | plan invalid / not a git repo | nothing | fix plan |
+| 3 | `gh` missing | commit + push | install gh, re-run |
+| 4 | push failed | commit only (local) | re-run |
+| 5 | PR create failed | commit + push | re-run (checks PR state) |
+| 6 | PR merge failed | commit + push + PR open | re-run (checks PR state) |
+| 7 | branch reconcile refused | nothing | fix working tree, re-plan |
+| 8 | tag create or push failed | merged to `<base>` | re-run (checks tag state) |
+| 9 | Release create failed | merged + tag pushed | re-run (checks release state) |
+
+**Guardrail for the skill:** when the previous delivery exit code is
+non-zero AND `mode: release`, tell the user which step is left before
+writing the new plan file. Do not silently rebuild a plan; the user
+must see what will happen on the re-run.
+
 ---
 
 ### Mode: `style`
