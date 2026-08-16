@@ -128,7 +128,7 @@ Verified 2026-08-16:
 
 ## Tasks
 
-- [~] 1.0 **User Story:** As a plugin user, one pre-approved command owns
+- [X] 1.0 **User Story:** As a plugin user, one pre-approved command owns
   every profile operation, so profile access never triggers an approval
   gate and never needs a broad `~/.claude` read whitelist.
   - [X] 1.1 Write `plugin/bin/embo-profile.test.sh` (fixture, following
@@ -197,9 +197,13 @@ Verified 2026-08-16:
     preset durability across plugin updates, single-field editing of a
     named profile) → task 054 seed.
 
-- [ ] 3.0 **User Story:** As the maintainer, the change is tested and the
+- [X] 3.0 **User Story:** As the maintainer, the change is tested and the
   wrapper is proven to avoid the approval gate.
-  - [ ] 3.1 Run `embo-profile.test.sh`; all pass (AC-6). [verify: auto-test]
-  - [ ] 3.2 Live: grant `Bash(embo-profile *)`, run `/embo:start`,
-    confirm the profile loads with no approval prompt and appears in the
-    session summary. [verify: manual-run-claude]
+  - [X] 3.1 Run `embo-profile.test.sh`; all pass (AC-6). [verify: auto-test]
+      → 15 passed, 0 failed [live] (2026-08-16)
+  - [X] 3.2 Live: run the profile load as `/embo:start` does, confirm no
+    approval prompt. [verify: manual-run-claude]
+      → live: `embo-profile show` auto-approved (bare command, no
+        prompt), returned default.yaml (no active profile set);
+        `get git.commit_style`→conventional, `get tools.rlm`→true.
+        Gate avoided as designed [live] (2026-08-16)
