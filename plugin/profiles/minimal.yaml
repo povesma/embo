@@ -1,5 +1,5 @@
 name: minimal
-description: Bare bones — no RLM, no memory, no ceremony
+description: Bare bones — no RLM, no ceremony (claude-mem stays on; it is mandatory)
 
 rules:
   code_style:
@@ -20,7 +20,6 @@ git:
 
 tools:
   rlm: false
-  memory_backend: none
 
 mcps:
   required: []

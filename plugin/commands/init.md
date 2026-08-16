@@ -36,10 +36,9 @@ Bootstrap both RLM file indexing and claude-mem semantic memory for a project. T
 
 ### Step 0: Load Profile
 
-Read `~/.claude/active-profile.yaml` if it exists. If not present,
-use defaults: rlm=true, memory_backend=claude-mem. Skip RLM init
-steps below if `tools.rlm` is `false`. Skip claude-mem bootstrap
-if `tools.memory_backend` is `none`.
+Use the profile already loaded this session (from `/embo:start`). If
+it is not in context, run `embo-profile show`. Skip RLM init steps
+below if `tools.rlm` is `false`. (claude-mem is always on.)
 
 ### Step 1: Verify Prerequisites
 

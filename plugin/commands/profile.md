@@ -28,20 +28,17 @@ If no argument is provided, default to `list`.
 
 ### Mode: `use <name>`
 
-1. Search for `<name>.yaml` in these locations (first match wins):
-   - `.claude/profiles/<name>.yaml` (project scope)
-   - `~/.claude/profiles/<name>.yaml` (user scope)
-
-2. If not found, list available profiles and stop with an error.
-
-3. Read the YAML file and verify it has a `name` field.
-
-4. Copy the file to `~/.claude/active-profile.yaml`:
+1. Activate the named profile with one bare command:
    ```bash
-   cp <found_path> ~/.claude/active-profile.yaml
+   embo-profile set <name>
    ```
+   `embo-profile` searches the profile dirs (project, then user, then
+   the plugin's built-ins), validates the `name` field, and writes
+   `~/.claude/active-profile.yaml` atomically. It exits non-zero with a
+   message if the profile is not found or is invalid — relay that and
+   stop.
 
-5. Output confirmation:
+2. On success, output confirmation:
    ```
    ✅ Profile activated: <name>
 
@@ -51,46 +48,38 @@ If no argument is provided, default to `list`.
    - Code style: <line_length> chars, comments: <comments>
    - Testing: <approach>, subagents: <subagents list or "none">
    - Workflow: docs-first: <docs_first>, corrections: <on/off>
-   - Tools: RLM: <on/off>, memory: <memory_backend>
+   - Tools: RLM: <on/off>
    - Git: commit style: <commit_style or "conventional">
    - Required MCPs: <list or "none">
    ```
 
 ### Mode: `list`
 
-1. Scan for `.yaml` files in:
-   - `~/.claude/profiles/` (user scope)
-   - `.claude/profiles/` (project scope, if it exists)
-
-2. For each file, read the `name` and `description` fields.
-
-3. Check if `~/.claude/active-profile.yaml` exists and read its
-   `name` to identify the active profile.
-
-4. Output a table:
+1. List available profiles with one bare command:
+   ```bash
+   embo-profile list
    ```
-   Available profiles:
+   It prints each profile's `name — description` across all search dirs
+   (deduped) and marks the active one.
 
-   Name       | Description                              | Scope   | Active
-   -----------|------------------------------------------|---------|-------
-   quality    | Full workflow — docs-first, TDD, RLM...  | user    | ◀
-   fast       | Speed mode — test-after, relaxed docs... | user    |
-   minimal    | Bare bones — no RLM, no memory...        | user    |
-
+2. Present the result as a readable table, ending with:
+   ```
    Activate with: /embo:profile use <name>
    Deactivate with: /embo:profile off
    ```
 
 ### Mode: `off`
 
-1. Remove the active profile:
+1. Deactivate the active profile with one bare command:
    ```bash
-   rm -f ~/.claude/active-profile.yaml
+   embo-profile reset
    ```
+   It removes `~/.claude/active-profile.yaml` (idempotent). Commands then
+   fall back to the canonical `default.yaml`.
 
 2. Output confirmation:
    ```
-   Profile deactivated. Commands will use built-in defaults.
+   Profile deactivated. Commands will use the default profile.
    ```
 
 ## Error Handling

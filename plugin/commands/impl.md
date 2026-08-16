@@ -231,22 +231,15 @@ the *shape* of the observation, not the literal output. No working-state excepti
 
 ### 0. Load Profile
 
-Read `~/.claude/active-profile.yaml` if it exists. If the file
-does not exist, use these defaults:
-- `rules.code_style`: line_length=120, comments=minimal,
-  naming_convention=handler
-- `rules.testing`: approach=tdd, scope=[unit, integration],
-  subagents=[test-backend, test-review]
-- `rules.workflow`: docs_first=strict, correction_capture=true,
-  scope_drift=warn
-- `tools`: rlm=true, memory_backend=claude-mem
-
-Apply the loaded values to all "per profile" references below.
+Use the profile already loaded this session (from `/embo:start`). If it
+is not in context, run `embo-profile show` — it returns the active
+profile, or the canonical `default.yaml` when none is set. Apply the
+loaded values to all "per profile" references below. (claude-mem is
+always on.)
 
 ### 1. Load Context
 
-**Search claude-mem for similar implementations**
-(skip if profile `tools.memory_backend` is `none`):
+**Search claude-mem for similar implementations**:
 ```
 mcp__plugin_claude-mem_mcp-search__search(
   query="{task_keywords} implementation pattern",

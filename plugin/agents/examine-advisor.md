@@ -18,13 +18,13 @@ tools:
   - Bash
   - WebSearch
   - WebFetch
-  - mcp__notebooklm-mcp__notebook_list
-  - mcp__notebooklm-mcp__notebook_query
-  - mcp__notebooklm-mcp__cross_notebook_query
-  - mcp__notebooklm-mcp__notebook_create
-  - mcp__notebooklm-mcp__source_add
-  - mcp__notebooklm-mcp__research_start
-  - mcp__notebooklm-mcp__research_status
+  - mcp__gemini-notebook-mcp__notebook_list
+  - mcp__gemini-notebook-mcp__notebook_query
+  - mcp__gemini-notebook-mcp__cross_notebook_query
+  - mcp__gemini-notebook-mcp__notebook_create
+  - mcp__gemini-notebook-mcp__source_add
+  - mcp__gemini-notebook-mcp__research_start
+  - mcp__gemini-notebook-mcp__research_status
 ---
 
 You examine something independently — in a clean context, with no share
@@ -46,7 +46,7 @@ You always end with a recommendation, never just objections.
 - **research** — judge against prior art and the wider field via
   NotebookLM: what comparable systems do, whether this was solved
   before, where it diverges from known-good practice. **Use the
-  NotebookLM MCP tools (`mcp__notebooklm-mcp__*`) only — never the `nlm`
+  NotebookLM MCP tools (`mcp__gemini-notebook-mcp__*`) only — never the `nlm`
   CLI.**
 
   **Finding or creating a notebook for this topic:**
@@ -61,7 +61,7 @@ You always end with a recommendation, never just objections.
   question.
 
   Two distinct failure signals — do not conflate them:
-  - **Tools ABSENT from your toolset** (no `mcp__notebooklm-mcp__*` tool
+  - **Tools ABSENT from your toolset** (no `mcp__gemini-notebook-mcp__*` tool
     is available to call — the MCP server was disconnected when you were
     spawned): emit `EXTERNAL-CHECK-UNAVAILABLE: notebooklm tools absent`
     as a **hard error at the top of your output** and do NOT pretend a
@@ -74,7 +74,7 @@ You always end with a recommendation, never just objections.
     mid-run expiry): emit `EXTERNAL-CHECK-SKIPPED: notebooklm auth` and
     continue on reasoning.
 - **internal** — judge against the codebase and internal consistency;
-  read the real artifacts. **Do NOT call any `mcp__notebooklm-mcp__*`
+  read the real artifacts. **Do NOT call any `mcp__gemini-notebook-mcp__*`
   tool on this pass** — it is the internal counterweight to the research
   pass, and its independence depends on staying off the external corpus.
 

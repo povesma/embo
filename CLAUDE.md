@@ -189,7 +189,9 @@ plugin/                          # THE PLUGIN ROOT (${CLAUDE_PLUGIN_ROOT})
 │   ├── embo-deliver             # one-shot stage+commit+push+(PR/merge);
 │   │                              # `release` mode adds tag+GitHub Release
 │   │                              # (tasks 038, 043)
-│   └── embo-corrections         # /embo:improve list-pending/write/mode (task 042)
+│   ├── embo-corrections         # /embo:improve list-pending/write/mode (task 042)
+│   └── embo-profile             # profile show/get/set/reset/list — pre-approved
+│                                  # profile access, no file-read gate (task 053)
 ├── agents/
 │   ├── rlm-subcall.md           # RLM chunk analysis subagent (Haiku)
 │   ├── session-scout.md         # /embo:start task-discovery digest
@@ -208,7 +210,8 @@ plugin/                          # THE PLUGIN ROOT (${CLAUDE_PLUGIN_ROOT})
 │   ├── corrections-lib.sh       # sourceable enable/disable/curation/
 │   │                              # list-pending/mode fns
 │   └── corrections-lib.test.sh  # fixture tests for corrections-lib.sh
-├── profiles/                    # quality.yaml, fast.yaml, minimal.yaml
+├── profiles/                    # default.yaml (canonical fallback) +
+│                                  # quality/fast/minimal/research.yaml
 ├── hooks/
 │   ├── hooks.json               # registers the event handlers
 │   ├── context-guard.sh         # Context window warning hook

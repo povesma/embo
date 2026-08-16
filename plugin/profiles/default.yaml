@@ -1,0 +1,57 @@
+name: default
+description: >
+  Canonical fallback profile — the values embo uses when no active
+  profile is set. Returned by `embo-profile show` when
+  ~/.claude/active-profile.yaml is absent, so no command hardcodes its
+  own defaults. Mirrors the `quality` profile (full workflow).
+  Note: claude-mem is a mandatory core system, so there is no
+  memory-backend toggle — it is always on.
+
+rules:
+  code_style:
+    # Max source line width before wrapping is encouraged. Cosmetic;
+    # match your team's linter. Alternatives: 80, 100, 160.
+    line_length: 120
+    # How much inline commentary to write. `minimal` = self-documenting
+    # code, comment only non-obvious logic; `allowed` = comment freely;
+    # `none` = no policy.
+    comments: minimal
+    # Naming rule for application-layer components. `handler` = enforce
+    # the handler-naming convention; `none` = no rule.
+    naming_convention: handler
+  testing:
+    # When tests are written. `tdd` = test-first (highest rigor,
+    # slowest); `test-after` = implement then test; `none` = no tests
+    # (fastest, lowest safety). The main quality/speed lever.
+    approach: tdd
+    # Which test levels to write. More levels = more coverage, slower.
+    scope: [unit, integration]
+    # Test subagents spawned during impl. `[]` = none (faster, cheaper,
+    # less rigor).
+    subagents: [test-backend, test-review]
+  workflow:
+    # Gate on editing code not covered by a documented task. `strict` =
+    # block until docs exist; `relaxed` = warn but proceed; `off` = no
+    # gate. The main ceremony lever.
+    docs_first: strict
+    # Whether user steers are captured for /embo:improve. Tiny overhead.
+    correction_capture: true
+    # Response when a request falls outside the active task. `warn` =
+    # flag and suggest documenting; `off` = say nothing.
+    scope_drift: warn
+
+git:
+  # Commit-message convention. `conventional` = Conventional Commits;
+  # `custom` = use git.custom_style.body_guidance instead.
+  commit_style: conventional
+
+tools:
+  # RLM codebase analysis. `true` = analyze the repo (more context,
+  # slower, needs python3); `false` = skip it (faster, small repos).
+  rlm: true
+
+mcps:
+  # MCP servers a command requires to run (it stops if one is missing).
+  required: [context7]
+  # MCP servers used when present, skipped when absent.
+  optional: [playwright, gemini-notebook-mcp]

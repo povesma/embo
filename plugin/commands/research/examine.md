@@ -47,14 +47,14 @@ is a thin spawner: the judgment lives in the `examine-advisor` agent.
    outbound call (a subagent cannot prompt mid-run).
 
 3a. **Verify the NotebookLM MCP server is connected — a precondition for
-   the research pass.** A subagent spawned while `notebooklm-mcp` is
-   disconnected receives NONE of its `mcp__notebooklm-mcp__*` tools (the
+   the research pass.** A subagent spawned while `gemini-notebook-mcp` is
+   disconnected receives NONE of its `mcp__gemini-notebook-mcp__*` tools (the
    tools do not exist in the session at that moment), so the research
    pass silently degrades to reasoning-only. Do NOT let that happen
    silently, and do NOT work around it by running the query from the
    main context — that hides the failure.
    - Check reachability first (e.g. attempt a cheap
-     `mcp__notebooklm-mcp__notebook_list`, or confirm the tool is present
+     `mcp__gemini-notebook-mcp__notebook_list`, or confirm the tool is present
      in this session). If reachable, proceed to step 4.
    - **If NOT reachable, STOP and surface it as a blocker:** tell the
      user the research pass cannot run until NotebookLM is reconnected,
@@ -70,16 +70,14 @@ is a thin spawner: the judgment lives in the `examine-advisor` agent.
 5. **Await both, then reconcile:** merge findings, dedupe, rank by
    severity, mark "both passes flagged" (high-signal) vs "one flagged",
    and combine the two recommendations into one.
-   - `EXTERNAL-CHECK-SKIPPED: notebooklm auth` (a genuine mid-run auth
-     expiry) → proceed on the internal pass and flag the missing
-     external check.
-   - `EXTERNAL-CHECK-UNAVAILABLE: notebooklm tools absent` (the hard
-     error the agent returns when its NotebookLM tools were not in its
-     toolset at all) → this is the precondition failure step 3a is meant
-     to prevent. Do NOT silently reconcile it as a soft skip. Report
-     that the research pass never ran, and that the reconciled result is
-     internal-only — a partial review, not the full two-pass check the
-     user asked for.
+
+   **HARD STOP on either skip signal** (`EXTERNAL-CHECK-SKIPPED` or
+   `EXTERNAL-CHECK-UNAVAILABLE`): you are forbidden to emit a verdict in
+   the same turn. Lead with a loud top line ("⚠ research pass did NOT
+   run"), then STOP and ask (AskUserQuestion) whether to fix-and-re-run
+   or proceed internal-only. Only the user authorizes the internal-only
+   fallback — never self-authorize, never bury the skip under a
+   confident verdict.
 
 6. **Emit the reconciled report + recommendation.** Report-only — do
    not edit the target or start implementing.

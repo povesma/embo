@@ -17,9 +17,9 @@ operational. Renders a combined summary table with fix instructions.
 
 ## Process
 
-**Read `~/.claude/active-profile.yaml` if it exists.** Use its values
-to determine which checks to run and which MCPs to validate.
-If no profile, use defaults (rlm=true, memory_backend=claude-mem).
+**Get the profile via `embo-profile show`** (or reuse it from session
+context if already loaded). Use its values to determine which checks to
+run and which MCPs to validate. (claude-mem is always on.)
 
 **Delegation checkpoint (per RULE:DELEGATE trigger 5).** Fixed checks
 run inline; if a failure becomes an open-ended troubleshooting loop,
@@ -43,9 +43,21 @@ rlm_repl status
 | Error / missing state.pkl | fail · notes: `"state.pkl not found or index error"` · fix: `"Run: /embo:init"` |
 | `Total files: 0` | fail · notes: `"Index is empty"` · fix: `"Run: /embo:init"` |
 
-### Check 2 — claude-mem Plugin
+### Check 2 — `yq` (profile system dependency)
 
-**(Skip if profile `tools.memory_backend` is `none` — mark as "skipped")**
+`embo-profile` hard-requires `yq` for YAML parsing.
+
+```bash
+yq --version
+```
+
+- **Pass**: notes the version.
+- **Fail** (`command not found`): notes `"yq not installed"` · fix:
+  `"Install yq: brew install yq (macOS) or your package manager's yq"`.
+
+### Check 3 — claude-mem Plugin
+
+claude-mem is a mandatory core system; this check always runs.
 
 ```
 mcp__plugin_claude-mem_mcp-search__search(query="health check probe", limit=1)
@@ -54,7 +66,7 @@ mcp__plugin_claude-mem_mcp-search__search(query="health check probe", limit=1)
 - **Pass** (tool returns, even 0 results): notes `"Responding"`
 - **Fail** (tool errors): notes `"MCP tool error"` · fix: `"Run /plugin list — look for claude-mem. If missing: /plugin marketplace add thedotmack/claude-mem"`
 
-### Check 3 — PostToolUse Hook End-to-End
+### Check 4 — PostToolUse Hook End-to-End
 
 ```bash
 date +%s   # → token = "hc-{timestamp}"
@@ -80,7 +92,7 @@ mcp__plugin_claude-mem_mcp-search__search(query="{token}", limit=1)
 - **Pass** (≥ 1 result): notes `"Observation captured"`
 - **Fail** (0 results): notes `"Observation not found (may be timing or hook misconfigured)"` · fix: `"Verify PostToolUse hook in ~/.claude/settings.json — see README.md §Hook Setup"`
 
-### Check 4 — Profile MCP Requirements
+### Check 5 — Profile MCP Requirements
 
 **(Skip if no active profile or profile has empty `mcps` lists)**
 

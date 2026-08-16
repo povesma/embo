@@ -20,7 +20,6 @@ git:
 
 tools:
   rlm: true
-  memory_backend: claude-mem
 
 mcps:
   required: []

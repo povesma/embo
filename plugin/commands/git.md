@@ -132,11 +132,12 @@ inline.
 ### Step 0: Load profile (always, before any mode)
 
 ```bash
-cat ~/.claude/active-profile.yaml 2>/dev/null
+embo-profile get git.commit_style
 ```
 
-Extract `git.commit_style`. Default: `conventional` if absent or file missing.
-Store as `<active_style>` — use throughout without re-reading the file.
+`embo-profile` prints the value from the active profile, or the
+canonical `default.yaml` when none is set (empty → `conventional`).
+Store as `<active_style>` — use throughout without re-reading.
 
 ---
 
@@ -528,10 +529,10 @@ Write approval in Step 2 is the single gate.
 #### Step 1: Read active style
 
 ```bash
-cat ~/.claude/active-profile.yaml 2>/dev/null
+embo-profile get git.commit_style
 ```
 
-Extract `git.commit_style`. Default: `conventional` if absent.
+Empty → `conventional`.
 
 #### Step 2: Offer style selection via AskUserQuestion
 
@@ -556,12 +557,18 @@ options:
 
 #### Step 3: Apply switch (if requested)
 
-If user selected a style other than "Keep current":
-1. Read `~/.claude/active-profile.yaml`
-2. Update `git.commit_style: <new_style>` (add `git:` block if
-   absent)
-3. Write back the file
-4. Print: "Style updated: conventional → imperative"
+If user selected a style other than "Keep current", update
+`git.commit_style` in the active profile:
+```bash
+yq -i '.git.commit_style = "<new_style>"' ~/.claude/active-profile.yaml
+```
+Then print: "Style updated: conventional → imperative".
+
+(Single-field profile edits are a known gap: the `embo-profile` wrapper
+owns whole-profile reads/writes but not field edits yet, and this writes
+the active *copy* rather than a named profile — both are covered by the
+deferred profile-storage-redesign task. Until then this direct `yq` edit
+stands.)
 
 If no active profile exists:
 - Print: "No active profile. Run `/embo:profile use <name>` first,
