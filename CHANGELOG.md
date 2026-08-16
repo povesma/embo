@@ -15,8 +15,19 @@ All notable changes to the embo plugin are documented here.
   (v.X.Y.Z)`) and warns when it is older than the embo you have
   installed — so a panel you injected before upgrading embo no longer
   drifts out of sync silently; the warning tells you to re-inject.
+- **Profile access no longer prompts.** A new `embo-profile` command
+  reads the active profile (or the shipped `default.yaml` fallback), so
+  workflows can be pre-approved with one narrow `Bash(embo-profile *)`
+  allow rule instead of whitelisting all of `~/.claude`. Requires `yq`.
 
 ### Fixed
+
+- **`/embo:research:examine` and `/embo:research:verify` actually run
+  their external check.** They pointed at the retired NotebookLM MCP
+  name; the live server is `gemini-notebook-mcp`. Every run silently
+  skipped the external prior-art pass and degraded to reasoning-only. A
+  skipped external check now leads with a loud failure instead of being
+  buried under a confident verdict.
 
 - The Live-Edit panel survives a real page navigation — a link you click
   yourself, on a server-rendered page or a client-side single-page app.
