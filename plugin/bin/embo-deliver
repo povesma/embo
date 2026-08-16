@@ -21,6 +21,13 @@
 # delivered (push + optional PR/merge). This lets `deliver` land an
 # already-committed branch without inventing an empty commit.
 #
+# Idempotency: each side-effect step (PR create, PR merge, tag create,
+# tag push, GitHub Release create) FIRST checks whether its output
+# already exists on the remote, and treats "already done" as success
+# instead of retrying. This means the SAME plan file can be re-run to
+# resume a partial delivery — see the "Delivery state recovery" section
+# in plugin/commands/git.md.
+#
 # The plan file is the source of truth for the target branch. embo-deliver
 # NEVER trusts the ambient checked-out branch: before staging it reconciles
 # the working tree onto `plan.branch`, refuses to commit onto a protected
@@ -288,15 +295,45 @@ if [ "$MODE" = "pr" ] || [ "$MODE" = "pr-merge" ] || [ "$MODE" = "release" ]; th
   # BUG-2026-07-07). The body carries the whole message; repeating the
   # subject there is harmless.
   PR_TITLE="${MESSAGE%%$'\n'*}"
-  run gh pr create --base "$BASE" --head "$BRANCH" \
-      --title "$PR_TITLE" --body "$MESSAGE" \
-    || fail "$STEPS; PR not created" 5
-  STEPS="$STEPS, PR opened"
+
+  # Idempotency: if a PR from this branch into base already exists, do
+  # NOT re-create it — pick up its state and continue. A re-run of the
+  # same plan after a partial delivery must resume, not fail. See the
+  # "Delivery state recovery" section in plugin/commands/git.md.
+  PR_STATE=""
+  if [ "$DRYRUN" -eq 0 ]; then
+    PR_STATE="$(gh pr list --base "$BASE" --head "$BRANCH" --state all \
+      --json state,number --jq '.[0].state' 2>/dev/null || true)"
+  fi
+
+  case "$PR_STATE" in
+    OPEN)
+      printf 'embo-deliver: PR from %s into %s already OPEN; skipping create\n' "$BRANCH" "$BASE" >&2
+      STEPS="$STEPS, PR already open"
+      ;;
+    MERGED)
+      printf 'embo-deliver: PR from %s into %s already MERGED; skipping create+merge\n' "$BRANCH" "$BASE" >&2
+      STEPS="$STEPS, PR already merged"
+      ;;
+    CLOSED)
+      fail "$STEPS; PR from $BRANCH into $BASE is CLOSED (unmerged) — resolve manually" 5
+      ;;
+    *)
+      run gh pr create --base "$BASE" --head "$BRANCH" \
+          --title "$PR_TITLE" --body "$MESSAGE" \
+        || fail "$STEPS; PR not created" 5
+      STEPS="$STEPS, PR opened"
+      ;;
+  esac
 
   if [ "$MODE" = "pr-merge" ] || [ "$MODE" = "release" ]; then
-    run gh pr merge --squash \
-      || fail "$STEPS; merge blocked, merge manually" 6
-    STEPS="$STEPS, merged"
+    if [ "$PR_STATE" = "MERGED" ]; then
+      : # already merged, nothing to do
+    else
+      run gh pr merge --squash \
+        || fail "$STEPS; merge blocked, merge manually" 6
+      STEPS="$STEPS, merged"
+    fi
   fi
 fi
 
@@ -314,17 +351,50 @@ if [ "$MODE" = "release" ]; then
   TAG="v$VERSION"
   run git fetch origin "$BASE" \
     || fail "$STEPS; fetch of $BASE failed before tagging" 8
-  run git tag "$TAG" "origin/$BASE" \
-    || fail "$STEPS; tag $TAG failed" 8
-  run git push origin "$TAG" \
-    || fail "$STEPS; tag $TAG not pushed" 8
+
+  # Idempotency: if the local tag already exists we assume the earlier
+  # `git tag` step in a prior run succeeded; likewise for the remote tag
+  # and the Release. Each step re-runs only if its output is missing.
+  local_tag_exists=0
+  remote_tag_exists=0
+  if [ "$DRYRUN" -eq 0 ]; then
+    git rev-parse --verify --quiet "refs/tags/$TAG" >/dev/null \
+      && local_tag_exists=1
+    git ls-remote --tags --exit-code origin "refs/tags/$TAG" >/dev/null 2>&1 \
+      && remote_tag_exists=1
+  fi
+
+  if [ "$local_tag_exists" -eq 1 ]; then
+    printf 'embo-deliver: local tag %s already exists; skipping create\n' "$TAG" >&2
+  else
+    run git tag "$TAG" "origin/$BASE" \
+      || fail "$STEPS; tag $TAG failed" 8
+  fi
+
+  if [ "$remote_tag_exists" -eq 1 ]; then
+    printf 'embo-deliver: remote tag %s already pushed; skipping push\n' "$TAG" >&2
+  else
+    run git push origin "$TAG" \
+      || fail "$STEPS; tag $TAG not pushed" 8
+  fi
   STEPS="$STEPS, tagged $TAG"
 
   # Publish a GA Release (non-draft, non-prerelease). Title is the tag; the
-  # body is the release-notes block.
-  run gh release create "$TAG" --title "$TAG" --notes "$RELNOTES" \
-    || fail "$STEPS; GitHub Release for $TAG not published" 9
-  STEPS="$STEPS, Release $TAG published"
+  # body is the release-notes block. If a Release already exists for this
+  # tag we assume a prior run created it and skip.
+  release_exists=0
+  if [ "$DRYRUN" -eq 0 ]; then
+    gh release view "$TAG" >/dev/null 2>&1 && release_exists=1
+  fi
+
+  if [ "$release_exists" -eq 1 ]; then
+    printf 'embo-deliver: GitHub Release %s already exists; skipping create\n' "$TAG" >&2
+    STEPS="$STEPS, Release $TAG already published"
+  else
+    run gh release create "$TAG" --title "$TAG" --notes "$RELNOTES" \
+      || fail "$STEPS; GitHub Release for $TAG not published" 9
+    STEPS="$STEPS, Release $TAG published"
+  fi
 fi
 
 printf 'embo-deliver: %s\n' "$STEPS"
