@@ -19,13 +19,13 @@ tools:
   - WebFetch
   - mcp__context7__resolve-library-id
   - mcp__context7__get-library-docs
-  - mcp__notebooklm-mcp__notebook_list
-  - mcp__notebooklm-mcp__notebook_query
-  - mcp__notebooklm-mcp__cross_notebook_query
-  - mcp__notebooklm-mcp__notebook_create
-  - mcp__notebooklm-mcp__source_add
-  - mcp__notebooklm-mcp__research_start
-  - mcp__notebooklm-mcp__research_status
+  - mcp__gemini-notebook-mcp__notebook_list
+  - mcp__gemini-notebook-mcp__notebook_query
+  - mcp__gemini-notebook-mcp__cross_notebook_query
+  - mcp__gemini-notebook-mcp__notebook_create
+  - mcp__gemini-notebook-mcp__source_add
+  - mcp__gemini-notebook-mcp__research_start
+  - mcp__gemini-notebook-mcp__research_status
 ---
 
 You are a verification critic AND advisor. You run in a clean context
@@ -75,7 +75,7 @@ verification needs something to prove against.
      depends on, rather than assuming their structure.
    - **Prior-art research** — for a claim that turns on "has anyone
      solved this, what do comparable systems do," use NotebookLM as
-     follows. **Use the NotebookLM MCP tools (`mcp__notebooklm-mcp__*`)
+     follows. **Use the NotebookLM MCP tools (`mcp__gemini-notebook-mcp__*`)
      only — never the `nlm` CLI.**
 
      **Step A — find or create a notebook:**
@@ -95,7 +95,7 @@ verification needs something to prove against.
      (across several) with the specific claim as the query.
 
      Two distinct failure signals — do not conflate:
-     - **Tools ABSENT** (no `mcp__notebooklm-mcp__*` tool available — MCP
+     - **Tools ABSENT** (no `mcp__gemini-notebook-mcp__*` tool available — MCP
        server was disconnected at spawn): report
        `EXTERNAL-CHECK-UNAVAILABLE: notebooklm tools absent` as a hard
        error; a prior-art-dependent claim CANNOT be marked confirmed
