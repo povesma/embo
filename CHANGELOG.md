@@ -2,23 +2,32 @@
 
 All notable changes to the embo plugin are documented here.
 
-## [0.2.5] - Unreleased
+## [0.2.5] - 2026-08-16
 
 ### Added
 
-- `/embo:visual-impl` gains **Live-Edit Mode**: a floating toggle panel
-  injected into the live page lets you turn candidate fixes on/off (or
-  bulk on/off/invert) without touching devtools, then lock in only the
-  chosen ones — written back to the project's own source, never
-  auto-committed.
-- The Live-Edit panel shows its version in the title (`Embo Live-Edit
-  (v.X.Y.Z)`) and warns when it is older than the embo you have
-  installed — so a panel you injected before upgrading embo no longer
-  drifts out of sync silently; the warning tells you to re-inject.
+- `/embo:visual-impl` gains **Live-Edit Mode** — a WYSIWYG loop for
+  tuning a page against a design or your own intent. You describe a
+  change, or Claude proposes options; Claude applies it live on the
+  page — no file edit, no rebuild. When the page looks right, you
+  accept and Claude writes the changes back into the source at their
+  real origins.
 - **Profile access no longer prompts.** A new `embo-profile` command
   reads the active profile (or the shipped `default.yaml` fallback), so
   workflows can be pre-approved with one narrow `Bash(embo-profile *)`
   allow rule instead of whitelisting all of `~/.claude`. Requires `yq`.
+- **Correction capture works out of the box.** When you steer how
+  Claude works, Claude restates the correction as a one-line
+  acknowledgment and a hook records it to a project-local
+  `.claude/corrections.jsonl`. `/embo:improve` reads that file as its
+  primary source. Running `/embo:enable-corrections` is still
+  recommended — claude-mem's `correction` observations add semantic
+  search across the history and cross-session context that the marker
+  file alone doesn't carry; `/embo:improve` merges and deduplicates
+  the two sources when both are present.
+- **`/embo:health` checks for `yq`.** The profile system hard-requires
+  it, so a `yq`-less environment now fails loudly at health-check time
+  instead of on the first profile read.
 
 ### Fixed
 
@@ -28,12 +37,6 @@ All notable changes to the embo plugin are documented here.
   skipped the external prior-art pass and degraded to reasoning-only. A
   skipped external check now leads with a loud failure instead of being
   buried under a confident verdict.
-
-- The Live-Edit panel survives a real page navigation — a link you click
-  yourself, on a server-rendered page or a client-side single-page app.
-  The panel, your toggle state, and any live style re-appear on the new
-  page automatically, and the panel restores itself if the app replaces
-  the page body. Previously it vanished the moment you navigated away.
 
 ## [0.2.4] - 2026-08-08
 
