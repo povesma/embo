@@ -2,6 +2,14 @@
 
 All notable changes to the embo plugin are documented here.
 
+## [0.2.6] - 2026-08-18
+
+### Fixed
+
+- **Live-Edit Mode is usable.** 0.2.5 shipped it broken. In
+  `/embo:visual-impl` you now see the browser and the panel appears
+  on the page.
+
 ## [0.2.5] - 2026-08-16
 
 ### Added
