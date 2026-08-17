@@ -179,30 +179,10 @@ package (scoped, official Microsoft). Do NOT use the unscoped
 binary. Note this CLI is **not** the `@playwright/test` runner; it does
 not provide `toHaveScreenshot` (see Step 4).
 
-First check whether it is already present (avoid a redundant global
-install):
-
-```bash
-playwright-cli --version
-```
-
-If that prints a version, you are done. If not-found, check a
-project-local install before installing globally:
-
-```bash
-npx --no-install playwright-cli --version
-```
-
-Only if BOTH report not-found, install it, then verify:
-
-```bash
-npm install -g @playwright/cli
-playwright-cli --version
-```
-
-The final `--version` must print a version. If it still fails, report
-the error and stop — the render/measure steps cannot run without it.
-Installing browsers may also be needed once: `npx playwright install`.
+Do not probe for it with `--version` or existence checks before using
+it. Just run it. If `playwright-cli` is not found, stop and report the
+error clearly — do not try to install it mid-run. If browsers are not
+installed, `npx playwright install` fixes that.
 
 **3. A reachable target URL** — some origin serving the current build
 of the code under review. This may be a local dev server OR a hosted
@@ -254,7 +234,7 @@ PSD2Code — they made generation deterministic, model-independent):
     edits — rendering a stale deploy makes the diff meaningless).
   - If the URL does not respond, stop and report it — do not screenshot
     a dead page.
-- `playwright-cli open <target-url>` (or `goto` on an open browser).
+- `playwright-cli open --headed <target-url>` (or `goto` on an open browser). The `--headed` flag is required — without it the browser runs headless and no window appears on screen.
 
 ### 4-SYSTEM. Verify by conformance (SYSTEM MODE — preferred)
 
@@ -377,6 +357,27 @@ visual judgment picks the target, but the code that ships is authored,
 diffed, reviewed, and reverted through the normal git flow — never
 auto-written by the panel itself.
 
+### Starting Live-Edit directly
+
+When the user says "start live edit on `<url>`" or "open a browser with
+live edit" — without a Figma design or a Loop task — skip the full
+Loop preamble and go straight to this sequence:
+
+1. Pick a per-run session name — anything unique to this Live-Edit run
+   (e.g. `embo-liveedit-<short-tag>`). Use it in every `playwright-cli`
+   call below via `-s=<session-name>`; that isolates you from any other
+   agent's `default` session on this machine.
+2. Open a headed browser on the target (foreground, not background):
+   ```bash
+   playwright-cli -s=<session-name> open --headed <target-url>
+   ```
+3. Seed the registry and inject the panel using the two Bash calls in
+   "Running the panel" below (same `-s=<session-name>` on every call).
+4. Ask the user if they see the panel and explain how to use it: toggle
+   rows ON/OFF, then say "lock in" when done.
+
+The Loop/Gate does not need to run first. Live-Edit is independent.
+
 ### Running the panel — load the shipped script
 
 The panel is one shipped file, `live-edit-panel.js`, in this plugin's
@@ -386,34 +387,63 @@ header comment carries the full spec (data model, live-apply mechanisms,
 UX requirements, the specificity rule, export/lock-in) so the behavior
 is reproducible.
 
-Resolve the file by its plugin-root path so it is found regardless of
-the working directory — the plugin installs into a version-keyed cache,
-not the project. The shell expands `$CLAUDE_PLUGIN_ROOT` INTO the
-run-code string (the string reaches playwright already containing the
-absolute path); `run-code` has no `process.env` access, so an env-var
-handoff does NOT work — the path must be a literal in the string. Keep
-the injection as ONE command (a `VAR=…; cmd` compound has been observed
-to hang here).
+**The browser must be open and headed before injecting.** Run
+`playwright-cli -s=<session-name> open --headed <target-url>` in the
+**foreground** (never `run_in_background` — a backgrounded open exits
+immediately and leaves no attached session). `<session-name>` is a
+per-run unique identifier; without `-s`, all calls share a `default`
+session another agent may have opened, so the injection could land on
+the wrong page.
 
-1. **Seed the registry**, then **inject the file** — both against the
-   attached page:
+**Panel path.** Claude Code's `${CLAUDE_PLUGIN_ROOT}` variable is
+substituted into command markdown at dispatch time and IS set for hook
+processes and MCP subprocesses, but it is **not exported to Bash tool
+calls** the LLM issues. That means the variable expands to empty in the
+shell for any Live-Edit call issued outside slash-command dispatch (e.g.
+from a subagent, or a follow-up freeform Bash call in the same session),
+producing a wrong path like `/commands/live-edit-panel.js`.
+
+Until Claude Code exposes the plugin root uniformly, derive it from the
+`rlm_repl` binary that this plugin ships on PATH. Run this as a plain
+Bash call first, before any playwright injection:
+
+```bash
+which rlm_repl
+```
+
+The printed path ends in `bin/rlm_repl`. Take its parent's parent — that
+is `PLUGIN_ROOT`. The panel is at `PLUGIN_ROOT/commands/live-edit-panel.js`.
+Substitute the literal path into the injection call below; do not use
+`${CLAUDE_PLUGIN_ROOT}`, do not chain `which` with the playwright call.
+
+*(This derivation is a documented workaround, not a design. Task
+054-PLUGIN-PATH-RESOLUTION tracks the proper fix — expose the plugin
+root via a shipped `embo-plugin-root` helper on PATH, so no command
+needs to derive it from an unrelated binary.)*
+
+1. **Seed the registry.** If the user started Live-Edit without naming
+   specific candidates, seed empty (`[]`) — the panel will render with
+   an "empty" state and you can add rows later. If you already have
+   candidate fixes for the task, put them in the array as `{ id, label,
+   kind, apply, sourceLocator }` entries (see "Registry data model"
+   below):
 
    ```bash
-   # read the installed embo version so the panel can flag a stale script
-   embo_ver=$(jq -r '.version' "$CLAUDE_PLUGIN_ROOT/.claude-plugin/plugin.json")
-   # seed the registry AND tell the panel which embo is installed. The panel
-   # bakes its OWN version and shows a warning if the two differ (stale
-   # script after an embo upgrade). Register both as an addInitScript so the
-   # value survives navigation too.
-   playwright-cli eval "() => { window.__liveEditRegistry = [ /* entries */ ]; window.__liveEditInstalledVersion = '$embo_ver'; return 'seeded'; }"
-   # register the panel via addInitScript so the browser re-runs it on
-   # EVERY document load — this is what makes the panel survive a
-   # USER-driven navigation (a plain addScriptTag would NOT survive). Also
-   # re-seed the installed version on every load via addInitScript so the
-   # stale-check keeps working across navigations. $CLAUDE_PLUGIN_ROOT is
-   # expanded by the shell into the string before playwright sees it.
-   playwright-cli run-code "async (page) => { await page.addInitScript('window.__liveEditInstalledVersion = \"'$embo_ver'\";'); await page.addInitScript({ path: '$CLAUDE_PLUGIN_ROOT/commands/live-edit-panel.js' }); await page.addScriptTag({ path: '$CLAUDE_PLUGIN_ROOT/commands/live-edit-panel.js' }); }"
+   playwright-cli -s=<session-name> eval "() => { window.__liveEditRegistry = [ /* entries or empty */ ]; return 'seeded'; }"
    ```
+
+2. **Inject the panel** (addInitScript survives navigation; addScriptTag
+   loads it immediately). Substitute the literal `PLUGIN_ROOT` from the
+   `which rlm_repl` step above:
+
+   ```bash
+   playwright-cli -s=<session-name> run-code "async (page) => { await page.addInitScript({ path: 'PLUGIN_ROOT/commands/live-edit-panel.js' }); await page.addScriptTag({ path: 'PLUGIN_ROOT/commands/live-edit-panel.js' }); }"
+   ```
+
+3. **Ask the user if the panel is visible.** The user's eye is the
+   check. Take a screenshot yourself
+   (`playwright-cli -s=<session-name> screenshot`) only when YOU need
+   to see the render to make a decision.
 
    The panel persists its registry and ON-state in `localStorage`, so
    after a user click navigates the page the init script re-reads them
@@ -422,11 +452,32 @@ to hang here).
    re-run on the new page to re-attach their closures (until then,
    toggling such a row is a no-op).
 
-2. The file exposes `window.__liveEditToggle(id)`,
-   `__liveEditBulk('all-on'|'all-off'|'invert')`, `__liveEditExport()`,
-   `__liveEditLockInPayload()`, and `__liveEditCleanup()`. Drive them via
-   `playwright-cli eval` when scripting; the human drives the panel UI
-   directly.
+**Exposed panel API** (drive from `playwright-cli eval` when scripting;
+the human drives the panel UI directly):
+
+- `window.__liveEditToggle(id)` — flip one candidate ON/OFF.
+- `window.__liveEditBulk('all-on' | 'all-off' | 'invert')` — bulk toggle.
+- `window.__liveEditExport()` — copy the change set for ON entries to
+  the clipboard.
+- `window.__liveEditLockInPayload()` — return the same change set to
+  the caller programmatically (for the Lock-in step).
+- `window.__liveEditCleanup()` — remove all injected panel scaffolding.
+- `window.__liveEditPersist()` — persist the current registry + ON-set
+  to `localStorage`. Call after mutating the registry at runtime.
+- `window.__liveEditRenderPanel()` — rebuild the visible panel from the
+  current registry. Call after mutating the registry at runtime.
+
+**Adding a candidate after the panel is already visible** (the common
+case for a bare "start live edit" session, where the user hands you a
+candidate later):
+
+```bash
+playwright-cli -s=<session-name> eval "() => { window.__liveEditRegistry.push({id:'<id>', label:'<label>', kind:'style', apply:'<css>', sourceLocator:{file:'<path>', selector:'<sel>'}}); window.__liveEditPersist(); window.__liveEditRenderPanel(); return window.__liveEditRegistry.length; }"
+```
+
+The `push` + `Persist` + `RenderPanel` sequence is required — a bare
+`push` mutates the array but the panel's DOM still reflects the pre-push
+state until `RenderPanel` rebuilds it.
 
 **Registry data model** — each candidate is one entry (runtime-only,
 nothing on disk until lock-in):

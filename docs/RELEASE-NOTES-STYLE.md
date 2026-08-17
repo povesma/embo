@@ -167,6 +167,31 @@ Phrases that sound descriptive but say nothing:
 If a phrase would collapse under "how does that work?" from a
 reader, either answer the question or delete the phrase.
 
+### 11. In a Fixed entry, name only the specific capability that changed
+
+A Fixed entry that names the whole feature area suggests every part
+of it was previously broken. Cut adjacent, correctly-shipped
+behavior. Test: for each clause, was this specifically what didn't
+work? If not, drop it.
+
+### 12. Say "predecessor was broken" only when the reader would otherwise wonder
+
+The `Fixed` header already tells the reader something was wrong.
+Naming the specific broken capability from the previous release is
+worth it when the fix corrects a flagship feature the reader may
+already have tried and given up on. For routine cleanups, the
+header carries the meaning; adding "vX.Y shipped it broken" is
+noise.
+
+### 13. No project vocabulary in user-facing entries
+
+Rule 10 removes empty phrases; this one removes internal terms that
+carry meaning inside the repo but not outside. Command names,
+internal mechanism names, and any word the reader could only learn
+from a command file need to be rephrased in ordinary English or
+dropped. Test: could a reader who has only seen the README follow
+this?
+
 ## The trajectory (Live-Edit Mode 0.2.5)
 
 The entry passed through six drafts. Each draft's fault, and the
@@ -193,3 +218,7 @@ Before committing a CHANGELOG entry, ask in order:
 6. If a setup step became optional, did I say what enabling it still
    adds?
 7. Every word carrying its weight — cut what isn't.
+8. For a Fixed entry, is each clause specifically what was broken?
+9. Am I calling out a predecessor version the reader doesn't need
+   named?
+10. Would a reader with no project vocabulary understand every phrase?
