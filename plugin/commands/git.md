@@ -361,8 +361,7 @@ messages for human review, or grouping of mixed concerns.
 
 The cycle is executed by `plugin/bin/embo-deliver`, a bare command on the
 Bash PATH. It makes no decisions — this skill builds the plan; the script
-only executes it. Full contract:
-`tasks/038-RAPID-DELIVER-one-shot-git/`.
+only executes it.
 
 **Prerequisite (one-time opt-in):** the user must add
 `"Bash(embo-deliver *)"` to their `permissions.allow`. Without it the
