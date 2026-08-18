@@ -296,14 +296,23 @@ if [ "$MODE" = "pr" ] || [ "$MODE" = "pr-merge" ] || [ "$MODE" = "release" ]; th
   # subject there is harmless.
   PR_TITLE="${MESSAGE%%$'\n'*}"
 
-  # Idempotency: if a PR from this branch into base already exists, do
-  # NOT re-create it — pick up its state and continue. A re-run of the
-  # same plan after a partial delivery must resume, not fail. See the
-  # "Delivery state recovery" section in plugin/commands/git.md.
+  # Idempotency: if a PR whose HEAD commit is EXACTLY the one we just
+  # pushed already exists, do NOT re-create it — pick up its state and
+  # continue. A re-run of the same plan after a partial delivery must
+  # resume, not fail. See "Delivery state recovery" in git.md.
+  #
+  # Match on headRefOid, not "any PR from this branch": a feature branch
+  # reused across releases will have prior merged PRs whose state must
+  # NOT be conflated with the current commit's state.
   PR_STATE=""
   if [ "$DRYRUN" -eq 0 ]; then
-    PR_STATE="$(gh pr list --base "$BASE" --head "$BRANCH" --state all \
-      --json state,number --jq '.[0].state' 2>/dev/null || true)"
+    HEAD_SHA="$(git rev-parse HEAD 2>/dev/null || true)"
+    if [ -n "$HEAD_SHA" ]; then
+      PR_STATE="$(gh pr list --base "$BASE" --head "$BRANCH" --state all \
+        --json state,number,headRefOid \
+        --jq ".[] | select(.headRefOid == \"$HEAD_SHA\") | .state" \
+        2>/dev/null | head -n 1 || true)"
+    fi
   fi
 
   case "$PR_STATE" in

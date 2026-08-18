@@ -13,6 +13,10 @@ All notable changes to the embo plugin are documented here.
   the panel is up, files, database rows, CMS entries, and API payloads
   stay untouched until you say to save the change.
 - Panel header shows the correct plugin version.
+- **`/embo:git deliver release` on a reused feature branch works.**
+  A follow-up release from a branch whose earlier PR was already
+  merged now creates a new PR for the new commit, instead of
+  silently skipping and tagging a stale commit.
 
 ## [0.2.6] - 2026-08-18
 
