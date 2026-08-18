@@ -2,6 +2,18 @@
 
 All notable changes to the embo plugin are documented here.
 
+## [0.2.7] - 2026-08-18
+
+### Fixed
+
+- **Live-Edit stays in one browser window.** Follow-up edits for the
+  same task land in the same panel, not in a new browser that opens on
+  the side.
+- **Live-Edit never touches your backend without you asking.** Once
+  the panel is up, files, database rows, CMS entries, and API payloads
+  stay untouched until you say to save the change.
+- Panel header shows the correct plugin version.
+
 ## [0.2.6] - 2026-08-18
 
 ### Fixed

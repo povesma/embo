@@ -104,7 +104,7 @@
   // at inject time). This catches the stale-script trap: a user tunes with an
   // old panel still live in the browser, upgrades embo, and the running
   // script silently no longer matches the installed one.
-  const PANEL_VERSION = '0.2.5';
+  const PANEL_VERSION = '0.2.7';
 
   // Persisted state (localStorage — survives navigation AND is captured by
   // Playwright storageState, unlike sessionStorage). One namespaced key per

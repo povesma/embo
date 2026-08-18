@@ -240,6 +240,8 @@ Note: the 5 test subagents (`test-backend`, `test-review`,
 
 **Do not check tool availability, versions, or system configuration before using a tool.** Just use it. If it fails, stop and report the error loudly — do not preemptively probe with `--version`, existence checks, or preflight commands.
 
+**Use `jq` for JSON.** No Python, no `grep` — `jq`.
+
 ## Verify Against the Current Source, Not Memory
 
 **Refresh state from its authoritative source before analyzing it — in
@@ -258,6 +260,13 @@ can't refresh, say so and mark the answer provisional.
   repo only. Users have their own CLAUDE.md. All behavioral rules for
   the workflow must live in the command files we ship
   (`plugin/commands/`), not here.
+- **No internal task references in user- or Claude-facing files**:
+  command and agent bodies (`plugin/commands/*.md`, `plugin/agents/*.md`),
+  README, and anything else loaded into Claude's context or shown to the
+  user MUST NOT reference `tasks/` paths or task numbers — those pointers
+  are meaningless outside this repo. State the rationale in plain terms
+  ("workaround for X") instead. Hook scripts, bin wrappers, test scripts,
+  and runtime JS header comments are exempt.
 
 ## Emoji Usage
 

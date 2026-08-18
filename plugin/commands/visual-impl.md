@@ -357,6 +357,17 @@ visual judgment picks the target, but the code that ships is authored,
 diffed, reviewed, and reverted through the normal git flow — never
 auto-written by the panel itself.
 
+**Hard rule while Live-Edit is running.** Once the panel is injected,
+every fix goes through it — style, markup, and logic all have a panel
+`kind` (see "Live-apply mechanisms" below). Do NOT touch the backend
+of the page — source files, database rows, CMS entries, API payloads,
+template engines, whatever the page is rendered from — because a fix
+"doesn't fit style" or is "too complex to preview". A markup move is a
+`kind: markup` candidate, not a backend edit. The backend is written
+only when the user, having seen the candidate applied live, explicitly
+asks for the change to be persisted. Direction on what to fix does not
+authorize backend edits; it authorizes you to build the candidate.
+
 ### Starting Live-Edit directly
 
 When the user says "start live edit on `<url>`" or "open a browser with
@@ -387,13 +398,28 @@ header comment carries the full spec (data model, live-apply mechanisms,
 UX requirements, the specificity rule, export/lock-in) so the behavior
 is reproducible.
 
-**The browser must be open and headed before injecting.** Run
-`playwright-cli -s=<session-name> open --headed <target-url>` in the
-**foreground** (never `run_in_background` — a backgrounded open exits
-immediately and leaves no attached session). `<session-name>` is a
-per-run unique identifier; without `-s`, all calls share a `default`
-session another agent may have opened, so the injection could land on
-the wrong page.
+**Session name = task folder ID.** Derive `<session-name>` from the
+active task's folder name (e.g. `040-VISUAL-IMPL-ship-to-plugin`). This
+is deterministic: every call in every turn for the same task
+regenerates the same name, so all edits land on one browser window with
+one panel. No agent-chosen tag, no `default`. If no active task exists,
+ask the user for one before starting Live-Edit — Live-Edit runs are
+bound to tasks, not to conversations.
+
+**One `open` per task, ever.** Look at your own conversation history:
+if you already ran `playwright-cli -s=<task-id> open` in this
+conversation, the session is attached — skip `open` and go straight to
+the panel injection step. A second `open` on the same `-s` spawns a
+duplicate browser window and splits panel state; there is no "reuse"
+mode. All subsequent calls (`eval`, `run-code`, `screenshot`, etc.)
+pass `-s=<task-id>`.
+
+**Open the browser** (headed, foreground — `run_in_background` exits
+immediately and leaves no attached session):
+
+```bash
+playwright-cli -s=<session-name> open --headed <target-url>
+```
 
 **Panel path.** Claude Code's `${CLAUDE_PLUGIN_ROOT}` variable is
 substituted into command markdown at dispatch time and IS set for hook
@@ -416,10 +442,9 @@ is `PLUGIN_ROOT`. The panel is at `PLUGIN_ROOT/commands/live-edit-panel.js`.
 Substitute the literal path into the injection call below; do not use
 `${CLAUDE_PLUGIN_ROOT}`, do not chain `which` with the playwright call.
 
-*(This derivation is a documented workaround, not a design. Task
-054-PLUGIN-PATH-RESOLUTION tracks the proper fix — expose the plugin
-root via a shipped `embo-plugin-root` helper on PATH, so no command
-needs to derive it from an unrelated binary.)*
+*(This derivation is a workaround. The proper fix is a shipped
+`embo-plugin-root` helper on PATH that prints the plugin's own root, so
+no command has to derive the path from an unrelated binary.)*
 
 1. **Seed the registry.** If the user started Live-Edit without naming
    specific candidates, seed empty (`[]`) — the panel will render with
