@@ -192,6 +192,22 @@ from a command file need to be rephrased in ordinary English or
 dropped. Test: could a reader who has only seen the README follow
 this?
 
+### 14. No showing-off, especially on bug fixes
+
+State what the version does; do not celebrate that it does so. On a
+release that fixes a bug that should not have shipped in the first
+place, the tone is neutral acknowledgment, not applause. Cut
+adjectives that praise the fix ("that actually works", "now really
+does X", "the version you've been waiting for"). Also cut hedged
+apologies ("finally", "at last") — they draw attention to the earlier
+failure. The `Fixed` header carries the meaning; the entry states the
+capability plainly.
+
+Test: if the sentence still reads like an announcement of a new
+achievement after you remove the version number, cut the celebratory
+word. Applies equally to CHANGELOG entries, GitHub Release bodies,
+and social/announcement posts.
+
 ## The trajectory (Live-Edit Mode 0.2.5)
 
 The entry passed through six drafts. Each draft's fault, and the
@@ -222,3 +238,4 @@ Before committing a CHANGELOG entry, ask in order:
 9. Am I calling out a predecessor version the reader doesn't need
    named?
 10. Would a reader with no project vocabulary understand every phrase?
+11. Any showing-off adjectives or hedged apologies — cut them.

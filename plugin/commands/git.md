@@ -70,6 +70,10 @@ Follows Conventional Commits 1.0.
 - **footer**: optional; `BREAKING CHANGE: <description>` or
   `Closes #N`
 
+**Hard rule — subject-only for self-evident diffs.** No body that
+paraphrases the diff. If you cannot state a *why* the diff does not
+already answer, omit the body.
+
 Examples — prefer subject-only when the change is self-evident:
 
 ```
