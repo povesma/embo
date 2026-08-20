@@ -56,7 +56,7 @@
     → user smoke-tested a fresh session: wider-context question fires
       first with approved framing; works [user-confirmed] (2026-07-26)
 
-- [ ] 2.0 **User Story:** As an embo user, I want the command to suggest
+- [X] 2.0 **User Story:** As an embo user, I want the command to suggest
   my JIRA parent and skip when context is already known, so I am not
   asked to restate what exists (FR-3, FR-4). [4/0]
   - [X] 2.1 Add the FR-4 redundancy check as evaluation step 1: wider
@@ -73,15 +73,16 @@
   - [X] 2.3 State the evaluation order explicitly (redundancy → JIRA →
     ask) and the precedence: redundancy-skip wins over the FR-5 follow-up
     when both could apply [verify: code-only]
-  - [~] 2.4 Live-run two `/embo:prd` cases: (a) prompt with a "so that"
+  - [X] 2.4 Live-run two `/embo:prd` cases: (a) prompt with a "so that"
     motivation → question skipped, context restated, no follow-up fires;
     (b) prompt with an `AS-1234`-style ID → command suggests the parent
     [verify: manual-run-claude]
-    → core question path smoke-tested and works; the redundancy-skip (a)
-      and JIRA-parent (b) branches not specifically driven yet
-      [pending branch-specific run] (2026-07-26)
+    → headless `claude -p` runs, harness-bounded to Step 4a: (a)
+      redundancy-skip fired — question skipped, 1-line restatement, no
+      follow-up; (b) JIRA branch fired on AS-1234 — parent suggested,
+      fell through to ask with approved framing [live] (2026-08-19)
 
-- [ ] 3.0 **User Story:** As an embo user, I want the captured wider
+- [X] 3.0 **User Story:** As an embo user, I want the captured wider
   context recorded in the generated PRD, so it propagates to tech-design
   and tasks (FR-6). [3/0]
   - [X] 3.1 In `plugin/commands/prd.md` Step 5 template, insert the
@@ -92,8 +93,10 @@
   - [X] 3.2 Patch-bump the version in
     `plugin/.claude-plugin/plugin.json` so a live test loads the change
     from the version-keyed plugin cache (0.2.3 → 0.2.4) [verify: code-only]
-  - [~] 3.3 Live-run `/embo:prd` twice: one with a wider-context answer
+  - [X] 3.3 Live-run `/embo:prd` twice: one with a wider-context answer
     (section populated) and one with none (section shows "None given —
     feature described in isolation.") [verify: manual-run-claude]
-    → populated-section path confirmed via smoke-test; "None given" empty
-      variant not specifically driven yet [pending edge run] (2026-07-26)
+    → populated variant user-confirmed (2026-07-26); empty variant via
+      headless run with scripted "skip" answer — section renders the
+      canonical "None given — feature described in isolation." sentence
+      [live] (2026-08-19)
