@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+# embo-plugin-info — one-shot diagnostic for how the embo plugin is
+# installed and which files/dirs are live.
+#
+# Why: dogfooding, cache inspection, and "did my edit take effect?"
+# questions otherwise devolve into a chain of ls/cat/git-status calls
+# that each cost a prompt and burn context. This script emits the
+# full state in one call. Report only; no side effects.
+#
+# Sections:
+#   1. Working tree — repo root, current branch, HEAD SHA, dirty flag.
+#   2. Marketplace  — every ~/.claude/plugins/*marketplaces*.json entry
+#                     (name, source type, source path/URL).
+#   3. Enabled      — every entry in ~/.claude/settings.json
+#                     enabledPlugins (name, marketplace, version).
+#   4. On disk      — every installed plugin dir under
+#                     ~/.claude/plugins/cache/**, with its
+#                     .claude-plugin/plugin.json version.
+#   5. embo focus   — resolved source of the currently-loaded `embo`
+#                     plugin, and the version of THIS repo's manifest,
+#                     side-by-side. Includes the resolved on-PATH
+#                     paths of the plugin's bin/ wrappers, so cache
+#                     shadowing is obvious.
+#
+# Usage: embo-plugin-info
+# No flags; prints plain text to stdout. Exit 0 on success even if
+# nothing is installed (empty sections are labelled).
+
+set -uo pipefail
+
+CLAUDE_DIR="${CLAUDE_HOME:-$HOME/.claude}"
+PLUGINS_DIR="$CLAUDE_DIR/plugins"
+SETTINGS="$CLAUDE_DIR/settings.json"
+
+header() {
+    printf '\n=== %s ===\n' "$1"
+}
+
+section_working_tree() {
+    header "1. Working tree"
+    local root branch head dirty
+    root="$(git rev-parse --show-toplevel 2>/dev/null || echo '(not a git repo)')"
+    branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '-')"
+    head="$(git rev-parse --short HEAD 2>/dev/null || echo '-')"
+    if git diff --quiet 2>/dev/null && git diff --cached --quiet 2>/dev/null; then
+        dirty="clean"
+    else
+        dirty="dirty"
+    fi
+    printf 'repo:     %s\n' "$root"
+    printf 'branch:   %s\n' "$branch"
+    printf 'HEAD:     %s\n' "$head"
+    printf 'state:    %s\n' "$dirty"
+    if [[ -f "$root/plugin/.claude-plugin/plugin.json" ]]; then
+        local wt_ver
+        wt_ver="$(jq -r '.version' "$root/plugin/.claude-plugin/plugin.json" 2>/dev/null || echo '?')"
+        printf 'manifest: plugin/.claude-plugin/plugin.json version=%s\n' "$wt_ver"
+    fi
+}
+
+section_marketplaces() {
+    header "2. Marketplaces (~/.claude/plugins/*.json)"
+    local found=0
+    shopt -s nullglob
+    for f in "$PLUGINS_DIR"/*marketplaces*.json "$PLUGINS_DIR"/*marketplace*.json; do
+        [[ -f "$f" ]] || continue
+        found=1
+        printf -- '-- %s\n' "$f"
+        if command -v jq >/dev/null 2>&1; then
+            jq -r '
+              (if type=="object" and has("marketplaces") then .marketplaces else . end)
+              | to_entries[]?
+              | "  name: \(.key)\n  source: \(.value.source // .value)"
+            ' "$f" 2>/dev/null || cat "$f"
+        else
+            cat "$f"
+        fi
+    done
+    shopt -u nullglob
+    [[ $found -eq 0 ]] && printf '(no marketplace files found)\n'
+}
+
+section_enabled() {
+    header "3. Enabled plugins (settings.json)"
+    if [[ ! -f "$SETTINGS" ]]; then
+        printf '(no %s)\n' "$SETTINGS"
+        return
+    fi
+    if command -v jq >/dev/null 2>&1; then
+        jq -r '
+          .enabledPlugins // {} | to_entries[]
+          | "  \(.key): \(.value)"
+        ' "$SETTINGS" 2>/dev/null
+        local n
+        n="$(jq -r '.enabledPlugins // {} | length' "$SETTINGS" 2>/dev/null)"
+        printf '(%s enabled)\n' "${n:-0}"
+    else
+        grep -A 20 enabledPlugins "$SETTINGS" || true
+    fi
+}
+
+section_on_disk() {
+    header "4. Installed plugin dirs"
+    local cache="$PLUGINS_DIR/cache"
+    if [[ ! -d "$cache" ]]; then
+        printf '(no cache dir at %s)\n' "$cache"
+        return
+    fi
+    shopt -s nullglob
+    for manifest in "$cache"/*/*/.claude-plugin/plugin.json "$cache"/*/*/*/.claude-plugin/plugin.json; do
+        [[ -f "$manifest" ]] || continue
+        local ver name
+        ver="$(jq -r '.version // "?"' "$manifest" 2>/dev/null)"
+        name="$(jq -r '.name // "?"' "$manifest" 2>/dev/null)"
+        printf '  %s@%s\n    %s\n' "$name" "$ver" "$manifest"
+    done
+    shopt -u nullglob
+}
+
+section_embo_focus() {
+    header "5. embo focus"
+    printf 'on-PATH bin wrappers (which -a):\n'
+    local w
+    for w in rlm_repl embo-profile embo-deliver embo-corrections embo-tokens embo-plugin-info; do
+        local path
+        path="$(command -v "$w" 2>/dev/null || echo '(missing)')"
+        printf '  %-20s %s\n' "$w" "$path"
+    done
+    if [[ -f "$SETTINGS" ]] && command -v jq >/dev/null 2>&1; then
+        printf '\nembo marketplace source (per settings.json enabledPlugins):\n'
+        local mp
+        mp="$(jq -r '.enabledPlugins["embo@embo"] // .enabledPlugins.embo // "(not enabled)"' "$SETTINGS")"
+        printf '  %s\n' "$mp"
+    fi
+}
+
+main() {
+    section_working_tree
+    section_marketplaces
+    section_enabled
+    section_on_disk
+    section_embo_focus
+}
+
+main

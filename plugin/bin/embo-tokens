@@ -1,0 +1,98 @@
+#!/usr/bin/env python3
+# embo-tokens — approximate token counts for one or more text files.
+#
+# Why: prose changes in shipped command/agent files (`plugin/commands/*.md`,
+# `plugin/agents/*.md`) and in the hook-extracted checklist blocks change the
+# per-session context cost of every user of the plugin. Lines are a poor
+# proxy — the model consumes tokens, not lines. This tool reports both, so
+# refactor decisions on shipped prompts are made against the real currency.
+#
+# Approximation: two independent estimates are printed per file.
+#   - chars/4  : the classic Anthropic/OpenAI rule of thumb for English
+#                prose. Cheap; runs anywhere with only the stdlib.
+#   - words*4/3: an alternative that leans on whitespace-token counts;
+#                often within a few percent of chars/4 for our prose.
+# Both are approximations. When an exact figure matters (e.g. a
+# published metric in a PRD), re-run with a real tokenizer library and
+# note the model. For refactor comparisons the two heuristics bracket
+# the true value well enough to decide.
+#
+# Usage:
+#   embo-tokens [--label LABEL FILE]... FILE...
+#
+#   Each positional FILE is reported with its path as the label. A
+#   `--label LABEL FILE` pair reports FILE under the given LABEL,
+#   which is useful for "before/after" tables.
+#
+#   Non-existent files are reported with `(missing)` and exit code 0
+#   for the whole run (so pairs where the "before" was deleted still
+#   print something). A truly empty argument list is a usage error
+#   (exit 2).
+#
+# Runs as a plain command (see plugin/bin/embo-profile for the same
+# permission-allowlist reasoning).
+
+import os
+import sys
+
+
+def approx_tokens(path):
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
+        s = f.read()
+    chars = len(s)
+    words = len(s.split())
+    lines = s.count("\n") + (0 if s.endswith("\n") or not s else 1)
+    tok_chars = chars // 4
+    tok_words = (words * 4 + 2) // 3
+    return chars, words, lines, tok_chars, tok_words
+
+
+def parse_args(argv):
+    items = []
+    i = 1
+    while i < len(argv):
+        a = argv[i]
+        if a == "--label":
+            if i + 2 >= len(argv):
+                sys.stderr.write("embo-tokens: --label requires LABEL and FILE\n")
+                sys.exit(2)
+            items.append((argv[i + 1], argv[i + 2]))
+            i += 3
+        elif a in ("-h", "--help"):
+            sys.stdout.write(__doc__ or "")
+            sys.exit(0)
+        else:
+            items.append((a, a))
+            i += 1
+    if not items:
+        sys.stderr.write("embo-tokens: no input files\n")
+        sys.exit(2)
+    return items
+
+
+def render(items):
+    label_w = max(len(lbl) for lbl, _ in items)
+    label_w = max(label_w, 5)
+    header = (
+        f"{'label':{label_w}s}  {'chars':>7} {'words':>6} {'lines':>5}  "
+        f"{'~tok(c/4)':>9} {'~tok(w*4/3)':>11}"
+    )
+    print(header)
+    print("-" * len(header))
+    for label, path in items:
+        if not os.path.exists(path):
+            print(f"{label:{label_w}s}  (missing)")
+            continue
+        c, w, ln, tc, tw = approx_tokens(path)
+        print(
+            f"{label:{label_w}s}  {c:>7} {w:>6} {ln:>5}  "
+            f"{tc:>9} {tw:>11}"
+        )
+
+
+def main():
+    render(parse_args(sys.argv))
+
+
+if __name__ == "__main__":
+    main()
