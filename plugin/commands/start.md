@@ -1,25 +1,9 @@
 ---
 description: Start a coding session with comprehensive context from RLM code analysis and claude-mem historical knowledge. Use at the beginning of each coding session.
-allowed-tools: Bash(embo-profile *) Bash(rlm_repl *) Bash(git log *) Bash(git diff *)
+allowed-tools: Bash(embo-profile *) Bash(rlm_repl *) Bash(git log *) Bash(git diff *) Bash(git remote get-url *) Read Task mcp__plugin_claude-mem_mcp-search__search mcp__plugin_claude-mem_mcp-search__get_observations AskUserQuestion
 ---
 
 # Start embo Coding Session
-
-Start a coding session with comprehensive context from both RLM code analysis and claude-mem historical knowledge.
-
-## When to Use
-
-- **Beginning of each coding session**
-- After `/embo:init` has been run
-- When you need full project context
-- Resuming work after a break
-
-## What This Command Does
-
-1. **Retrieves historical context** from claude-mem
-2. **Analyzes current codebase** with RLM
-3. **Synthesizes** both into actionable session summary
-4. **Recommends** next task based on data
 
 ## Process
 
@@ -30,8 +14,9 @@ embo-profile show
 ```
 
 `embo-profile show` returns the active profile, or the canonical
-`default.yaml` when none is set; parse the YAML. (claude-mem is always
-on — there is no memory toggle.)
+`default.yaml` when none is set. (claude-mem is always on — there is
+no memory toggle.) For any later single-value read within this
+session, use `embo-profile get <key>` instead of re-parsing the YAML.
 
 This is the session's single profile load. Echo the profile (or
 "default") into the session summary so later commands read it from
@@ -412,7 +397,13 @@ mixing a new/rare tool with others — FIRST emit one line:
 `| head`; split a chain; drop a `>` wrapper and let the capture file
 hold output); `needed` = the risky shape is genuinely required, say
 why. Reaching for `$()`/redirects/chains by reflex when a simpler form
-exists is the failure this catches.
+exists is the failure this catches. Exception: calls named in an
+explicit Batch A/B block in the active command are pre-approved as a
+group — emitting them as multiple parallel `tool_use` blocks in a
+single assistant response is the intended path, not "chaining". No
+`Shape-check:` line is required for a batch group; a `Shape-check:`
+line is still required for any risky-shape call *outside* a batch
+group.
 <!-- /CHECKLIST -->
 
 
@@ -596,250 +587,113 @@ the 3rd file-opening call — not a feeling about whether it's "bulk";
 emitting `inline` with no specific reason is the silent-default failure
 this catches. Weigh a subagent for many-file exploration, judging this
 session's own work, independent proof, 3+ independent tasks, or noisy
-loops. Verify a delegated diff, don't trust the summary.
+loops. Verify a delegated diff, don't trust the summary. Exception:
+calls named in an explicit Batch A/B block in the active command do
+NOT count toward the 3-call trigger — they are pre-approved as a
+group and no `Delegate-check:` line is required for them. The trigger
+still applies to any file-opening call *outside* a batch group.
 <!-- /CHECKLIST -->
 
 
-### Step 1: Verify Systems
+### Batch A — independent discovery
 
-**(Skip if profile `tools.rlm` is `false`)**
+Emit the five calls below as five parallel `tool_use` blocks **in
+the same assistant response**, not one per response. "Batch" is
+literal: the harness returns all five tool results together, in
+one round-trip. Serial single-tool responses cost 5× the tokens
+for identical work.
 
-```bash
-# Check RLM status
-rlm_repl status
-```
+- `Bash: embo-profile show` — the session's single profile load.
+- `Bash: rlm_repl status` — skip if profile `tools.rlm` is `false`.
+  If the index reports not initialized, suggest `/embo:init` in
+  the summary.
+- `Bash: git log --oneline -10` — pre-approved shape; do not
+  change flags or the count.
+- `Bash: git diff --stat HEAD` — pre-approved shape.
+- `Read: <repo-root>/README.md` using the Read tool. A missing
+  file IS the "skip" — do NOT probe with a Bash `test -f` or any
+  other existence check first. Do not read `CLAUDE.md` here; the
+  harness injects it into every session already.
 
-`rlm_repl` is a plain command on PATH (the plugin's `bin/` wrapper, or
-`~/.claude/bin/` for a manual install) — no `${...}` expansion, so it
-auto-approves under a `Bash(rlm_repl *)` rule with no prompt.
+Recent activity is already in context: claude-mem's SessionStart
+hook injects a "recent context" block (recent observations + stats)
+before this command runs. Read recent work, decisions, and
+in-progress items from that block — **do not re-search for recent
+work**, it double-pays for what is already present.
 
-**If not initialized**: Suggest running `/embo:init` first
+### Batch B — profile-dependent discovery
 
-**Capture**:
-- Project path
-- Total files indexed
-- Languages
-- Last indexed timestamp
+Batch A's `embo-profile show` returns the profile name. Once you
+have it, emit the two calls below as parallel `tool_use` blocks
+**in the same assistant response**:
 
-### Step 2: Query Claude-Mem for Historical Context
+- Memory overview:
+  `mcp__plugin_claude-mem_mcp-search__search(query="project overview goals architecture", project="<profile-name>", limit=5)`.
+  `project` is **mandatory** and is the launch directory's last
+  path segment (e.g. `embo`). Without it, `search` reads ALL
+  projects and leaks cross-repo context — never omit it, never
+  pass a full path. Skip in brief depth (profile
+  `fast`/`minimal`).
+- Session-scout Task: spawn the `embo:session-scout` agent with
+  the repo root and the resolved depth. It reads
+  `tasks/**/*-tasks.md` in ITS OWN context and returns a compact
+  digest (top active tasks by recency, open-marker counts, a
+  recommended next task); the task-file bulk never enters this
+  context. **If the scout returns an empty or unreadable digest,
+  report "no active tasks" and continue** — do NOT re-do the
+  scout's work by reading task files inline; that defeats the
+  delegation. In brief depth, the scout returns names + counts
+  only.
 
-**(Skip in brief depth.)**
-
-Recent activity is already in context: claude-mem's SessionStart hook
-injects a "recent context" block (recent observations + stats) before
-this command runs. Read recent work, decisions, and in-progress items
-from that block — **do not re-search for recent work**, it double-pays
-for what is already present.
-
-Issue only the one query that block does not cover — topical overview:
-
-```
-mcp__plugin_claude-mem_mcp-search__search(query="project overview goals architecture", project="<project-name>", limit=5)
-```
-
-`project` is **mandatory** and is the launch directory's last path
-segment (`Primary working directory` in your environment, e.g. `embo`).
-Without it, `search` reads ALL projects and leaks cross-repo context —
-never omit it, never pass a full path. Fetch full observations
-(`get_observations`) only for a detail the index row lacks.
+Fetch full observations (`get_observations`) only for a detail an
+index row lacks; that is a follow-up call, not part of Batch B.
 
 If NO SessionStart block is present (claude-mem absent, or a
-non-injecting runtime), then also run one recency query so recent
-activity is not empty:
-`search(query="recent work completed in progress", project="<project-name>", limit=8, orderBy="created_at DESC")`.
-If the overview query returns near-nothing, the project may have been
-renamed since capture — retry once with the inferable prior name, note
-the rename; never fall back to an unscoped search.
+non-injecting runtime), also run one recency query — that too is a
+follow-up call, not part of Batch B:
+`search(query="recent work completed in progress", project="<profile-name>", limit=8, orderBy="created_at DESC")`.
 
-### Step 3: Codebase Context
+**Rename fallback (conditional).** If the memory overview returns
+exactly 0 rows, the project may have been renamed since capture.
+Retry ONCE using the repository name from `git remote get-url
+origin` (basename, `.git` suffix stripped) as the `project`, and
+note the rename in the summary. If `git remote get-url origin`
+exits non-zero or prints nothing (no remote, no `origin`), skip
+the retry and report the overview as empty. Never fall back to an
+unscoped search; never guess a prior name.
 
-**Do not** use Bash loops (`for`, `while`), `find`, or `$(...)`
-substitution for the discovery steps below. The harness refuses
-to auto-approve those constructs. Use the **Glob tool** as
-directed; if Glob is unavailable, skip the step.
+### Summary
 
-- Docs: use the **Glob tool** (not Bash, not `find`) with pattern
-  `**/README*.md`, then again with `**/CLAUDE*.md`. Read the
-  matched files at the project root only.
-- Tasks: **do not read task files here — delegate.** Spawn the
-  `embo:session-scout` agent (Task tool) with the repo root and the
-  resolved depth. It reads `tasks/**/*-tasks.md` in ITS OWN context and
-  returns a compact digest (top active tasks by recency, open-marker
-  counts, a recommended next task); the task-file bulk never enters this
-  context. Use the digest verbatim for the summary's Active Tasks and
-  recommendation. Read a task file in full only when the user selects it
-  for active work.
-- Git: run these two commands exactly as shown. Do not change
-  flags, count, or `HEAD` reference; they are pre-approved at
-  these exact prefixes.
+After Batch A and Batch B return, synthesize the session summary
+below. Output one Markdown document with these sections in this
+order. Every section is populated ONLY from the source in its row
+— never invent a section, never invent data for a slot whose
+source returned nothing (label it explicitly, e.g. "empty").
+Headings are plain text; a status indicator (a check or warning
+mark) is permitted only in the System status row.
 
-```bash
-git log --oneline -10
-git diff --stat HEAD
-```
+| Section | Content (one line) | Source |
+|---|---|---|
+| Project overview | short description of the project | Batch A (README) + Batch B (memory overview) |
+| Repository stats | files indexed, languages, last indexed | Batch A (`rlm_repl status`) |
+| Active tasks | top open tasks with markers, recommended next | Batch B (session-scout digest) |
+| Recent activity | latest commits and any uncommitted-change stats | Batch A (the two git commands) |
+| Recommended next task | one task + one-line rationale | Batch B digest + this session's user prompt, if any |
+| System status | RLM state, memory state, git branch, read depth | Batch A (profile/RLM/git) + Batch B (memory) |
 
-### Step 4: Synthesize Session Summary
+Close the summary with the next-action choice via `AskUserQuestion`
+(per RULE:CLEAR-OPTIONS): the recommended task, plus at minimum
+"review critically / wrap up / tell me what to do".
 
-Combine findings from claude-mem and RLM into comprehensive summary:
+## Closing guidance
 
-```markdown
-# 🚀 Session Started: {project_name}
-
-*Generated from RLM code analysis + claude-mem historical context*
-
-## 📊 Project Overview
-
-{overview_from_claude_mem_or_readme}
-
-**Repository Statistics** (RLM):
-- **Files**: {total_files:,} files ({size_mb:.1f} MB)
-- **Primary languages**: {lang_breakdown}
-- **Last indexed**: {rlm_timestamp}
-
-## ✅ Completed Features
-
-{completed_features_from_claude_mem}
-
-Recent implementations:
-{recent_work_from_mem}
-
-## 🏗️ Current Architecture
-
-{architecture_from_mem_or_docs}
-
-**Key Patterns Discovered** (RLM):
-{patterns_if_analyzed}
-
-## 📝 Active Tasks
-
-### From Task Files (RLM):
-{active_tasks_from_rlm_analysis}
-
-### From Memory (Claude-Mem):
-{in_progress_tasks_from_mem}
-
-## 🔥 Recent Activity
-
-**Most Modified Files** (Past week):
-{recently_modified_from_git}
-
-**Recent Observations** (Claude-Mem):
-{recent_observations}
-
-## 💡 Recommended Next Task
-
-Based on:
-- Task priorities from {task_file_or_mem}
-- Current momentum (recently modified areas)
-- Historical context (what makes sense next)
-
-**Suggestion**: {next_task_recommendation}
-
-**Rationale**: {why_this_task}
-
-## 🎯 Quick Actions
-
-- **Start recommended task**: `/embo:impl`
-- **Create new feature**: `/embo:prd`
-- **Search past work**: Ask me about anything (claude-mem enabled)
-- **Review codebase**: Ask specific questions (RLM will analyze)
-
----
-
-**System Status**:
-- ✅ RLM: Ready ({total_files} files indexed)
-- ✅ Claude-Mem: Ready ({obs_count} observations)
-- ✅ Git: {git_branch} ({git_status})
-- Read depth: {full|brief} — in brief, memory search skipped and the
-  task-scout returns names + counts only; label any skipped section
-  rather than omitting it.
-
-Ready to code! 🎉
-```
-
-## Context Quality Levels
-
-Depending on what's available, provide appropriate detail:
-
-### Full Context (Best Case)
-- Claude-mem has project overview + recent work
-- RLM has complete file index
-- Git history available
-- Task files exist
-→ **Rich, actionable summary**
-
-### Partial Context
-- RLM index exists, but no claude-mem data yet
-- Or vice versa
-→ **Basic summary, suggest indexing missing system**
-
-### Minimal Context
-- Only RLM index, no docs, no mem
-→ **File statistics, suggest creating documentation**
-
-## Important Notes
-
-1. **Fast Context Refresh**:
-   - Use cached RLM index (don't re-index)
-   - Quick claude-mem queries (limit results)
-   - Aim for <30s total time
-
-2. **Actionable Output**:
-   - Don't just describe, recommend next action
-   - Prioritize based on data, not guesses
-   - Make it easy to start working
-
-3. **Error Handling**:
-   - If RLM not initialized: suggest `/embo:init`
-   - If claude-mem empty: that's OK, use RLM only
-   - If no tasks found: suggest creating one
-
-4. **No Implementation**:
-   - This command only provides context
-   - DO NOT start implementing tasks
-   - DO NOT read entire source files
-   - Wait for user to choose next action
-
-## Example Output
-
-```
-# 🚀 Session Started: {project_name}
-
-*Generated from RLM code analysis + claude-mem historical context*
-
-## 📊 Project Overview
-
-{Short project description from README or claude-mem}
-
-**Repository Statistics** (RLM):
-- **Files**: {N} files ({size} MB) · **Languages**: {list}
-- **Last indexed**: {timestamp}
-
-## ✅ Completed Features
-- {Feature A} ({task-id})
-- {Feature B} ({task-id})
-
-## 🏗️ Current Architecture
-{Architecture summary from claude-mem}
-
-## 📝 Active Tasks
-- {TASK-1}: {description} ({N} subtasks, {M} done)
-- {TASK-2}: {description} (planning phase)
-
-## 🔥 Recent Activity
-- {file/path}: {N} changes
-
-## 💡 Recommended Next Task
-
-**Suggestion**: {task and subtask description}
-
-**Rationale**:
-- {reason 1}
-- {reason 2}
-
-## 🎯 Quick Actions
-Ready to code! 🎉
-```
+- Missing dependencies degrade gracefully: RLM not initialized →
+  suggest `/embo:init`; claude-mem overview empty → report empty and
+  continue; no tasks found → suggest `/embo:prd`.
+- This command only provides context. **DO NOT** implement anything
+  yet — wait for the user's next-action choice. When the user then
+  asks for implementation, apply the Docs-First Principle below
+  before touching any code file.
 
 ## Context7
 
@@ -863,12 +717,3 @@ When the user asks to implement something after the session starts:
 file, assess: is this edit justified by an active task, ongoing
 research, or user approval? If not, warn and suggest documenting first.
 
-## Final Instructions
-
-1. Check RLM and claude-mem status
-2. Query historical context (claude-mem)
-3. Analyze current state (RLM)
-4. Synthesize comprehensive summary
-5. Recommend next task (data-driven)
-6. DO NOT implement anything yet — wait for user to choose action
-7. When user requests implementation: check docs exist and are consistent — if not, flag and fix before proceeding

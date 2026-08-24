@@ -16,6 +16,16 @@ exists to cut that recurring cost: fewer tokens loaded per session,
 zero approval dialogs during startup, no instructions that invite
 meaningless actions.
 
+**Scope amendment (2026-08-22)**: post-smoke-test observation folded
+in per user decision. The transcript revealed a second cost driver
+larger than the prose bloat itself: `/embo:start` executes as ~7
+sequential assistant turns when the data-dependency graph supports 3.
+Each assistant turn is an LLM round-trip that resends the whole
+accumulated context (prompt caching reduces the per-token rate but
+still occupies the context window and still costs input tokens).
+Cutting round-trips is the direct fix and lives in the same command
+file this task already targets.
+
 ## Context
 
 A live execution of `/embo:start` this session surfaced 9 concrete
@@ -185,6 +195,25 @@ is cheap, prompt-free, and predictable.
    - [ ] Status indicators (for example a check mark in the System
      Status block) are permitted only where they aid scanning.
 
+5. **As an** embo user
+   **I want** `/embo:start` to finish in the fewest assistant turns
+   the data dependencies allow
+   **So that** every extra whole-context resend is eliminated
+   (scope amendment, 2026-08-22).
+
+   **Acceptance Criteria**:
+   - [ ] The command body directs parallel execution of the 5
+     independent discovery calls in a single assistant turn:
+     profile, RLM status, `git log`, `git diff`, README read.
+   - [ ] The 2 profile-dependent calls (memory overview, session-
+     scout) run together in the next assistant turn.
+   - [ ] The Bash `test -f README.md` pattern is removed in favor
+     of a Read that tolerates a missing file (a Read failing is
+     the "skip").
+   - [ ] A headless `claude -p "/embo:start"` transcript shows
+     ≤ 3 assistant turns containing tool calls (excluding the
+     final summary turn and the conditional rename-retry turn).
+
 ## Requirements
 
 ### Functional Requirements
@@ -238,19 +267,55 @@ is cheap, prompt-free, and predictable.
    - **Rationale**: Repo emoji policy.
    - **Dependencies**: FR-1.
 
-8. **FR-8** (preservation constraint): the Session Behavioral Rules —
-   all RULE bodies and the 5 CHECKLIST blocks — stay in `start.md`
-   unchanged; the hook contract is untouched.
+9. **FR-9** (scope amendment, 2026-08-22; **downgraded to
+   best-effort 2026-08-23**): the command body documents parallel
+   execution as Batch A (5 independent discovery calls) and Batch B
+   (2 profile-dependent calls) with explicit "parallel tool_use
+   blocks in the same response" wording, so a compliant runner can
+   complete `/embo:start` in ≤ 3 assistant turns. The Bash `test -f`
+   probe for README is removed in favor of a Read that tolerates a
+   missing file.
+   - **Priority**: Medium (downgraded from High).
+   - **Rationale**: turn count is the direct token-cost lever;
+     however, live headless testing (2 runs, original and
+     strengthened wording) showed the model serializes single-tool
+     turns anyway. Directive-only enforcement is insufficient in
+     headless mode. The prose is retained as documentation and
+     specification, but the ≤ 3-turn metric is not achievable
+     without a real mechanism (Stop-hook, Bash wrapper, or
+     tool-choice constraint) — seeded as task 056.
+   - **Dependencies**: FR-1 (single output spec), FR-3 (pre-approved
+     shapes only).
+   - **Related defect discovered**: session-scout return handling —
+     when the scout returned an empty/unreadable digest, the model
+     replaced the delegation with 15+ inline Read/Grep turns
+     against task files. Seeded as task 057.
+
+8. **FR-8** (preservation constraint, amended 2026-08-23): the
+   Session Behavioral Rules stay in `start.md` **byte-identical
+   except for two named batch carve-outs**, both added inside
+   existing CHECKLIST blocks. The hook contract is untouched.
    - **Priority**: High
    - **Rationale**: two distinct locks. The hook contract locks only
      the `[<RULE> checklist]` opener→`<!-- /CHECKLIST -->` closer text
      (awk at `behavioral-reminder.sh:114`); the RULE bodies are locked
      by the chosen in-place scope (policy decision), not by the hook.
-   - **Dependencies**: none (constraint on all other FRs).
-   - **Editor guard**: no new or edited line outside the CHECKLIST
-     blocks may start with `[` and contain "checklist" — such a line
-     would match the hook's extraction pattern and leak into the
-     per-prompt injection.
+   - **Amendment rationale**: a clean-context review of the FR-9
+     batching failure (2026-08-23) identified two CHECKLIST rules
+     that structurally block parallel `tool_use` in the same response
+     and are re-injected on every turn. The AVOID-APPROVAL checklist
+     treats parallel tool_use blocks as "chaining"; the DELEGATE
+     checklist requires a text line before the 3rd file-opening call,
+     which contradicts the Anthropic API's tool-use-only-response
+     shape for parallel tool_use. Both rules must gain a one-sentence
+     "explicit Batch A/B calls are exempt" carve-out for FR-9 to have
+     any chance of working. Every other line in the rules region
+     stays byte-identical.
+   - **Amended dependencies**: minimal, named edits inside the
+     AVOID-APPROVAL and DELEGATE CHECKLIST blocks; nowhere else in
+     the rules region.
+   - **Editor guard** (unchanged): no new or edited line outside the
+     CHECKLIST blocks may start with `[` and contain "checklist".
 
 ### Non-Functional Requirements
 
@@ -298,18 +363,31 @@ is cheap, prompt-free, and predictable.
 
 ## Success Metrics
 
-1. All 9 audit findings resolved: 9/9, each mapped to an FR above.
-2. Hook contract: extracted checklist text byte-identical before/after
-   (diff of extraction output): 0 differences.
-3. Rules region byte-identical: diff of the `## Session Behavioral
-   Rules` heading through the last CHECKLIST closer (pre-change
-   `start.md:46-600`, re-anchored after the edit) before/after:
-   0 differences. (This metric — not metric 2, which sees only the
-   extracted checklist text — is what verifies FR-8's RULE-body lock.)
+1. All 9 audit findings + the turn-count concern (FR-9) resolved,
+   each mapped to an FR above.
+2. Hook contract: extracted checklist text differs from baseline ONLY
+   in the AVOID-APPROVAL and DELEGATE blocks, and only by the exact
+   carve-out clauses documented in FR-8. `behavioral-reminder.test.sh`
+   still passes 30/30.
+3. Rules region byte-identical **except for the two named batch
+   carve-outs** (FR-8 amendment): a diff of the `## Session
+   Behavioral Rules` heading through the last CHECKLIST closer
+   before/after shows non-zero differences ONLY inside the
+   AVOID-APPROVAL and DELEGATE CHECKLIST blocks, and each of those
+   diffs consists of exactly the documented carve-out clause added.
+   `behavioral-reminder.test.sh` still passes 30/30, and the hook's
+   extraction output diff (Metric 2) is the specific line additions
+   from the carve-outs and nothing else.
 4. A live `/embo:start` run after the change: 0 approval dialogs, 0
    invented commands, all summary sections filled from named steps.
 5. Line reduction of the non-rules region (319 lines): ≥ 35%
    (≥ 112 lines); stretch 40%.
+6. **Turn count (FR-9, best-effort)**: prose landed in the command
+   body specifying Batch A / Batch B as parallel `tool_use` blocks
+   in the same response, and the `test -f` probe for README is
+   removed. The ≤ 3-turn target is documented but not enforced —
+   two headless runs (original and strengthened wording) produced
+   11 and 10 turns respectively; real enforcement is task 056.
 
 ## References
 

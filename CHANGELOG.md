@@ -2,6 +2,18 @@
 
 All notable changes to the embo plugin are documented here.
 
+## [0.2.8] - 2026-08-24
+
+### Changed
+
+- `/embo:start` runs faster and no longer stalls on permission
+  dialogs.
+
+### Added
+
+- `embo-tokens` — measures the token cost of a prompt file.
+- `embo-plugin-info` — reports the plugin's install state in one call.
+
 ## [0.2.7] - 2026-08-18
 
 ### Fixed
