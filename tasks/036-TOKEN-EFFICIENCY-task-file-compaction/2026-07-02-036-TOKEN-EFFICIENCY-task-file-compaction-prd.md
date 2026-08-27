@@ -49,12 +49,23 @@ Three delivery pieces, in dependency order:
 - No extra tool calls or steps — format constraint only
 
 **3. `/embo:wrapup` — new end-of-session command**
-- Scope: task files only (not PRDs, tech-designs, seeds)
+- Goal: session idempotency — no important session information is lost.
+  Everything decided, discovered, or completed during the session ends up
+  in the respective docs tree (PRD / tech-design / tasks), each per its
+  own rules, so the next session resumes from the docs, not from
+  conversation memory
+- Detects violations of the docs-first principle and work not timely
+  tracked in the docs (including task progress the task files do not yet
+  reflect), doc references that no longer resolve, and session
+  corrections that should become workflow rules; proposes the
+  corresponding doc updates
+- Idempotent itself: running wrapup twice in a row changes nothing on
+  the second run
 - Steps: compact task files touched this session; surface uncommitted work;
   optionally save a session observation to claude-mem
-- Safety: does not silently delete — shows what will be removed and asks for
-  confirmation, OR applies the rule only to content it classifies as unambiguous
-  noise
+- Safety: never changes docs silently — shows every proposed removal or
+  update and asks for confirmation, OR applies the compaction rule only to
+  content it classifies as unambiguous noise
 - Reads only files modified since session start, not all task files
 
 **4. Selective reading in `/embo:start`**

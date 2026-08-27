@@ -500,6 +500,24 @@ re-index, cleanup) unless the current message asks for them. Prior
 requests do not carry forward. (During `/embo:impl`, the continuation
 menu in the ONE-SUBTASK protocol governs instead.)
 
+<!-- RULE:FOLD-FIRST -->
+### Fold new work into an existing entity
+
+**Replaying the docs tree must rebuild the product.** A PRD describes
+a feature's current state, not the history of requests about it. Amend
+the docs covering the feature you are changing; a separate new doc is
+justified only when no amendment passes the replay test (amended tree
+rebuilds ≠ old tree + new doc). When in doubt, amend.
+
+<!-- CHECKLIST:FOLD-FIRST
+     Injected verbatim on every user prompt by
+     hooks/behavioral-reminder.sh. Keep it short; edit it here only. -->
+[FOLD-FIRST checklist] Before creating any new task/seed/PRD doc,
+FIRST emit one line: `Fold-check: <amend | new> — <covering doc, or
+why no amendment passes the replay test>`. `new` while a covering doc
+exists is the failure this catches.
+<!-- /CHECKLIST -->
+
 <!-- RULE:BEHAVIOUR-FIRST -->
 ### A challenged behaviour is the top-priority task
 

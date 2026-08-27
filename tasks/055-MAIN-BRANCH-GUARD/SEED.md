@@ -18,6 +18,14 @@ out. Prose rules in CLAUDE.md are unreliable under load (the agent did
 exactly this after being reminded). The correct fix is a deterministic
 guard.
 
+The blindness is wider than protected branches: no step of the workflow
+checks that the checked-out branch corresponds to the work being done.
+Branch rules exist only at delivery time (`/embo:git deliver`
+destination rules + the `embo-deliver` reconcile); during the work
+phase, edits land on whatever branch is checked out — observed
+2026-08-27: task-036 changes made on `feat/052-start-slim-and-tooling`,
+the branch of an already-completed task.
+
 ## Proposed direction (validate in a design pass)
 
 - **A PreToolUse guard hook** that inspects the current branch and blocks
@@ -36,6 +44,12 @@ guard.
   - This depends on task 053's `embo-profile` (shipped) for reading the
     field, and interacts with the profile schema — coordinate with the
     profile work.
+- **Work-phase branch awareness**: check that the current branch matches
+  the task being worked — report a mismatch at session start
+  (`/embo:start` already displays the branch but acts on nothing) and
+  suggest creating/switching to the task's branch before the first edit
+  of an `/embo:impl` run. Policy lives in the profile alongside the
+  protected-branch mode.
 - **A terse CLAUDE.md note** stating the rule for humans, pointing at the
   hook as the enforcement.
 

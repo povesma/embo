@@ -1,5 +1,12 @@
 # 057 — /embo:wrapup redesign for session idempotency
 
+**Status: Superseded — folded into task 036.** Detection of untracked
+session information, the docs sweep, rule discovery, and the
+self-idempotency constraint are specified in
+`tasks/036-TOKEN-EFFICIENCY-task-file-compaction/` (PRD delivery
+piece 3, tech-design §Component 3, tasks story 6.0). This seed remains
+as the problem record only.
+
 ## Problem
 
 The wrapup command's stated purpose is to make sessions idempotent —
