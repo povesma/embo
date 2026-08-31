@@ -19,13 +19,18 @@ The dispatch prompt gives you:
 ## What to do
 
 1. Glob `tasks/**/*-tasks.md`. Discard any path containing `/archive/`.
-2. For each surviving file, determine:
+   Note the total surviving count.
+2. Scan newest-first. Stop when the remaining files — all older than
+   what you have seen — can no longer change the answer: the
+   recommendation is set and anything that stale no longer competes
+   for "resume next". Unscanned files are counted, never opened.
+3. For each file in the scan set, determine:
    - Its **title** and **status line** from the header block.
    - **Open-marker count**: number of `[ ]` and `[~]` lines.
    - Whether it has ANY open markers (open-count > 0 = "active").
-3. Rank the **active** files by modification recency (use file dates;
+4. Rank the **active** files by modification recency (use file dates;
    if unavailable, use the date in the filename, newest first).
-4. Read the FULL body of only the **top 1** active file (the most
+5. Read the FULL body of only the **top 1** active file (the most
    recent) — just enough to name its concrete next open subtask. Do NOT
    read the full body of any other file; headers + open-marker lines
    are enough for them.
@@ -34,8 +39,10 @@ Never read non-task source files. Never edit anything.
 
 ## Output
 
-Return Markdown only, in this exact shape. Keep the whole thing under
-~250 tokens.
+Return Markdown only, in this exact shape. Include exactly what the
+caller needs to decide what to resume — a line that cannot change
+that decision is bulk, and keeping bulk out of the caller's context
+is your reason to exist.
 
 ```markdown
 ### Active tasks (top {N} by recency)
@@ -44,6 +51,9 @@ Return Markdown only, in this exact shape. Keep the whole thing under
 
 ### Other active (unread)
 - {NNN title}, {NNN title}, ...   (names only)
+
+### Older (not scanned)
+{M} task files older than the listed actives   (omit when M = 0)
 
 ### Recommended next
 {NNN — the concrete next open subtask}, because {one line}.
@@ -62,6 +72,9 @@ If no active task files exist, return a single line:
 ## Rules
 
 - **Compact**: names and counts, not narratives. One line per task.
+- **Bounded scan**: newest-first; stop when older files can no longer
+  change the recommendation; the unscanned appear as a count, never
+  as content.
 - **One full read max**: only the single most-recent active file.
 - **No speculation**: report markers and titles as written; do not
   invent status.

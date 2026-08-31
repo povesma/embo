@@ -149,11 +149,19 @@ format these data points:
 {directory_structure}
 ```
 
-**4d. Index existing tasks directory** (if exists):
+**4d. Catalogue the tasks directory** (if it exists):
 
-For each file in `/tasks/` (prd, tech-design, tasks, review files):
-Read the file — the PostToolUse hook captures it as a claude-mem
-observation automatically. No explicit save call needed.
+Collect structure only — never task-doc content: the tree can be
+arbitrarily large, and each task's docs are read later, per selected
+task, by the workflow commands (`/embo:start` scout digest,
+`/embo:prd`, `/embo:impl`). Gather:
+
+- counts by doc type (prd / tech-design / tasks / seed / other) from
+  file NAMES via the Glob tool — no reads;
+- the most recently modified task folders: `ls -t tasks/` — names only.
+
+Print these under the `[PROJECT: {project_name}]` block; that printed
+summary is the claude-mem baseline for the task tree.
 
 **4e. Index configuration files**:
 
@@ -176,37 +184,41 @@ mcp__plugin_claude-mem_mcp-search__search(
 
 ### Step 6: Generate Summary Report
 
+When rendering, prefix each status line with ✅ (done) or ❌ (failed /
+skipped). The marks are added at render time — they are kept out of
+the template to save tokens.
+
 ```markdown
-# ✅ embo Initialization Complete
+# embo Initialization Complete
 
 **Project**: {project_name}
 
 ## RLM Indexing
-- ✅ **Files indexed**: {total_files:,}
-- ✅ **Repository size**: {size_mb:.1f} MB
-- ✅ **Primary languages**:
+- **Files indexed**: {total_files:,}
+- **Repository size**: {size_mb:.1f} MB
+- **Primary languages**:
   • {lang1}: {count1} files ({pct1:.1f}%)
   • {lang2}: {count2} files ({pct2:.1f}%)
   • {lang3}: {count3} files ({pct3:.1f}%)
-- ✅ **State saved**: .claude/rlm_state/state.pkl
+- **State saved**: .claude/rlm_state/state.pkl
 
 Include any filter summary lines from the `init-repo` stdout
 verbatim, if present.
 
 ## Claude-Mem Bootstrap
-- ✅ **Project overview**: Indexed
-- ✅ **Codebase analysis**: Indexed
-- ✅ **PRDs**: {prd_count} indexed
-- ✅ **Tech designs**: {design_count} indexed
-- ✅ **Task lists**: {tasks_count} indexed
-- ✅ **Reviews**: {review_count} indexed
-- ✅ **Configuration**: Indexed
-- ✅ **Total observations**: {total_obs}
+- **Project overview**: Indexed
+- **Codebase analysis**: Indexed
+- **PRDs**: {prd_count} catalogued
+- **Tech designs**: {design_count} catalogued
+- **Task lists**: {tasks_count} catalogued
+- **Reviews**: {review_count} catalogued
+- **Configuration**: Indexed
+- **Total observations**: {total_obs}
 
 ## Integration Status
-- ✅ RLM ↔ Claude-Mem: Connected
-- ✅ Cross-references: Created
-- ✅ Project tagged: "{project_name}"
+- RLM ↔ Claude-Mem: Connected
+- Cross-references: Created
+- Project tagged: "{project_name}"
 
 ## Next Steps
 
@@ -257,33 +269,33 @@ Search: "authentication" or "database schema" or "API design"
 ## Output Example
 
 ```
-# ✅ embo Initialization Complete
+# embo Initialization Complete
 
 **Project**: app-astudio
 
 ## RLM Indexing
-- ✅ **Files indexed**: 3,940
-- ✅ **Repository size**: 157.1 MB
-- ✅ **Primary languages**:
+- **Files indexed**: 3,940
+- **Repository size**: 157.1 MB
+- **Primary languages**:
   • C/C++: 1254 files (31.8%)
   • C++: 876 files (22.2%)
   • TypeScript: 35 files (0.9%)
-- ✅ **State saved**: .claude/rlm_state/state.pkl
+- **State saved**: .claude/rlm_state/state.pkl
 
 ## Claude-Mem Bootstrap
-- ✅ **Project overview**: Indexed
-- ✅ **Codebase analysis**: Indexed
-- ✅ **PRDs**: 12 indexed
-- ✅ **Tech designs**: 8 indexed
-- ✅ **Task lists**: 15 indexed
-- ✅ **Reviews**: 5 indexed
-- ✅ **Configuration**: Indexed
-- ✅ **Total observations**: 42
+- **Project overview**: Indexed
+- **Codebase analysis**: Indexed
+- **PRDs**: 12 catalogued
+- **Tech designs**: 8 catalogued
+- **Task lists**: 15 catalogued
+- **Reviews**: 5 catalogued
+- **Configuration**: Indexed
+- **Total observations**: 42
 
 ## Integration Status
-- ✅ RLM ↔ Claude-Mem: Connected
-- ✅ Cross-references: Created
-- ✅ Project tagged: "app-astudio"
+- RLM ↔ Claude-Mem: Connected
+- Cross-references: Created
+- Project tagged: "app-astudio"
 
 ## Next Steps
 /embo:start
@@ -298,5 +310,6 @@ Search: "authentication" or "database schema" or "API design"
 5. Cross-link systems
 6. Report comprehensive summary
 7. DO NOT start implementing anything
-8. DO NOT read entire source code files
+8. DO NOT read source code files or task-doc contents — RLM indexes
+   code; task docs are read per selected task by later commands
 9. Suggest `/embo:start` as next step
