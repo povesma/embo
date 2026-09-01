@@ -182,6 +182,20 @@ IS required to trigger `/plugin update` for existing installs.
 
 **Version bump**: `0.1.2` → `0.1.3` when this ships.
 
+### 5. Bounded task ingestion in `/embo:init` (edit `plugin/commands/init.md`)
+
+**Was**: Step 4d read every file under `tasks/` in full as the
+claude-mem write path (the observer captures reads); main-context cost
+grew linearly with the archive and overflowed on large trees.
+
+**Shipped (0.2.9)**: Step 4d ("Catalogue the tasks directory") collects
+name-only type counts via Glob and recent folder names via `ls -t`; the
+printed summary block is the claude-mem baseline. session-scout scans
+newest-first and stops when the remaining, older files can no longer
+change the resumption recommendation — cost bounded by decision
+relevance, not archive size. Bulk semantic import of a large archive is
+out of session scope (a future claude-mem batch pipeline).
+
 ---
 
 ## Rejected Alternatives

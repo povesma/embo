@@ -99,6 +99,14 @@ Three delivery pieces, in dependency order:
 - Fix: implement the missing helpers in `_make_helpers` using the
   `repo_index` already injected into the exec env at line 1119.
 
+**6. Bounded task ingestion in `/embo:init`**
+- Init catalogues the tasks tree by name (type counts, recent folders)
+  and reads no task-doc content, so initialization cost stays constant
+  in archive size
+- Task content enters a context later, per selected task, via the
+  workflow commands; the session-scout scan is bounded by decision
+  relevance (stop when older files cannot change the recommendation)
+
 ## Out of Scope
 
 - Compacting PRDs, tech-designs, seeds

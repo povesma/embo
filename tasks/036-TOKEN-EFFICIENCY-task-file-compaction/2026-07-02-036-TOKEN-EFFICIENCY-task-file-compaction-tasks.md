@@ -103,7 +103,7 @@
   tree — docs-first violations, task progress not yet reflected in
   task files, decisions or findings with no doc home — and propose the
   doc updates, so that the next session resumes from the docs, not
-  from conversation memory. [3/6]
+  from conversation memory. [4/6]
   - [X] 6.1 Add the detection step to `plugin/commands/wrapup.md` per
     tech-design §Component 3 step 2: goal statement, the three flag
     categories, proposals routed to the doc type whose rules cover the
@@ -111,10 +111,13 @@
       → Goal section + Step 2 (detect, three flag categories, confirm
         gate) added; steps renumbered 1–5; compaction unchanged [live]
         (2026-08-27)
-  - [ ] 6.2 Run `/embo:wrapup` after a session with untracked task
+  - [X] 6.2 Run `/embo:wrapup` after a session with untracked task
     progress (a completed subtask not yet marked); confirm the update
     is proposed and applied only after confirmation
     [verify: manual-run-claude]
+      → live run 2026-09-01: flagged unrecorded init-fix docs, stale
+        4.1, missing README row; all updates applied only after
+        AskUserQuestion confirmation [live] (2026-09-01)
   - [ ] 6.3 Run `/embo:wrapup` after a session with a change not
     covered by any doc; confirm a docs-first violation is flagged
     [verify: manual-run-claude]
@@ -130,11 +133,28 @@
     the second run proposes and writes nothing
     [verify: manual-run-claude]
 
-- [ ] 4.0 **User Story:** As an embo plugin user, I want the version
+- [ ] 7.0 **User Story:** As a user running `/embo:init` on a repo
+  with a large task tree, I want initialization to complete without
+  reading task docs into the main context, so that init cannot
+  overflow the context window. [1/2]
+  - [X] 7.1 Replace init.md Step 4d per-file reads with name-only
+    Glob counts + recent folder names; bound the session-scout scan
+    by decision relevance [verify: code-only]
+      → shipped in 0.2.9 (catalogue-only Step 4d; scout stops when
+        older files cannot change the recommendation) [live]
+        (2026-09-01)
+  - [ ] 7.2 Run `/embo:init` on a repo with a large tasks/ tree;
+    confirm no task doc is read inline and the summary still reports
+    counts [verify: manual-run-claude]
+
+- [X] 4.0 **User Story:** As an embo plugin user, I want the version
   bump and README update to be in place so that `/plugin update`
-  delivers this feature. [0/2]
-  - [ ] 4.1 Bump `plugin/.claude-plugin/plugin.json` version from
-    `0.1.2` to `0.1.3` [verify: code-only]
-  - [ ] 4.2 Add `/embo:wrapup` row to the command table in `README.md`
+  delivers this feature. [2/2]
+  - [X] 4.1 Bump the plugin version at ship time so `/plugin update`
+    delivers the feature [verify: code-only]
+      → 0.2.9 shipped with the wrapup detection (PR #59, tag v0.2.9)
+        [live] (2026-09-01)
+  - [X] 4.2 Add `/embo:wrapup` row to the command table in `README.md`
     with a one-line description consistent with the other entries
     [verify: code-only]
+      → row added under Development [live] (2026-09-01)
