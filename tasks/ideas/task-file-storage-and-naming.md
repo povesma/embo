@@ -105,6 +105,33 @@ to git. Convenient, low-token, native to Claude Code — but:
   harness (that parses `<!-- CHECKLIST -->` blocks and `<Rule>-check:`
   artifacts in conversation, unrelated to file markers).
 
+## Category naming and backend survey (2026-09-01)
+
+Deep research (84 sources, Gemini Notebook
+`877102ef-f9a0-49c2-8246-7cc81450ff2f`, "embo specbase — category name
+and implementations") on what to call the docs tree and what could
+store it besides files:
+
+- Established category: **living documentation / living
+  specification**, implemented as **spec as code** (per-feature
+  markdown specs versioned with the repo) — consistent with the
+  earlier finding that AI-SDD tooling standardizes on "spec".
+  **"Spec-as-source"** names the maturity level the replay principle
+  aims at: humans edit only specs; code is regenerated from them.
+- **"specbase" is taken twice** (an open-source MCP spec-oracle tool;
+  a spec framework by Dima Semensky). "spec tree" is collision-free.
+  Decision 2026-09-01: keep "docs tree" for now.
+- Backend classes for a future storage technology, by
+  amend-over-append fit:
+  - agent context layers (Reqode) — read-only MCP, branch-aware
+    revisions, change-requests instead of tickets: strong;
+  - requirements platforms (Jama Connect) — read-write MCP, formal
+    baselines, suspect-flagging traceability: strong;
+  - spec-as-source tools (Tessl, Specmatic) — code regenerated from
+    specs, drift fails CI: absolute;
+  - API-first trackers — Linear moderate; Jira weak: its backlog is
+    append-centric where the docs tree amends.
+
 ## Current lean (not decided)
 
 1. Keep git-tracked markdown as sole source of truth.

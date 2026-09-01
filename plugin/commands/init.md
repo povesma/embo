@@ -15,23 +15,6 @@ Bootstrap both RLM file indexing and claude-mem semantic memory for a project. T
 - **Re-indexing** after major repository changes
 - **New team member** onboarding
 
-## What This Command Does
-
-1. **RLM Indexing**: Builds file index for code analysis
-   - Indexes all files (respecting `.gitignore`)
-   - Detects languages, file types, binary files
-   - Creates persistent state for fast lookups
-
-2. **Claude-Mem Bootstrap**: Indexes project knowledge
-   - Scans existing documentation
-   - Indexes PRDs, designs, task lists, reviews
-   - Creates searchable semantic memory
-
-3. **Cross-Linking**: Connects both systems
-   - Saves RLM index summary to claude-mem
-   - Tags observations with project metadata
-   - Enables hybrid queries
-
 ## Process
 
 ### Step 0: Load Profile
@@ -265,41 +248,6 @@ Search: "authentication" or "database schema" or "API design"
    - If RLM init fails: report error, suggest fixes
    - If claude-mem unavailable: warn but continue with RLM only
    - If no documentation found: that's OK, index RLM baseline only
-
-## Output Example
-
-```
-# embo Initialization Complete
-
-**Project**: app-astudio
-
-## RLM Indexing
-- **Files indexed**: 3,940
-- **Repository size**: 157.1 MB
-- **Primary languages**:
-  • C/C++: 1254 files (31.8%)
-  • C++: 876 files (22.2%)
-  • TypeScript: 35 files (0.9%)
-- **State saved**: .claude/rlm_state/state.pkl
-
-## Claude-Mem Bootstrap
-- **Project overview**: Indexed
-- **Codebase analysis**: Indexed
-- **PRDs**: 12 catalogued
-- **Tech designs**: 8 catalogued
-- **Task lists**: 15 catalogued
-- **Reviews**: 5 catalogued
-- **Configuration**: Indexed
-- **Total observations**: 42
-
-## Integration Status
-- RLM ↔ Claude-Mem: Connected
-- Cross-references: Created
-- Project tagged: "app-astudio"
-
-## Next Steps
-/embo:start
-```
 
 ## Final Instructions
 

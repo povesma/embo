@@ -2,6 +2,32 @@
 
 All notable changes to the embo plugin are documented here.
 
+## [Unreleased]
+
+### Added
+
+- `/embo:wrapup` enforces session idempotency: at session end the docs
+  tree (PRD / tech-design / tasks) must reflect everything decided,
+  discovered, or completed — wrapup flags docs-first violations,
+  unmarked task progress, decisions or findings with no doc home,
+  unresolvable doc references, and corrections not yet workflow rules,
+  and proposes each doc update for confirmation.
+- FOLD-FIRST session rule (with enforcement checklist), built on the
+  replay principle — replaying the docs tree from scratch must rebuild
+  the current product: a change to an existing feature amends the docs
+  that cover it; a separate new doc is justified only when no
+  amendment passes the replay test.
+
+### Fixed
+
+- `/embo:init` completes on repositories with arbitrarily large
+  `tasks/` trees: it catalogues task docs by name instead of reading
+  every file into the context window; task content is read later, per
+  selected task, by the workflow commands.
+- Session startup cost no longer grows with the task archive: the
+  session-scout agent scans newest-first and stops when older files
+  can no longer change the resumption recommendation.
+
 ## [0.2.8] - 2026-08-24
 
 ### Changed
