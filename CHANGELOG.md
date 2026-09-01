@@ -2,7 +2,7 @@
 
 All notable changes to the embo plugin are documented here.
 
-## [Unreleased]
+## [0.2.9] - 2026-09-01
 
 ### Added
 
@@ -12,11 +12,17 @@ All notable changes to the embo plugin are documented here.
   unmarked task progress, decisions or findings with no doc home,
   unresolvable doc references, and corrections not yet workflow rules,
   and proposes each doc update for confirmation.
-- FOLD-FIRST session rule (with enforcement checklist), built on the
-  replay principle — replaying the docs tree from scratch must rebuild
-  the current product: a change to an existing feature amends the docs
-  that cover it; a separate new doc is justified only when no
-  amendment passes the replay test.
+- FOLD-FIRST session rule (with enforcement checklist): a change to
+  an existing feature amends the docs that cover it; a separate new
+  doc is justified only when no amendment passes the replay test.
+  The goal: replaying the docs tree from scratch rebuilds the same
+  product.
+
+### Changed
+
+- Commands load leaner: `/embo:git` and `/embo:init` shed dead and
+  duplicated blocks — the shipped prompt set is smaller than in
+  0.2.8 despite the new features.
 
 ### Fixed
 
