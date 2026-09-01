@@ -275,6 +275,7 @@ Two invariants shape every embo command:
 | Planning | `/embo:check` | Audit task completion status |
 | Development | `/embo:impl` | Implement subtasks one at a time, evidence-gated |
 | Development | `/embo:git` | Commit/PR messages, styles, and one-shot `deliver` |
+| Development | `/embo:wrapup` | Session-end idempotency check: untracked work to docs, evidence compacted, uncommitted changes surfaced |
 | Research | `/embo:research:examine` | Independent two-pass critique of a decision or doc → reconciled recommendation |
 | Research | `/embo:research:verify` | Prove a chosen approach meets its acceptance criteria before building |
 | Design | `/embo:visual-impl` | Implement a Figma node to code, gated by a numeric diff + independent visual-QA judge (**experimental**) |
