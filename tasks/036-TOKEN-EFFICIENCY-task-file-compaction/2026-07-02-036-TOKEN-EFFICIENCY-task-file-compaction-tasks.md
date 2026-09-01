@@ -98,6 +98,38 @@
   - [X] 5.2 Deploy fixed `impl.md` to plugin cache for immediate effect
     [verify: code-only]
 
+- [ ] 6.0 **User Story:** As a developer ending a session, I want
+  `/embo:wrapup` to detect session information missing from the docs
+  tree — docs-first violations, task progress not yet reflected in
+  task files, decisions or findings with no doc home — and propose the
+  doc updates, so that the next session resumes from the docs, not
+  from conversation memory. [3/6]
+  - [X] 6.1 Add the detection step to `plugin/commands/wrapup.md` per
+    tech-design §Component 3 step 2: goal statement, the three flag
+    categories, proposals routed to the doc type whose rules cover the
+    information, applied only on confirmation [verify: code-only]
+      → Goal section + Step 2 (detect, three flag categories, confirm
+        gate) added; steps renumbered 1–5; compaction unchanged [live]
+        (2026-08-27)
+  - [ ] 6.2 Run `/embo:wrapup` after a session with untracked task
+    progress (a completed subtask not yet marked); confirm the update
+    is proposed and applied only after confirmation
+    [verify: manual-run-claude]
+  - [ ] 6.3 Run `/embo:wrapup` after a session with a change not
+    covered by any doc; confirm a docs-first violation is flagged
+    [verify: manual-run-claude]
+  - [X] 6.4 Extend the detection step with a reference-rot sweep: flag
+    doc references (paths, tools, tasks) that no longer resolve
+    [verify: code-only]
+      → added to Step 2 flag list, scoped to docs touched this session
+        per the modified-files-only constraint [live] (2026-08-27)
+  - [X] 6.5 Extend the detection step to flag session corrections not
+    yet reflected as workflow rules [verify: code-only]
+      → added to Step 2 flag list [live] (2026-08-27)
+  - [ ] 6.6 Verify wrapup self-idempotency: run it twice in a row;
+    the second run proposes and writes nothing
+    [verify: manual-run-claude]
+
 - [ ] 4.0 **User Story:** As an embo plugin user, I want the version
   bump and README update to be in place so that `/plugin update`
   delivers this feature. [0/2]

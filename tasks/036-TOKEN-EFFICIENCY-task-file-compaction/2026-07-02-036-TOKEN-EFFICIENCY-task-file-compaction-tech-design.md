@@ -118,14 +118,29 @@ pattern. No new tool permissions needed.
 
 **Trigger**: user runs `/embo:wrapup` at end of session.
 
+**Goal**: session idempotency — the docs tree (PRD / tech-design / tasks)
+reflects everything decided, discovered, or completed this session, so
+the next session resumes from the docs, not from conversation memory.
+
 **Steps** (in order):
 
 1. **Identify task files touched this session**
    Use `git diff --name-only HEAD` to find modified files, filter to
    `tasks/**/*-tasks.md`. If none, report "no task files modified this
-   session" and skip to step 3.
+   session" and skip step 3 (compaction).
 
-2. **Compact each modified task file**
+2. **Detect untracked session information**
+   Compare the session's work (decisions, findings, completed work, and
+   the working-tree diff) against the docs tree. Flag:
+   - docs-first violations — changes made with no covering doc;
+   - task progress the task files do not yet reflect;
+   - decisions or findings with no home in PRD / tech-design / tasks;
+   - doc references (paths, tools, tasks) that no longer resolve;
+   - corrections captured this session that are not yet workflow rules.
+   For each flag, propose an update to the doc type whose rules cover
+   that information; apply only on confirmation.
+
+3. **Compact each modified task file**
    For each file:
    - Read it.
    - Apply the validated compaction rule to completed subtasks only
@@ -135,11 +150,11 @@ pattern. No new tool permissions needed.
      `tasks/xxx-tasks.md`". Ask for confirmation before writing.
    - On confirmation: write the compacted version.
 
-3. **Surface uncommitted work**
+4. **Surface uncommitted work**
    Run `git diff --stat HEAD`. If non-empty, list the modified files and
    ask: commit now, skip, or note it for next session.
 
-4. **Optional session observation**
+5. **Optional session observation**
    Ask: "Save a session summary to claude-mem? (y/n)". If yes, prompt for
    a one-line summary and save via `mcp__plugin_claude-mem_mcp-search__observation_add`
    (or `memory_add` on the worker runtime — verify tool name in impl).
@@ -147,7 +162,10 @@ pattern. No new tool permissions needed.
 **Safety constraints** (non-negotiable):
 - Never compact `[ ]` or `[~]` subtasks — only `[X]`.
 - Never write without showing the diff summary and receiving confirmation.
-- Never touch PRD, tech-design, seed, or other non-tasks files.
+- Compaction never touches PRD, tech-design, seed, or other non-tasks
+  files; step 2 may update any doc in the tree, but only as a proposal
+  the user confirmed.
+- Idempotent: an immediate second run flags nothing and writes nothing.
 - If `git diff` is not available, skip step 1 and ask the user which task
   files to compact.
 
@@ -204,6 +222,7 @@ not a functional one — included in the same commit.
 |---|---|
 | Compact summary rule in impl | `[verify: code-only]` — text change only; verified by reading the updated section |
 | Selective reading in start | `[verify: manual-run-claude]` — run `/embo:start` on a session with a ≥80%-complete task file; confirm startup summary omits completed subtask bodies |
+| `/embo:wrapup` detection step | `[verify: manual-run-claude]` — run after a session with untracked progress (a completed subtask not yet marked) and an undocumented change; confirm both are flagged and updates applied only after confirmation |
 | `/embo:wrapup` compaction step | `[verify: manual-run-claude]` — run on a task file with known verbose evidence; confirm diff summary shown, compacted file written after confirmation |
 | `/embo:wrapup` uncommitted work step | `[verify: manual-run-claude]` — run with a dirty working tree; confirm modified files listed |
 | Version bump | `[verify: code-only]` |
