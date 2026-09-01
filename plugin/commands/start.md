@@ -503,11 +503,14 @@ menu in the ONE-SUBTASK protocol governs instead.)
 <!-- RULE:FOLD-FIRST -->
 ### Fold new work into an existing entity
 
-**Replaying the docs tree must rebuild the product.** A PRD describes
-a feature's current state, not the history of requests about it. Amend
-the docs covering the feature you are changing; a separate new doc is
-justified only when no amendment passes the replay test (amended tree
-rebuilds ≠ old tree + new doc). When in doubt, amend.
+**The docs tree — the per-task PRDs, tech-designs, and task lists
+under `tasks/` — describes the product's current state.** The goal
+(an intention to maintain, not a guarantee): replaying it from
+scratch rebuilds the same product. A PRD states a feature's current
+state, not the history of requests about it. Amend the docs covering
+the feature you are changing; a separate new doc is justified only
+when no amendment passes the replay test (amended tree rebuilds ≠
+old tree + new doc). When in doubt, amend.
 
 <!-- CHECKLIST:FOLD-FIRST
      Injected verbatim on every user prompt by

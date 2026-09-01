@@ -12,6 +12,16 @@ Task 052 revealed a large gap between "lines cut" and "tokens saved"
 tool `plugin/bin/embo-tokens` now exists; running it across the
 whole shipped surface tells us where the leverage actually is.
 
+## Budget principle (from user, 2026-09-01)
+
+The total token size of shipped commands and agents is a budget to
+hold constant or reduce: an addition to any shipped prompt must name
+the saving that offsets it. Snapshot at 0.2.9 time (~tok = chars/4):
+~56k total; top consumers visual-impl 9.2k (rare load), start 8.8k
+(every session, checklists re-injected every prompt), git 7.5k (every
+delivery; ~50 lines are dormant commented-out blocks that still load).
+Cost = size × load frequency — rank targets by that product.
+
 ## Deliverable
 
 A single audit report at

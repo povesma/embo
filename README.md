@@ -7,6 +7,8 @@ backed by a persistent codebase index (RLM) and cross-session memory
 
 > **TL;DR**
 > - **Category:** spec-driven development workflow for Claude Code
+> - **Principles:** a replayable docs tree and session idempotency —
+>   see [Principles](#principles)
 > - **Differentiator:** the only framework with **both** persistent
 > codebase indexing **and** cross-session memory
 > - **Install:** **two plugins, inside Claude Code** — (1)
@@ -240,6 +242,25 @@ of resetting to zero every morning.
 
 -> Full evidence and citations: [**docs/WHY.md**](docs/WHY.md)
 
+## Principles
+
+Two invariants shape every embo command:
+
+- **Replayable docs tree.** The *docs tree* — the per-task planning
+  documents under `tasks/` (PRD, tech-design, task list) — describes
+  the product's current state. The maintained intention (a goal, not a
+  guarantee): replaying all PRDs from scratch would rebuild the same
+  product. A change to an existing feature therefore amends the docs
+  that cover it — a separate new doc is justified only when no
+  amendment keeps the replay equivalent (the FOLD-FIRST rule, enforced
+  with a per-action checklist).
+- **Session idempotency.** Nothing important may exist only in a
+  conversation: decisions, findings, and progress land in the docs
+  tree (PRD / tech-design / tasks), so the next session resumes from
+  the docs, not from memory of the chat. `/embo:wrapup` enforces this
+  at session end by detecting untracked information and proposing the
+  doc updates.
+
 ## Available Commands
 
 | Phase | Command | Purpose |
@@ -383,6 +404,17 @@ tuning, performance/cost, and Docker — lives in
 **[docs/REFERENCE.md](docs/REFERENCE.md)**.
 
 Common errors: **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)**.
+
+## TODO / ideas
+
+- **Pluggable task-tracker backends.** The docs tree lives as files
+  under `tasks/` today, and those files double as the task tracker.
+  The same workflow could run against other backends — agent context
+  layers (e.g. Reqode), requirements platforms (Jama Connect),
+  spec-as-source tools (Tessl, Specmatic), or API-first trackers
+  (Linear; Jira fits worst — its backlog appends tickets where the
+  docs tree amends specs) — with the file tree as one implementation
+  among several.
 
 ## Contributing
 
