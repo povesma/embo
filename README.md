@@ -381,19 +381,17 @@ Adding a new rule: write the rule prose and its `CHECKLIST` block in
 `start.md`. The hook auto-injects it with zero code change — the
 genericity test (`behavioral-reminder.test.sh`) proves this.
 
-**Subagents inherit the judgment rules.** A `SubagentStart` hook
-(`subagent-rules.sh`) injects a filtered rule block into every spawned
-subagent — shipped or ad hoc. It keeps the checklists that work without
-a human channel (WITHSTAND-CRITICISM, AVOID-APPROVAL, sourced verbatim
-from `start.md`) and replaces the interactive ones with a preamble that
-tells the agent to decide recoverable choices itself, verify claims
-against documentation, and report irreversible actions as blockers
-instead of performing them. In a **standalone (manual) install** the
-shipped agents also run with `permissionMode: acceptEdits`, so their
-recoverable actions proceed unattended while destructive ones stay
-gated by the harness; Claude Code ignores this frontmatter field for
-plugin-installed agents, where the parent session's permission mode
-governs. Disable the injection with `SUBAGENT_RULES_DISABLED=1`.
+**Rules for subagents.** A `SubagentStart` hook (`subagent-rules.sh`)
+adds a short instruction block to every subagent Claude Code spawns,
+shipped or ad hoc. The block tells the subagent to: make routine
+choices itself instead of stopping, check documentation before stating
+facts about tools or APIs, and never delete, force-push, or merge —
+report such actions back instead. The WITHSTAND-CRITICISM and
+AVOID-APPROVAL checklists are included verbatim from `start.md`; the
+rules that need a human answer are left out. In a manual (non-plugin)
+install the shipped agents also edit files without a permission prompt
+(`permissionMode: acceptEdits`); plugin installs ignore this field.
+Turn the injection off with `SUBAGENT_RULES_DISABLED=1`.
 
 ## Test subagents
 
