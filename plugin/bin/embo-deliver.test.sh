@@ -665,8 +665,97 @@ release: 0.2.9')"
   OUT_VN="$(cd "$REPO_VN" && bash "$BIN" --dry-run --plan "$PLAN_V" 2>&1)"
   RC_VN=$?
   assert_exit "version check: no manifest files -> exit 0 (skipped)" 0 "$RC_VN"
+
+  # (d) plugins[].version case: marketplace top-level matches, but a
+  #     plugin entry's own version is stale. This is the shape audit G1
+  #     flagged — the check must catch it.
+  printf '{"version":"0.2.9","plugins":[{"name":"embo","version":"0.2.5"}]}\n' \
+    > "$REPO_V/.claude-plugin/marketplace.json"
+  OUT_VP="$(cd "$REPO_V" && bash "$BIN" --dry-run --plan "$PLAN_V" 2>&1)"
+  RC_VP=$?
+  assert_exit "version check: stale plugins[].version -> exit 2" 2 "$RC_VP"
+  assert_contains "version check: message names the plugins path" \
+    ".plugins[0].version" "$OUT_VP"
+  assert_contains "version check: message names the plugins value" \
+    "0.2.5" "$OUT_VP"
+
+  # (e) both top-level and plugins[].version aligned -> passes.
+  printf '{"version":"0.2.9","plugins":[{"name":"embo","version":"0.2.9"}]}\n' \
+    > "$REPO_V/.claude-plugin/marketplace.json"
+  OUT_VPOK="$(cd "$REPO_V" && bash "$BIN" --dry-run --plan "$PLAN_V" 2>&1)"
+  RC_VPOK=$?
+  assert_exit "version check: both fields aligned -> exit 0 (dry-run)" 0 "$RC_VPOK"
+
+  # (f) CHANGELOG entry check: a release plan without a matching
+  #     "## [X.Y.Z]" heading in CHANGELOG.md must be refused.
+  printf '# Changelog\n\n## [0.2.8] - 2026-08-01\n\n- earlier stuff\n' \
+    > "$REPO_V/CHANGELOG.md"
+  OUT_VC="$(cd "$REPO_V" && bash "$BIN" --dry-run --plan "$PLAN_V" 2>&1)"
+  RC_VC=$?
+  assert_exit "changelog check: missing entry for version -> exit 2" 2 "$RC_VC"
+  assert_contains "changelog check: message names the version" \
+    "0.2.9" "$OUT_VC"
+
+  # (g) CHANGELOG entry present -> passes.
+  printf '# Changelog\n\n## [0.2.9] - 2026-09-02\n\n- fix stuff\n' \
+    > "$REPO_V/CHANGELOG.md"
+  OUT_VCOK="$(cd "$REPO_V" && bash "$BIN" --dry-run --plan "$PLAN_V" 2>&1)"
+  RC_VCOK=$?
+  assert_exit "changelog check: matching entry -> exit 0 (dry-run)" 0 "$RC_VCOK"
 else
   printf 'SKIP: version-consistency tests (jq missing)\n'
+fi
+
+# --- tag-identity guard (G3) --------------------------------------------
+# A pre-existing v-tag that points at a DIFFERENT commit than origin/$BASE
+# is a stale/wrong tag; the executor must refuse rather than silently
+# accept it as "already done" and then push a mismatched tag.
+#
+# Fixture: bare remote with two commits on relbranch; a v9.9.9 tag lives
+# on the FIRST commit; the maintainer plans a release for the SECOND.
+# gh is stubbed to succeed the PR steps so we reach the tag phase.
+if command -v jq >/dev/null 2>&1; then
+  STUBDIR_T="$WORK/stubbin-tagid"
+  mkdir -p "$STUBDIR_T"
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$STUBDIR_T/gh"
+  chmod +x "$STUBDIR_T/gh"
+
+  BARE_T="$WORK/bareT.git"
+  git init -q --bare "$BARE_T"
+  REPO_T="$WORK/repoT"
+  git init -q -b relbranch "$REPO_T"
+  git -C "$REPO_T" config user.email t@t.t
+  git -C "$REPO_T" config user.name t
+  # commit A (old) — the stale tag will live here
+  printf 'a\n' > "$REPO_T/CHANGELOG.md"
+  git -C "$REPO_T" add CHANGELOG.md
+  git -C "$REPO_T" commit -qm init
+  # commit B (new) — the release should tag here
+  printf '# Changelog\n\n## [9.9.9] - 2026-09-02\n\n- x\n' > "$REPO_T/CHANGELOG.md"
+  git -C "$REPO_T" add CHANGELOG.md
+  git -C "$REPO_T" commit -qm "release: 9.9.9"
+  git -C "$REPO_T" remote add origin "$BARE_T"
+  git -C "$REPO_T" push -qu origin relbranch
+  # pretend a stale v9.9.9 tag already exists locally at commit A
+  git -C "$REPO_T" tag v9.9.9 HEAD~1
+
+  PLAN_T="$(write_plan tag-id.txt '# release — irreversible
+branch: relbranch
+mode: release
+base: relbranch
+version: 9.9.9
+file: CHANGELOG.md
+release-notes:
+notes
+message:
+release: 9.9.9')"
+  OUT_T="$(cd "$REPO_T" && PATH="$STUBDIR_T:$PATH" bash "$BIN" --plan "$PLAN_T" 2>&1)"
+  RC_T=$?
+  assert_exit "tag-identity: stale local tag -> exit 8" 8 "$RC_T"
+  assert_contains "tag-identity: message names the tag" "v9.9.9" "$OUT_T"
+  assert_contains "tag-identity: message notes points at" "points at" "$OUT_T"
+else
+  printf 'SKIP: tag-identity test (jq missing)\n'
 fi
 
 # --- T043 2.0: release halts on failure, undoes nothing ------------------
