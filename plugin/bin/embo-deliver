@@ -170,14 +170,35 @@ case "$MODE" in
     # the plugin manifest both declare it, and `/plugin update` fails
     # silently when they disagree. Refuse the release when any known
     # version-bearing file, if present, does not match plan.version.
+    # Extract every version string a Claude Code marketplace/plugin
+    # manifest may carry — top-level `.version` and each `.plugins[].version`
+    # — and compare each to plan.version. A repo may declare the same
+    # version in more than one place; if ANY of them disagrees, /plugin
+    # update reports "already at the latest" silently. Refuse on any
+    # mismatch.
     for VFILE in .claude-plugin/marketplace.json plugin/.claude-plugin/plugin.json; do
       [ -f "$VFILE" ] || continue
       command -v jq >/dev/null 2>&1 || fail "release requires jq to verify $VFILE" 2
-      FVER="$(jq -r '.version // empty' "$VFILE")"
-      [ -n "$FVER" ] || continue
-      [ "$FVER" = "$VERSION" ] \
-        || fail "version mismatch: $VFILE has '$FVER', plan says '$VERSION'. Bump $VFILE (or fix plan.version) and re-plan." 2
+      # jq emits one "path=value" line per non-null version field found.
+      while IFS='=' read -r VPATH FVER; do
+        [ -n "$FVER" ] || continue
+        [ "$FVER" = "$VERSION" ] \
+          || fail "version mismatch: $VFILE $VPATH has '$FVER', plan says '$VERSION'. Bump $VFILE (or fix plan.version) and re-plan." 2
+      done < <(jq -r '
+        [ [".version", .version // empty] ]
+        + (if .plugins then
+            [ .plugins | to_entries[] | [".plugins[\(.key)].version", (.value.version // empty)] ]
+          else [] end)
+        | .[] | select(.[1] != "") | "\(.[0])=\(.[1])"
+      ' "$VFILE")
     done
+
+    # CHANGELOG.md must have a heading for this version. Prevents
+    # shipping a tagged release with no documented changes.
+    if [ -f CHANGELOG.md ]; then
+      grep -Eq "^##[[:space:]]+\\[?v?${VERSION//./\\.}\\]?" CHANGELOG.md \
+        || fail "release refused: CHANGELOG.md has no heading for $VERSION (expected e.g. '## [$VERSION]'). Add the entry or fix plan.version." 2
+    fi
     ;;
 esac
 
@@ -378,24 +399,39 @@ if [ "$MODE" = "release" ]; then
   # Idempotency: if the local tag already exists we assume the earlier
   # `git tag` step in a prior run succeeded; likewise for the remote tag
   # and the Release. Each step re-runs only if its output is missing.
+  # Identity check: when a tag already exists it MUST point at the
+  # commit we would tag (origin/$BASE tip). A tag existing at a
+  # different commit is a stale/wrong tag and the executor refuses
+  # rather than silently accepting it.
   local_tag_exists=0
   remote_tag_exists=0
+  target_sha=""
   if [ "$DRYRUN" -eq 0 ]; then
-    git rev-parse --verify --quiet "refs/tags/$TAG" >/dev/null \
-      && local_tag_exists=1
-    git ls-remote --tags --exit-code origin "refs/tags/$TAG" >/dev/null 2>&1 \
-      && remote_tag_exists=1
+    target_sha="$(git rev-parse --verify --quiet "origin/$BASE" 2>/dev/null || true)"
+    if git rev-parse --verify --quiet "refs/tags/$TAG" >/dev/null; then
+      local_tag_exists=1
+      local_tag_sha="$(git rev-parse --verify --quiet "refs/tags/$TAG^{commit}")"
+      [ -n "$target_sha" ] && [ "$local_tag_sha" = "$target_sha" ] \
+        || fail "$STEPS; local tag $TAG points at $local_tag_sha, not $target_sha. Delete or move the tag before re-running." 8
+    fi
+    remote_line="$(git ls-remote --tags origin "refs/tags/$TAG" 2>/dev/null | head -n1)"
+    if [ -n "$remote_line" ]; then
+      remote_tag_exists=1
+      remote_tag_sha="${remote_line%%[[:space:]]*}"
+      [ -n "$target_sha" ] && [ "$remote_tag_sha" = "$target_sha" ] \
+        || fail "$STEPS; remote tag $TAG points at $remote_tag_sha, not $target_sha. Delete or move the remote tag before re-running." 8
+    fi
   fi
 
   if [ "$local_tag_exists" -eq 1 ]; then
-    printf 'embo-deliver: local tag %s already exists; skipping create\n' "$TAG" >&2
+    printf 'embo-deliver: local tag %s already exists at %s; skipping create\n' "$TAG" "$target_sha" >&2
   else
     run git tag "$TAG" "origin/$BASE" \
       || fail "$STEPS; tag $TAG failed" 8
   fi
 
   if [ "$remote_tag_exists" -eq 1 ]; then
-    printf 'embo-deliver: remote tag %s already pushed; skipping push\n' "$TAG" >&2
+    printf 'embo-deliver: remote tag %s already at %s; skipping push\n' "$TAG" "$target_sha" >&2
   else
     run git push origin "$TAG" \
       || fail "$STEPS; tag $TAG not pushed" 8
