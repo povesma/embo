@@ -35,7 +35,8 @@ if [ -n "$HOOK_DIR" ] && [ -f "$START_MD" ]; then
   CHECKLISTS="$(awk '
     /<!-- \/CHECKLIST -->/ { if (keep) printf "%s", buf; f = 0; keep = 0; buf = "" }
     f { buf = buf $0 "\n" }
-    /^\[.*checklist/ && !f { f = 1; buf = $0 "\n"; keep = ($0 ~ /WITHSTAND-CRITICISM|AVOID-APPROVAL/) }
+    /^\[.*checklist/ && !f { f = 1; buf = $0 "\n"; keep = ($0 ~ /^\[(WITHSTAND-CRITICISM|AVOID-APPROVAL) checklist/) }
+    END { if (f && keep) printf "%s", buf }
   ' "$START_MD" 2>/dev/null || true)"
 fi
 

@@ -164,6 +164,13 @@ subagent-rules.sh                         (new; PreToolUse-style, fail-open)
   the subagent runs at is `max(parent, self)` in permissiveness; the design
   cannot lower a permissive parent. This bounds the NFR-2 claim to
   "does not exceed the main agent's own configured mode."
+  **Scope caveat (docs-verified 2026-09-02, post-review):** Claude Code
+  ignores `permissionMode` (with `hooks`, `mcpServers`) in agents loaded
+  from a plugin, for security — the field is inert on the
+  `/plugin install` path and effective only in the standalone
+  (`~/.claude/`) install, where agents are user-level. Kept anyway: it
+  costs nothing on the plugin path and delivers FR-2 on the standalone
+  path. README states the split.
 
 ### Components
 

@@ -388,10 +388,12 @@ a human channel (WITHSTAND-CRITICISM, AVOID-APPROVAL, sourced verbatim
 from `start.md`) and replaces the interactive ones with a preamble that
 tells the agent to decide recoverable choices itself, verify claims
 against documentation, and report irreversible actions as blockers
-instead of performing them. The shipped agents also run with
-`permissionMode: acceptEdits`, so their recoverable actions proceed
-unattended while destructive ones stay gated by the harness. Disable
-with `SUBAGENT_RULES_DISABLED=1`.
+instead of performing them. In a **standalone (manual) install** the
+shipped agents also run with `permissionMode: acceptEdits`, so their
+recoverable actions proceed unattended while destructive ones stay
+gated by the harness; Claude Code ignores this frontmatter field for
+plugin-installed agents, where the parent session's permission mode
+governs. Disable the injection with `SUBAGENT_RULES_DISABLED=1`.
 
 ## Test subagents
 

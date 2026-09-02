@@ -147,6 +147,26 @@ test_single_source_edit_changes_output() {
   assert_not_contains "edited fixture no longer emits old token" "$ctx" "FIXTURE-TOKEN-V1"
 }
 
+# ---- disable switch ----
+
+test_disable_switch() {
+  local out rc
+  out="$(printf '%s' "$STDIN_JSON" | SUBAGENT_RULES_DISABLED=1 bash "$HOOK" 2>/dev/null)"
+  rc=$?
+  assert_eq "disable switch: exit 0" "0" "$rc"
+  assert_eq "disable switch: no output" "" "$out"
+}
+
+# ---- fail-open when jq is unavailable ----
+
+test_fail_open_missing_jq() {
+  local out rc
+  out="$(printf '%s' "$STDIN_JSON" | env PATH=/nonexistent /bin/bash "$HOOK" 2>/dev/null)"
+  rc=$?
+  assert_eq "missing jq: exit 0 (spawn never blocked)" "0" "$rc"
+  assert_eq "missing jq: no partial output" "" "$out"
+}
+
 # ---- run all tests ----
 
 test_includes_kept_checklists
@@ -154,6 +174,8 @@ test_excludes_dropped_checklists
 test_preamble_leads
 test_fail_open_missing_startmd
 test_single_source_edit_changes_output
+test_disable_switch
+test_fail_open_missing_jq
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

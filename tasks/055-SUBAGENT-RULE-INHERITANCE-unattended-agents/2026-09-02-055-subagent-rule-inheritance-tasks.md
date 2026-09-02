@@ -137,6 +137,9 @@
     `/reload-plugins` (no schema rejection). [verify: manual-run-claude]
     → reload reported 12 agents with no rejection; edited rlm-subcall
       spawned and replied [live] (2026-09-02)
+    → post-review docs check: permissionMode is IGNORED for plugin-loaded
+      agents (effective only in standalone installs); README scoped, D4
+      caveat recorded (2026-09-02)
 
 - [X] 4.0 **User Story:** As an embo user, I want end-to-end confirmation
   that a spawned subagent receives and applies the rules and respects the
