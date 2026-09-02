@@ -164,6 +164,20 @@ case "$MODE" in
     [ -n "$BASE" ]     || fail "mode release needs 'base'" 2
     [ -n "$VERSION" ]  || fail "mode release needs 'version'" 2
     [ -n "$RELNOTES" ] || fail "mode release needs a 'release-notes:' block" 2
+
+    # Version-consistency check. A repo may carry the plugin version in more
+    # than one file — for a Claude Code plugin, the marketplace manifest and
+    # the plugin manifest both declare it, and `/plugin update` fails
+    # silently when they disagree. Refuse the release when any known
+    # version-bearing file, if present, does not match plan.version.
+    for VFILE in .claude-plugin/marketplace.json plugin/.claude-plugin/plugin.json; do
+      [ -f "$VFILE" ] || continue
+      command -v jq >/dev/null 2>&1 || fail "release requires jq to verify $VFILE" 2
+      FVER="$(jq -r '.version // empty' "$VFILE")"
+      [ -n "$FVER" ] || continue
+      [ "$FVER" = "$VERSION" ] \
+        || fail "version mismatch: $VFILE has '$FVER', plan says '$VERSION'. Bump $VFILE (or fix plan.version) and re-plan." 2
+    done
     ;;
 esac
 
