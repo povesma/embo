@@ -58,6 +58,22 @@ block. Proposed mechanism (minor): require the body to mention
 `$VERSION` or exceed a floor length; reject the obvious placeholder
 cases.
 
+### G9 — PR create fails on an already-open PR (observed 2026-09-02)
+
+During the 0.2.10 delivery, a `pr-merge` plan exited 5 because a PR
+for the branch already existed OPEN; the re-run then detected it and
+merged. The create step should treat an existing open PR as success
+and proceed to merge in the same run, as the re-run path already
+does.
+
+### G10 — release checks validate the pre-reconcile tree (observed 2026-09-02)
+
+The G2 CHANGELOG check ran against the checked-out branch (a stale
+one) before the executor reconciled onto `plan.branch`, refusing a
+release that was valid on the target state. Validation should run
+after the branch reconcile, against the tree that will actually be
+committed.
+
 ## Related files
 
 - `plugin/bin/embo-deliver` — executor with the release-mode checks.
