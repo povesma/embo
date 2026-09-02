@@ -14,6 +14,17 @@ BIN="$HERE/embo-deliver"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
+# run_dry runs the executor from a bare-minimum git repo inside $WORK, so
+# the executor's "cd repo root" step lands in a clean directory that does
+# NOT contain the outer embo repo's real .claude-plugin/marketplace.json,
+# plugin/.claude-plugin/plugin.json, or any other version-bearing file.
+# Otherwise dry-run release tests that use fake version strings (9.9.9)
+# would collide with the outer repo's real versions and be refused by
+# the version-consistency check.
+DRYREPO="$WORK/dryrepo"
+mkdir -p "$DRYREPO"
+git -C "$DRYREPO" init -q -b main >/dev/null 2>&1
+
 PASS=0
 FAIL=0
 
@@ -59,8 +70,11 @@ write_plan() {
 }
 
 # run_dry <plan-path> -> sets OUT and RC
+# Runs from an isolated dry-run git repo, so the executor does not see the
+# outer repo's real files (marketplace.json, plugin.json) that would leak
+# into version-consistency and file-existence checks.
 run_dry() {
-  OUT="$(bash "$BIN" --dry-run --plan "$1" 2>&1)"
+  OUT="$(cd "$DRYREPO" && bash "$BIN" --dry-run --plan "$1" 2>&1)"
   RC=$?
 }
 
@@ -599,6 +613,61 @@ message:
 release: x')"
 run_dry "$REL_NONOTES"
 assert_exit "release: missing release-notes: -> exit 2" 2 "$RC"
+
+# --- version-consistency check -------------------------------------------
+# The mechanism must catch the case that shipped a broken 0.2.9 release:
+# plugin/.claude-plugin/plugin.json was bumped but .claude-plugin/
+# marketplace.json still held the old version, so `/plugin update` reported
+# "already at the latest". A release plan whose version disagrees with any
+# version-bearing manifest present in the repo must be refused before any
+# git side effect.
+if command -v jq >/dev/null 2>&1; then
+  REPO_V="$WORK/repoV"
+  mkdir -p "$REPO_V/.claude-plugin" "$REPO_V/plugin/.claude-plugin"
+  git -C "$REPO_V" init -q -b main
+  git -C "$REPO_V" config user.email t@t.t
+  git -C "$REPO_V" config user.name t
+
+  # (a) plugin.json at 0.2.9, marketplace.json at 0.2.5 (the observed bug),
+  #     plan says 0.2.9 -> executor must refuse and name marketplace.json.
+  printf '{"version":"0.2.9"}\n' > "$REPO_V/plugin/.claude-plugin/plugin.json"
+  printf '{"version":"0.2.5"}\n' > "$REPO_V/.claude-plugin/marketplace.json"
+  PLAN_V="$(write_plan rel-mismatch.txt '# release — irreversible
+branch: release/0.2.9
+mode: release
+base: main
+version: 0.2.9
+file: a.py
+release-notes:
+notes
+message:
+release: 0.2.9')"
+  OUT_V="$(cd "$REPO_V" && bash "$BIN" --dry-run --plan "$PLAN_V" 2>&1)"
+  RC_V=$?
+  assert_exit "version check: mismatched marketplace.json -> exit 2" 2 "$RC_V"
+  assert_contains "version check: message names the mismatched file" \
+    ".claude-plugin/marketplace.json" "$OUT_V"
+  assert_contains "version check: message names the file's actual value" \
+    "0.2.5" "$OUT_V"
+
+  # (b) both files at 0.2.9 -> executor accepts and proceeds (dry-run).
+  printf '{"version":"0.2.9"}\n' > "$REPO_V/.claude-plugin/marketplace.json"
+  OUT_VOK="$(cd "$REPO_V" && bash "$BIN" --dry-run --plan "$PLAN_V" 2>&1)"
+  RC_VOK=$?
+  assert_exit "version check: matched files -> exit 0 (dry-run)" 0 "$RC_VOK"
+
+  # (c) neither manifest file present (arbitrary repo) -> no false positive.
+  REPO_VN="$WORK/repoVN"
+  mkdir -p "$REPO_VN"
+  git -C "$REPO_VN" init -q -b main
+  git -C "$REPO_VN" config user.email t@t.t
+  git -C "$REPO_VN" config user.name t
+  OUT_VN="$(cd "$REPO_VN" && bash "$BIN" --dry-run --plan "$PLAN_V" 2>&1)"
+  RC_VN=$?
+  assert_exit "version check: no manifest files -> exit 0 (skipped)" 0 "$RC_VN"
+else
+  printf 'SKIP: version-consistency tests (jq missing)\n'
+fi
 
 # --- T043 2.0: release halts on failure, undoes nothing ------------------
 # Real run of a release plan where the PR step fails. The commit + push
