@@ -10,6 +10,7 @@ description: >
   ad hoc, outside that command, whenever a chosen approach is risky
   or complex and needs independent proof before you implement it.
 model: sonnet
+permissionMode: acceptEdits
 tools:
   - Read
   - Grep

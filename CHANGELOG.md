@@ -2,6 +2,23 @@
 
 All notable changes to the embo plugin are documented here.
 
+## [0.2.10] - 2026-09-02
+
+### Added
+
+- Subagent rules: every spawned subagent starts with the session's
+  working rules — decide routine things itself, check docs before
+  stating facts, hand destructive actions (delete, force-push, merge)
+  back instead of running them. Off: `SUBAGENT_RULES_DISABLED=1`.
+- Shipped agents carry `permissionMode: acceptEdits` — manual installs
+  edit files without prompts; plugin installs ignore the field.
+
+### Fixed
+
+- **`/embo:git deliver release` refuses an inconsistent release**:
+  mismatched manifest versions, no CHANGELOG section for the version,
+  or tag `vX.Y.Z` on another commit.
+
 ## [0.2.9] - 2026-09-01
 
 ### Added

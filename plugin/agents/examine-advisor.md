@@ -11,6 +11,7 @@ description: >
   needs a clean-context second opinion this session's author cannot
   give.
 model: sonnet
+permissionMode: acceptEdits
 tools:
   - Read
   - Grep

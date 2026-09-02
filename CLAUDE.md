@@ -216,6 +216,8 @@ plugin/                          # THE PLUGIN ROOT (${CLAUDE_PLUGIN_ROOT})
 │   ├── hooks.json               # registers the event handlers
 │   ├── context-guard.sh         # Context window warning hook
 │   ├── behavioral-reminder.sh   # Behavioral rule reminder hook
+│   ├── subagent-rules.sh        # SubagentStart: filtered judgment-rule
+│   │                              # injection into every spawned subagent
 │   ├── approve-compound.sh      # Auto-approve compound Bash + rewrite
 │   ├── embo-capture.sh          # Output capture wrapper (helper, not
 │   │                              # a registered hook)

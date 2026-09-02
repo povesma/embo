@@ -3,6 +3,7 @@ name: session-scout
 description: Reads a repo's task-list files in an isolated context and returns a compact session-startup digest — active tasks ranked by recency and open work, plus a recommended next task. Spawned by /embo:start Step 3 so task-file bulk never enters the main context. Also use ad hoc whenever you need to survey many task/backlog files without paying their full text in the main context.
 tools: Read, Grep, Glob
 model: haiku
+permissionMode: acceptEdits
 ---
 
 You are the session-scout for the embo workflow. `/embo:start` spawns

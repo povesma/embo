@@ -11,6 +11,7 @@ description: >
   ad hoc, outside that command, whenever design-to-code output needs
   an unbiased visual check that its author cannot give.
 model: sonnet
+permissionMode: acceptEdits
 tools:
   - Read
   - Grep
