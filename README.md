@@ -381,6 +381,18 @@ Adding a new rule: write the rule prose and its `CHECKLIST` block in
 `start.md`. The hook auto-injects it with zero code change — the
 genericity test (`behavioral-reminder.test.sh`) proves this.
 
+**Subagents inherit the judgment rules.** A `SubagentStart` hook
+(`subagent-rules.sh`) injects a filtered rule block into every spawned
+subagent — shipped or ad hoc. It keeps the checklists that work without
+a human channel (WITHSTAND-CRITICISM, AVOID-APPROVAL, sourced verbatim
+from `start.md`) and replaces the interactive ones with a preamble that
+tells the agent to decide recoverable choices itself, verify claims
+against documentation, and report irreversible actions as blockers
+instead of performing them. The shipped agents also run with
+`permissionMode: acceptEdits`, so their recoverable actions proceed
+unattended while destructive ones stay gated by the harness. Disable
+with `SUBAGENT_RULES_DISABLED=1`.
+
 ## Test subagents
 
 Five specialised agents run in **isolated contexts** during
