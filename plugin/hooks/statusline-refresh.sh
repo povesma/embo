@@ -20,7 +20,9 @@
 #
 # Fails open: any error path exits 0, never blocks the session.
 
-trap 'exit 0' ERR
+# Fail-open is guaranteed by the explicit `|| exit 0` on every path
+# below plus the trailing `exit 0`; the script sets no `-e`/`-E`, so a
+# failing command never aborts it. This hook must never block a session.
 
 # ${CLAUDE_PLUGIN_ROOT} resolves here (hook runtime). Bundled source:
 SRC="${CLAUDE_PLUGIN_ROOT:-}/statusline.sh"
@@ -33,11 +35,13 @@ DEST="$HOME/.claude/statusline.sh"
 [ -f "$DEST" ] || exit 0
 
 # Respect a customized copy. The bundled statusline ships with an
-# `embo:auto-refresh` marker line; a user who customizes their copy
+# `embo:auto-refresh` marker comment; a user who customizes their copy
 # removes that line (the line says to). If the installed copy no longer
-# carries the token, treat it as intentionally customized and never
-# overwrite it.
-grep -q 'embo:auto-refresh' "$DEST" || exit 0
+# carries the marker, treat it as intentionally customized and never
+# overwrite it. Anchor to the marker's line shape (`# embo:auto-refresh`
+# at the start of a line) so a file that merely mentions the string
+# elsewhere is not mistaken for a stock copy.
+grep -q '^# embo:auto-refresh' "$DEST" || exit 0
 
 # Refresh only when the bundled script differs from the installed copy.
 if ! cmp -s "$SRC" "$DEST"; then

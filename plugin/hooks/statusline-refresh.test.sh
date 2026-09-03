@@ -68,6 +68,19 @@ test_token_absent_preserved() {
   assert_eq "token absent (customized) -> preserved" "kept" "$got"
 }
 
+# ---- 2b. coincidental mention of the token (not the marker line) -> preserved ----
+
+test_coincidental_token_preserved() {
+  setup
+  # Custom file that mentions the token in prose, but NOT as the
+  # start-of-line marker. Must be treated as customized and kept.
+  printf '#!/usr/bin/env bash\n# my statusline; note: embo:auto-refresh is off here\nCUSTOM_MENTION\n' > "$DEST"
+  run_hook
+  local got=overwritten
+  grep -q CUSTOM_MENTION "$DEST" && got=kept
+  assert_eq "token mentioned mid-line (not marker) -> preserved" "kept" "$got"
+}
+
 # ---- 3. no installed copy -> no-op, exit 0 ----
 
 test_no_installed_copy_noop() {
@@ -105,6 +118,7 @@ test_fail_open_no_plugin_root() {
 
 test_token_present_stale_refreshes
 test_token_absent_preserved
+test_coincidental_token_preserved
 test_no_installed_copy_noop
 test_identical_exit_zero
 test_fail_open_no_plugin_root
