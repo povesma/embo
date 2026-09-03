@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Claude Code statusLine script — embo edition
+# embo:auto-refresh — remove this line if you customize this file, to stop embo overwriting it on plugin update
 # Displays: cwd (tilde-abbreviated) | git branch | model | USED/TOTAL $cost | ctx % | mem | time
 # Requires: jq (brew install jq / apt install jq)
 # Install:  cp .claude/statusline.sh ~/.claude/statusline.sh && chmod +x ~/.claude/statusline.sh

@@ -2,8 +2,9 @@
 
 This doc records the concrete rewriting lessons from polishing the
 0.2.5 Live-Edit Mode changelog entry. Consult it before writing or
-reviewing a CHANGELOG entry: the failure modes below are ones a
-first draft reliably falls into, and each has a rewrite rule.
+reviewing a CHANGELOG entry or an announcement post: the failure
+modes below are ones a first draft reliably falls into, and each has
+a rewrite rule.
 
 The CHANGELOG contract is set in `CLAUDE.md` (# CHANGELOG Entries):
 describe **what the released version does**, in **behavior** not
@@ -221,6 +222,52 @@ rule from above that caught it:
 | 4: "Claude injects candidate style, markup, or logic fixes into the running page as live overrides you can toggle on and off…" | Implementation-first; too long; still misses that YOU also author changes | 3 (lead with idea), 4 (inputs) |
 | 5: "a WYSIWYG loop for fixing a page… Live overlays hold candidate edits — some proposed by Claude, some you author in the panel yourself" | Leads with implementation ("live overlays hold"); "gap" borrowed from Figma context; "no edit-rebuild cycle per attempt" is jargon the reader must decode | 3, 7, 9 |
 | 6 (final): "a WYSIWYG loop for tuning a page against a design or your own intent. You describe a change, or Claude proposes options; Claude applies it live on the page — no file edit, no rebuild. When the page looks right, you accept and Claude writes the changes back into the source at their real origins." | — | passes all rules |
+
+## Social / announcement posts
+
+Lessons from the 0.2.9 + 0.2.10 announcement (2026-09-03). All rules
+above apply — especially 8 (cut), 13 (vocabulary), 14 (no showing-off).
+These are the post-specific rules on top.
+
+### S1. Search memory and this doc before drafting
+
+The polished style already exists: claude-mem holds the corrections,
+this doc holds the rules. A from-scratch draft reproduces the exact
+faults they already fixed.
+
+### S2. Lead each item with the affected command
+
+The audience is existing users; they scan for the commands they use.
+`/embo:wrapup — verifies …` beats a prose paragraph: one line per
+command, a dash, the behavior.
+
+### S3. Keep platform terms; rewrite only project-internal ones
+
+"Subagent", "hook", "tag" are the platform's established vocabulary —
+the audience knows them, and replacing them with invented plain
+phrases ("helper agents") reads as unserious. Rule 13 applies to
+embo-internal names only.
+
+### S4. Length proportional to change magnitude
+
+Small changes get a small post. A long post about minor updates loses
+the reader.
+
+### S5. Include only what draws the reader's attention
+
+Readers take safety and correctness for granted: guard-rail and
+validation improvements never headline — fold them into "other
+improvements" or drop them. New capability and speed draw attention.
+
+### S6. Close with the action
+
+End with the update commands, not a project description:
+`/plugin marketplace update embo`, `/reload-plugins`.
+
+### S7. One announcement per fix cycle
+
+Related point releases are announced together as one narrative, never
+fragmented into per-version entries.
 
 ## The one-line checklist
 
