@@ -32,6 +32,13 @@ DEST="$HOME/.claude/statusline.sh"
 [ -f "$SRC" ] || exit 0
 [ -f "$DEST" ] || exit 0
 
+# Respect a customized copy. The bundled statusline ships with an
+# `embo:auto-refresh` marker line; a user who customizes their copy
+# removes that line (the line says to). If the installed copy no longer
+# carries the token, treat it as intentionally customized and never
+# overwrite it.
+grep -q 'embo:auto-refresh' "$DEST" || exit 0
+
 # Refresh only when the bundled script differs from the installed copy.
 if ! cmp -s "$SRC" "$DEST"; then
     cp "$SRC" "$DEST" 2>/dev/null || exit 0
