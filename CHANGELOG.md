@@ -2,6 +2,15 @@
 
 All notable changes to the embo plugin are documented here.
 
+## [0.2.11] - 2026-09-03
+
+### Fixed
+
+- A customized `~/.claude/statusline.sh` is no longer overwritten on
+  session start: remove the `embo:auto-refresh` marker line from the
+  file to opt out of automatic refresh. Stock copies keep the marker and
+  keep updating.
+
 ## [0.2.10] - 2026-09-02
 
 ### Added
