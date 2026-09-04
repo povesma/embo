@@ -167,17 +167,19 @@ plugin.**
 ## Comparison
 
 How embo positions against other Claude Code workflow plugins.
-Snapshot 2026-06-07; sources for every cell are in
+Snapshot 2026-09-04; sources for every cell are in
 [`tasks/017-.../comparison-data.md`](tasks/017-README-ONBOARDING-spec-driven-positioning/comparison-data.md).
 
 | Project | Spec phases | Code navigation | X-session memory | TDD | Profiles | Agent model | Worktrees |
 |---|---|---|---|---|---|---|---|
 | **embo** *(this)* | yes | index (RLM) | yes | yes | yes (4) | focused (1+5 test) | no |
-| [Superpowers](https://github.com/obra/superpowers) | yes | grep-only | optional | yes | partial | skills (20+) | yes |
-| [BMAD-METHOD](https://github.com/aj-geddes/claude-code-bmad-skills) | yes | none | yes | partial | yes | roles (9) | no |
-| [Oh-My-ClaudeCode](https://github.com/Yeachan-Heo/oh-my-claudecode) | partial | LSP+AST | yes | no | yes | swarm (29) | yes |
-| [claude-code-workflows](https://github.com/shinpr/claude-code-workflows) | yes | grep-only | no | yes | yes | roles (variants) | no |
-| [claude-workflow-template](https://github.com/nicholasmartin/claude-workflow-template) | yes | none | partial | no | no | single (1) | no |
+| [GitHub Spec-Kit](https://github.com/github/spec-kit) | yes | grep-only | no | partial | partial | delegates to host | yes |
+| [Superpowers](https://github.com/obra/superpowers) | yes | grep-only | yes | yes | no | focused (~14) | yes |
+| [BMAD-METHOD](https://github.com/aj-geddes/claude-code-bmad-skills) | yes | none | optional | no | yes | roles (~20, plan-only) | no |
+| [Oh-My-ClaudeCode](https://github.com/Yeachan-Heo/oh-my-claudecode) | partial | LSP+AST | yes | partial | yes | swarm (~16) | yes |
+| [claude-code-workflows](https://github.com/shinpr/claude-code-workflows) | yes | grep-only | no | yes | partial | roles (~25) | no |
+| [Pimzino/spec-workflow](https://github.com/Pimzino/claude-code-spec-workflow) | yes | grep-only | no | partial | no | focused (main+sub) | no |
+| [claude-workflow-template](https://github.com/nicholasmartin/claude-workflow-template) | yes | grep-only | partial | partial | partial | roles (~few) | yes |
 
 Legend: `yes` = built-in · `partial` / `optional` = partial or
 optional · `no` / `none` = absent. **Code navigation**: how the tool
@@ -186,20 +188,27 @@ locates code — a persistent `index`, live `LSP+AST` lookups, plain
 (a `focused` set, a large `swarm`, role-based, or a `single` agent) —
 not a quality score; more agents is not inherently better.
 
+Explicit spec phases (PRD → design → tasks) are now table stakes —
+every serious tool here has them, including GitHub's Spec-Kit. What
+separates tools is **context depth** versus **parallelism**.
+
 **Pick embo if:** you want both *spatial* (where is code?)
 and *temporal* (why did we decide this in February?) context
-auto-loaded into every spec, design, and impl. No other tool here
-has both a persistent codebase index **and** cross-session memory.
+auto-loaded into every spec, design, and impl. No other tool here —
+not even Spec-Kit — has both a persistent codebase index **and**
+cross-session memory. embo is the deep-context, single-track choice.
 
 **Pick something else if:**
-- you need **git-worktree isolation** for parallel agents —
-  Superpowers or OMC
+- you need **git-worktree isolation** for parallel agents — Spec-Kit,
+  Superpowers, or OMC (embo runs its agents in one working tree)
 - you want **maximum agent throughput / parallel swarms** — OMC or
   shinpr
 - you rely on **LSP/AST "go-to-definition" navigation** rather than a
   text index — OMC
 - you want **self-looping verification** (audit-fix-retry until a
   pass signal) — OMC (`ralph`) or shinpr's quality gates
+- you want the **largest ecosystem** and broadest agent support —
+  GitHub Spec-Kit
 
 **Pairs well with:** [ponytail](https://github.com/DietrichGebert/ponytail)
 — a plugin that pushes the agent to write less code (a YAGNI check
