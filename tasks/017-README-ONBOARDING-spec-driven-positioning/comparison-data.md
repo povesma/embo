@@ -174,3 +174,100 @@ codebase index (RLM) **and** cross-session memory (claude-mem)
 in a single workflow. No competitor in the table has both — OMC
 has memory + LSP/AST navigation but no persistent index; the
 spec-driven ones (Superpowers, shinpr) lack persistent memory.
+
+## Refresh 2026-09-04 — re-verified cells + two new entrants
+
+> Re-research via parallel web/repo fetches (three research subagents,
+> each citing the tool's live GitHub repo/README, 2026-09-04). Every
+> changed cell below has a live source. Changes from the 2026-06-07
+> snapshot:
+>
+> - **Superpowers memory**: `🟡 optional` → **`✅`**. Core now ships
+>   multi-section private journaling (feelings, project notes, technical
+>   insights, user context) persisting across sessions — no longer an
+>   external add-on. Now in Anthropic's official marketplace; reached
+>   v5.x. Source: github.com/obra/superpowers README.
+> - **Superpowers agent model**: "skills (20+)" → **focused (~14
+>   skills)** with a coordinator dispatching per-task subagents
+>   (`dispatching-parallel-agents`).
+> - **BMAD TDD**: `🟡` → **`❌`**. v6.x refocus dropped all
+>   code-execution/dev-story/lint/coverage skills; now planning &
+>   orchestration ONLY. Memory reframed `✅`→**`🟡 optional`** (planning
+>   artifacts, not a documented cross-session store). Agent model ~20
+>   skills + 3 planning subagents. Source:
+>   aj-geddes.github.io/claude-code-bmad-skills.
+> - **OMC agent model**: swarm "(29)" → **~16 core role agents**
+>   (legacy `swarm` keyword removed v4.1.7; now branded "Team"). LSP+AST
+>   navigation and the `ralph` self-looping verifier BOTH still exist
+>   (confirmed in repo tree: `src/tools/lsp/`, `src/tools/ast-tools.ts`,
+>   `src/hooks/ralph/`). Spec phases remain `🟡`. Source:
+>   github.com/Yeachan-Heo/oh-my-claudecode.
+> - **shinpr agent model / profiles**: refined to **~25 role-based**
+>   (~16 shared + 4 backend + 5 frontend); profiles `✅`→**`🟡`**
+>   (`quality.yaml` repo rules, not full workflow-mode profiles). Split
+>   into three install targets; added an independent security-review
+>   gate. Memory remains `❌` (committed docs, not a store). Source:
+>   github.com/shinpr/claude-code-workflows.
+> - **claude-workflow-template**: worktrees `❌`→**`✅`** (shipped
+>   `execute-isolated.md` + Level-4 isolation). Navigation `none`→
+>   **grep-only** (path-scoped rules + `/prime` context, plain reads).
+>   Agent model single→**role-based (~few)** (`execute-team.md`,
+>   `execute-isolated.md`). Memory remains `🟡` (GitHub Issues + git,
+>   no semantic store). Source:
+>   github.com/nicholasmartin/claude-workflow-template.
+>
+> **Two new entrants added** (both genuinely spec-driven Claude Code
+> workflows, verified live):
+>
+> - **GitHub Spec-Kit** (github.com/github/spec-kit) — 133k stars,
+>   GitHub-official, `/spec.constitution→specify→plan→tasks→implement`,
+>   works with 30+ agents incl. Claude Code. Now the dominant tool in
+>   the field. Spec `✅`; nav grep-only; memory `❌` (`constitution.md`
+>   is a rules file, not cross-session store); TDD `🟡` (constitution
+>   can mandate); profiles `🟡` (`--ai` flag); agent model delegates to
+>   the host agent's subagents; worktrees `✅` (feature-level isolation,
+>   DAG waves). *TDD/profile ratings inferred from docs, not
+>   code-verified — provisional.*
+> - **Pimzino/claude-code-spec-workflow**
+>   (github.com/Pimzino/claude-code-spec-workflow) — 3.9k stars (aging,
+>   last push 2025-09). Requirements→Design→Tasks→Implementation + bug
+>   flow, Kiro-inspired steering docs, context caching. Spec `✅`; nav
+>   grep-only; memory `❌` (steering docs); TDD `🟡`; profiles `❌`;
+>   agent model focused (main+sub with selective context); worktrees
+>   `❌`.
+>
+> **Adjacent, NOT added as rows** (planning-only or not a Claude Code
+> workflow plugin): Taskmaster/claude-task-master (28k stars,
+> PRD→tasks.json, planning-only, editor-agnostic); Kiro (AWS agentic
+> IDE, not a plugin); Aider/Cline (general coding assistants).
+>
+> **Axis note:** no axis change this refresh — the 2026-06-07 columns
+> (Spec phases, Code navigation, X-session memory, TDD, Profiles, Agent
+> model, Worktrees) still capture the field. Worktrees is now the axis
+> where embo is most conspicuously behind: Spec-Kit, Superpowers, OMC,
+> and claude-workflow-template all have it; embo does not.
+
+### Final compact table — refreshed 2026-09-04
+
+> **Legend**: ✅ built-in · 🟡 partial / optional · ❌ absent.
+> Snapshot 2026-09-04; every cell sourced above.
+
+| Project | Spec phases | Code navigation | X-session memory | TDD | Profiles | Agent model | Worktrees |
+|---|---|---|---|---|---|---|---|
+| **embo** *(this)* | ✅ | index (RLM) | ✅ | ✅ | ✅ (4) | focused (1+5 test) | ❌ |
+| [GitHub Spec-Kit](https://github.com/github/spec-kit) | ✅ | grep-only | ❌ | 🟡 | 🟡 | delegates to host | ✅ |
+| [Superpowers](https://github.com/obra/superpowers) | ✅ | grep-only | ✅ | ✅ | ❌ | focused (~14) | ✅ |
+| [BMAD-METHOD](https://github.com/aj-geddes/claude-code-bmad-skills) | ✅ | none | 🟡 | ❌ | ✅ | roles (~20, plan-only) | ❌ |
+| [Oh-My-ClaudeCode](https://github.com/Yeachan-Heo/oh-my-claudecode) | 🟡 | LSP+AST | ✅ | 🟡 | ✅ | swarm/Team (~16) | ✅ |
+| [claude-code-workflows](https://github.com/shinpr/claude-code-workflows) | ✅ | grep-only | ❌ | ✅ | 🟡 | roles (~25) | ❌ |
+| [Pimzino/spec-workflow](https://github.com/Pimzino/claude-code-spec-workflow) | ✅ | grep-only | ❌ | 🟡 | ❌ | focused (main+sub) | ❌ |
+| [claude-workflow-template](https://github.com/nicholasmartin/claude-workflow-template) | ✅ | grep-only | 🟡 | 🟡 | 🟡 | roles (~few) | ✅ |
+
+**embo's only-one-with-both differentiator holds against the refreshed
+field**: persistent codebase index (RLM) **and** cross-session memory
+(claude-mem). Even Spec-Kit (now dominant) has neither; Superpowers has
+memory but grep-only nav; OMC has LSP+AST nav but session-search, not
+semantic cross-session recall. The trade: embo is the deep-context,
+single-track choice in a field trending toward broad parallelism —
+worktree isolation is the one gap most likely to lose a
+parallelism-seeking user.
