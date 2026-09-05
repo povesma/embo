@@ -1,0 +1,164 @@
+#!/usr/bin/env bash
+# embo-worktree-finish — one-command local merge-back for a git worktree.
+#
+# Finishes work done in a linked git worktree by merging its branch into a
+# local integration branch and cleaning up — no remote round-trip. Native
+# `claude --worktree` creates the worktree; this returns it to the base.
+#
+# Why a bare command: Claude Code adds plugin bin/ to the Bash tool PATH,
+# so this runs as `embo-worktree-finish <base>` with no ${...} expansion.
+# An allow rule `Bash(embo-worktree-finish *)` lets it auto-approve; the
+# git commands here are child processes the hook never sees. Users opt in
+# by adding that rule (see plugin/commands docs, mirroring embo-deliver).
+#
+# STRICT SAFETY: never force. No `git worktree remove --force`, no
+# `git branch -D` (except an explicit `--discard`), no force-checkout of a
+# branch held by another worktree. A dirty tree aborts; nothing is lost.
+#
+# Sequence (from inside the worktree being finished):
+#   1. run tests in the worktree; red -> abort, no merge
+#   2. ensure <base> is not dirty in its owning checkout
+#   3. locate the checkout that owns <base>; merge from there (or a temp
+#      worktree if <base> is unheld and the main tree is on another branch)
+#   4. merge the worktree branch into <base> (no force)
+#   5. re-run tests on the MERGED result; red -> stop, preserve worktree
+#   6. cleanup: git worktree remove <path> ; git worktree prune
+#   7. git branch -d <branch>   (never -D except --discard)
+#
+# DIRTY = `git status --porcelain -uno` reports any line (staged/unstaged
+# tracked changes). Untracked files do NOT count as dirty.
+#
+# Menu: --mode merge (default) | pr (delegate to embo-deliver) | keep
+#       (stop after step 5, no cleanup).
+#
+# Exit codes:
+#   0  finished (merged + cleaned, or kept as requested)
+#   2  bad usage / not in a git worktree / <base> missing
+#   3  worktree tests failed (step 1) — nothing merged
+#   4  <base> dirty, or held-and-dirty elsewhere — nothing merged
+#   5  merge conflict — nothing cleaned, worktree preserved
+#   6  merged-result tests failed (step 5) — worktree preserved
+#   7  cleanup refused (dirty worktree) — merge done, worktree kept
+
+set -uo pipefail
+
+BASE=""
+MODE="merge"
+TEST_CMD=""
+DISCARD=0
+
+fail() { printf 'embo-worktree-finish: %s\n' "$1" >&2; exit "${2:-2}"; }
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --mode) MODE="${2:-}"; shift 2 ;;
+    --test-cmd) TEST_CMD="${2:-}"; shift 2 ;;
+    --discard) DISCARD=1; shift ;;
+    -*) fail "unknown flag: $1" 2 ;;
+    *) if [ -z "$BASE" ]; then BASE="$1"; shift; else fail "unexpected arg: $1" 2; fi ;;
+  esac
+done
+
+[ -n "$BASE" ] || fail "usage: embo-worktree-finish <base> [--mode merge|pr|keep] [--test-cmd CMD]" 2
+case "$MODE" in merge|pr|keep) ;; *) fail "bad --mode: $MODE (merge|pr|keep)" 2 ;; esac
+
+# Must be run from inside a linked worktree (git-dir != git-common-dir).
+# Compare both in the SAME absolute form; a relative-vs-absolute mismatch
+# would give a false verdict.
+git_dir="$(git rev-parse --path-format=absolute --git-dir 2>/dev/null)" || fail "not inside a git repository" 2
+common_dir="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" \
+  || fail "not inside a git repository" 2
+[ "$git_dir" != "$common_dir" ] \
+  || fail "not inside a linked worktree; run this from the worktree you want to finish" 2
+
+wt_path="$(git rev-parse --show-toplevel)"
+wt_branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null)" \
+  || fail "worktree is in detached HEAD; check out a branch to finish it" 2
+main_root="$(dirname "$common_dir")"
+
+# is_dirty <dir> : tracked staged/unstaged changes (untracked excluded)
+is_dirty() {
+  [ -n "$(git -C "$1" status --porcelain -uno 2>/dev/null)" ]
+}
+
+# owning_worktree <branch> -> prints the checkout path holding <branch>, or
+# empty if no checkout has it checked out.
+owning_worktree() {
+  local want="$1" path="" br=""
+  while IFS= read -r line; do
+    case "$line" in
+      worktree\ *) path="${line#worktree }" ;;
+      branch\ refs/heads/*)
+        br="${line#branch refs/heads/}"
+        [ "$br" = "$want" ] && { printf '%s' "$path"; return 0; }
+        ;;
+    esac
+  done < <(git worktree list --porcelain)
+  return 1
+}
+
+run_tests() {
+  [ -n "$TEST_CMD" ] || return 0   # no test command => skip the gate
+  ( cd "$1" && eval "$TEST_CMD" )
+}
+
+# --- step 1: tests in the worktree ---------------------------------------
+run_tests "$wt_path" || fail "worktree tests failed; not merging" 3
+
+# --- step 2/3: locate the base's owning checkout -------------------------
+merge_dir=""
+temp_wt=""
+if base_owner="$(owning_worktree "$BASE")"; then
+  is_dirty "$base_owner" && fail "base '$BASE' is dirty in $base_owner; commit or stash there first" 4
+  merge_dir="$base_owner"
+else
+  # <base> not checked out anywhere.
+  main_branch="$(git -C "$main_root" symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+  if [ "$main_branch" = "$BASE" ]; then
+    is_dirty "$main_root" && fail "base '$BASE' is dirty in the main tree; resolve it first" 4
+    merge_dir="$main_root"
+  elif ! is_dirty "$main_root"; then
+    # main tree is clean but on another branch: never switch it out from
+    # under a live session — merge in a throwaway worktree instead.
+    temp_wt="$(mktemp -d)"
+    git worktree add -q "$temp_wt" "$BASE" \
+      || fail "could not create a temporary worktree for base '$BASE'" 2
+    merge_dir="$temp_wt"
+  else
+    fail "base '$BASE' is not checked out and the main tree is dirty; check out '$BASE' somewhere clean and re-run" 4
+  fi
+fi
+
+cleanup_temp() { [ -n "$temp_wt" ] && git worktree remove --force "$temp_wt" 2>/dev/null; }
+trap cleanup_temp EXIT
+
+# --- step 4: merge (no force) --------------------------------------------
+git -C "$merge_dir" merge --no-edit "$wt_branch" \
+  || { git -C "$merge_dir" merge --abort 2>/dev/null; fail "merge conflict merging '$wt_branch' into '$BASE'; resolve manually" 5; }
+
+# --- step 5: re-test the merged result -----------------------------------
+run_tests "$merge_dir" || fail "merged result failed tests; worktree preserved" 6
+
+# --- menu: keep / pr / merge ---------------------------------------------
+if [ "$MODE" = "keep" ]; then
+  printf 'merged into %s; worktree kept as requested.\n' "$BASE"
+  exit 0
+fi
+if [ "$MODE" = "pr" ]; then
+  printf 'merged into %s; hand off to embo-deliver pr for %s.\n' "$BASE" "$wt_branch"
+  exit 0
+fi
+
+# --- step 6/7: cleanup (mode merge) --------------------------------------
+if is_dirty "$wt_path"; then
+  fail "worktree has uncommitted changes; not removing. Files:
+$(git -C "$wt_path" status --porcelain -uno)" 7
+fi
+git worktree remove "$wt_path" || fail "could not remove worktree $wt_path" 7
+git worktree prune
+if [ "$DISCARD" -eq 1 ]; then
+  git branch -D "$wt_branch" 2>/dev/null || true
+else
+  git branch -d "$wt_branch" 2>/dev/null || true
+fi
+printf 'finished: %s merged into %s, worktree removed.\n' "$wt_branch" "$BASE"

@@ -48,13 +48,65 @@ import sys
 import textwrap
 import time
 import traceback
-from contextlib import redirect_stderr, redirect_stdout
+
+try:
+    import fcntl  # POSIX only; absent on Windows
+except ImportError:  # pragma: no cover - exercised via a shim in tests
+    fcntl = None
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from pathlib import Path
 from typing import Any, Dict, List, NamedTuple, Tuple, Set, Optional
 
 
 DEFAULT_STATE_PATH = Path(".claude/rlm_state/state.pkl")
 DEFAULT_MAX_OUTPUT_CHARS = 8000
+
+
+def _git(*args: str) -> Optional[str]:
+    """Run a git command, returning stripped stdout or None on any failure."""
+    try:
+        out = subprocess.run(
+            ["git", *args],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return out.stdout.strip()
+
+
+def resolve_state_path(explicit: Optional[Path] = None) -> Path:
+    """Resolve where the RLM state pickle lives.
+
+    An explicit path always wins. Inside a linked git worktree the state
+    resolves to the MAIN tree so parallel worktree sessions share one
+    index; everywhere else it stays the CWD-relative default, so
+    non-worktree users are unaffected.
+    """
+    if explicit is not None:
+        return explicit
+
+    git_dir = _git("rev-parse", "--git-dir")
+    common_dir = _git("rev-parse", "--git-common-dir")
+    if git_dir is None or common_dir is None:
+        return DEFAULT_STATE_PATH  # not a git repo / git absent
+
+    if git_dir == common_dir:
+        return DEFAULT_STATE_PATH  # main tree, not a linked worktree
+
+    # Linked worktree: anchor to the MAIN tree. --git-common-dir points at
+    # the main tree's .git (unlike --show-toplevel, which returns the
+    # worktree's own root); its parent is the main working tree. Request
+    # an absolute form so the parent is meaningful. A bare repo has no
+    # main working tree to anchor to.
+    if _git("rev-parse", "--is-bare-repository") == "true":
+        return DEFAULT_STATE_PATH
+    common_abs = _git("rev-parse", "--path-format=absolute", "--git-common-dir")
+    if not common_abs:
+        return DEFAULT_STATE_PATH
+    main_root = Path(common_abs).parent
+    return main_root / ".claude" / "rlm_state" / "state.pkl"
 
 # Language detection by file extension
 LANGUAGE_MAP = {
@@ -224,12 +276,56 @@ def _load_state(state_path: Path) -> Dict[str, Any]:
     return state
 
 
-def _save_state(state: Dict[str, Any], state_path: Path) -> None:
+_fcntl_warned = False
+
+
+@contextmanager
+def index_write_lock(state_path: Path):
+    """Serialize index writes across concurrent sessions/worktrees.
+
+    Advisory, non-blocking `fcntl` lock on `<state_path>.lock`. A writer
+    that cannot acquire it raises RlmReplError ("index busy") rather than
+    racing another session. Where `fcntl` is unavailable (Windows) the
+    lock is a no-op with a one-time warning, degrading to unserialized
+    writes rather than crashing.
+    """
+    if fcntl is None:
+        global _fcntl_warned
+        if not _fcntl_warned:
+            sys.stderr.write(
+                "WARNING: worktree write-serialization unavailable on this "
+                "platform (no fcntl); index writes are not locked.\n"
+            )
+            _fcntl_warned = True
+        yield
+        return
+
     _ensure_parent_dir(state_path)
-    tmp_path = state_path.with_suffix(state_path.suffix + ".tmp")
-    with tmp_path.open("wb") as f:
-        pickle.dump(state, f, protocol=pickle.HIGHEST_PROTOCOL)
-    tmp_path.replace(state_path)
+    lock_path = state_path.with_suffix(state_path.suffix + ".lock")
+    lock_file = lock_path.open("w")
+    try:
+        try:
+            fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            raise RlmReplError(
+                f"index busy: another session is writing {state_path}"
+            )
+        yield
+    finally:
+        lock_file.close()  # releases the advisory lock on close
+
+
+def _save_state(state: Dict[str, Any], state_path: Path) -> None:
+    # Every state write goes through here (cmd_init, cmd_init_repo,
+    # cmd_exec), so the lock lives here: one guard covers all writers and
+    # serializes concurrent worktree sessions. The atomic tmp->replace
+    # prevents partial-write corruption; the lock prevents lost updates.
+    with index_write_lock(state_path):
+        _ensure_parent_dir(state_path)
+        tmp_path = state_path.with_suffix(state_path.suffix + ".tmp")
+        with tmp_path.open("wb") as f:
+            pickle.dump(state, f, protocol=pickle.HIGHEST_PROTOCOL)
+        tmp_path.replace(state_path)
 
 
 def _read_text_file(path: Path, max_bytes: int | None = None) -> str:
@@ -1193,8 +1289,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--state",
-        default=str(DEFAULT_STATE_PATH),
-        help=f"Path to state pickle (default: {DEFAULT_STATE_PATH})",
+        default=None,
+        help=(
+            f"Path to state pickle (default: {DEFAULT_STATE_PATH}, or the "
+            "main tree's copy when run inside a git worktree)"
+        ),
     )
 
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -1301,6 +1400,9 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: List[str]) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    explicit = Path(args.state) if args.state is not None else None
+    args.state = str(resolve_state_path(explicit))
 
     try:
         return int(args.func(args))

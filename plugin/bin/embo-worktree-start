@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# embo-worktree-start — create/list git worktrees without hand-naming.
+#
+# Removes the naming and tracking friction native `claude --worktree`
+# leaves: derives the worktree directory name from the branch and shows
+# existing worktrees on demand. Native `claude --worktree` stays fully
+# supported; this is a convenience alongside it.
+#
+# Why a bare command: Claude Code adds plugin bin/ to the Bash tool PATH,
+# so this runs as `embo-worktree-start <branch>` with no ${...} expansion.
+# Opt in with `Bash(embo-worktree-start *)` in permissions.allow.
+#
+# Usage:
+#   embo-worktree-start <branch>   create .worktrees/<derived> on <branch>
+#   embo-worktree-start --list     list existing worktrees + branches
+#
+# Derived name: branch with slashes -> '-' (feat/x -> feat-x). Worktrees
+# live under .worktrees/ (git-ignored). Refuses to nest.
+#
+# Exit codes:
+#   0  created, or listed
+#   2  bad usage / not a git repo / nested / branch or path conflict
+
+set -uo pipefail
+
+fail() { printf 'embo-worktree-start: %s\n' "$1" >&2; exit "${2:-2}"; }
+
+git rev-parse --git-dir >/dev/null 2>&1 || fail "not inside a git repository" 2
+
+do_list() {
+  git worktree list
+}
+
+do_start() {
+  local branch="$1"
+  [ -n "$branch" ] || fail "usage: embo-worktree-start <branch> | --list" 2
+
+  # Refuse to nest: if we are already in a linked worktree, abort. Compare
+  # both dirs in the SAME absolute form (a relative-vs-absolute mismatch
+  # would falsely read the main tree as a worktree).
+  local git_dir common_dir
+  git_dir="$(git rev-parse --path-format=absolute --git-dir)"
+  common_dir="$(git rev-parse --path-format=absolute --git-common-dir)"
+  [ "$git_dir" = "$common_dir" ] \
+    || fail "already inside a linked worktree; run from the main tree" 2
+
+  local main_root name path
+  main_root="$(git rev-parse --show-toplevel)"
+  name="$(printf '%s' "$branch" | tr '/' '-')"
+  path="$main_root/.worktrees/$name"
+
+  [ -e "$path" ] && fail "worktree path already exists: $path" 2
+
+  # Existing branch -> check it out; new branch -> create it.
+  if git show-ref --verify --quiet "refs/heads/$branch"; then
+    git worktree add "$path" "$branch" \
+      || fail "could not add worktree for existing branch '$branch'" 2
+  else
+    git worktree add "$path" -b "$branch" \
+      || fail "could not create worktree + branch '$branch'" 2
+  fi
+  printf '%s\n' "$path"
+}
+
+main() {
+  case "${1:-}" in
+    ""|-h|--help) fail "usage: embo-worktree-start <branch> | --list" 2 ;;
+    --list|list) do_list ;;
+    -*) fail "unknown flag: $1" 2 ;;
+    *) do_start "$1" ;;
+  esac
+}
+
+main "$@"

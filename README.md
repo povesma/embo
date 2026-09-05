@@ -366,6 +366,37 @@ all** after you ask for one. Only add this if you consciously want
 unattended delivery; there is no way for the agent to warn you at
 delivery time that the gate is gone.
 
+### Parallel worktree sessions
+
+Work several features at once in separate git worktrees
+(`claude --worktree <branch>`) and they share **one** RLM index and
+claude-mem memory — no per-worktree re-index, and deleting a worktree
+never touches the shared state (it lives in the main tree). Index writes
+are serialized across sessions, so two live worktrees cannot corrupt the
+index.
+
+Start one with `embo-worktree-start <branch>` — it creates
+`.worktrees/<name>` (name derived from the branch, so you never invent
+one) and refuses to nest; `embo-worktree-start --list` shows the
+worktrees you have open. Native `claude --worktree` works too; this just
+removes the naming and tracking chore.
+
+Finish a worktree locally with `embo-worktree-finish <base>`: it runs
+your tests, merges the branch into the local base, re-tests the merged
+result, and removes the worktree — never forcing, never touching a dirty
+tree. Modes: `--mode merge` (default), `pr` (hand off to
+`embo-deliver`), or `keep` (merge, leave the worktree).
+
+**One-time opt-in (required).** Add both to your `permissions.allow`:
+
+```json
+"Bash(embo-worktree-start *)",
+"Bash(embo-worktree-finish *)"
+```
+
+Without them the commands prompt once per run; with them they run
+without per-command prompts.
+
 ## Behavioral rule reminders
 
 embo's primary mechanism for rule compliance is **per-rule conclusion

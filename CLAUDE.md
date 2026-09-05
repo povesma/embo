@@ -149,6 +149,16 @@ python3 ~/.claude/rlm_scripts/rlm_repl.py init-repo .
 python3 ~/.claude/rlm_scripts/rlm_repl.py status
 ```
 
+### Run RLM code inline
+
+`rlm_repl exec` requires `-c <code>`. Heredocs (`<<'PY'`) are not
+supported. For multi-line scripts, write to a temp file first:
+
+```bash
+# write probe to tmp/rlm-probe.py, then:
+rlm_repl exec -c "$(cat tmp/rlm-probe.py)"
+```
+
 ### Modify Commands
 Edit `plugin/commands/<name>.md` directly.
 
