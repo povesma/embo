@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# embo-worktree-remove — safely remove a git worktree (and optionally its
+# branch) created for a parallel session.
+#
+# Merging back is done however you normally do it (a PR, or a manual
+# merge) — this only cleans up the worktree afterwards. It never forces
+# and never removes a worktree with uncommitted changes: your work is
+# surfaced, not discarded.
+#
+# Why a bare command: Claude Code adds plugin bin/ to the Bash tool PATH,
+# so this runs as `embo-worktree-remove <path>` with no ${...} expansion.
+# Opt in with `Bash(embo-worktree-remove *)` in permissions.allow.
+#
+# Usage:
+#   embo-worktree-remove <path>              remove the worktree at <path>
+#   embo-worktree-remove <path> --branch     also delete its branch (-d,
+#                                            refuses if unmerged)
+#   embo-worktree-remove <path> --branch --force-branch
+#                                            delete the branch with -D
+#                                            (explicit; drops unmerged work)
+#
+# Exit codes:
+#   0  removed
+#   2  bad usage / not a git repo / not a worktree
+#   3  worktree has uncommitted changes — refused, nothing removed
+
+set -uo pipefail
+
+fail() { printf 'embo-worktree-remove: %s\n' "$1" >&2; exit "${2:-2}"; }
+
+WT_PATH=""
+DEL_BRANCH=0
+FORCE_BRANCH=0
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --branch) DEL_BRANCH=1; shift ;;
+    --force-branch) FORCE_BRANCH=1; shift ;;
+    -*) fail "unknown flag: $1" 2 ;;
+    *) if [ -z "$WT_PATH" ]; then WT_PATH="$1"; shift; else fail "unexpected arg: $1" 2; fi ;;
+  esac
+done
+
+[ -n "$WT_PATH" ] || fail "usage: embo-worktree-remove <path> [--branch [--force-branch]]" 2
+git rev-parse --git-dir >/dev/null 2>&1 || fail "not inside a git repository" 2
+[ -d "$WT_PATH" ] || fail "no such directory: $WT_PATH" 2
+
+# Confirm <path> is actually a registered worktree of this repo.
+is_registered() {
+  local want abs line path
+  abs="$(cd "$WT_PATH" 2>/dev/null && pwd -P)" || return 1
+  while IFS= read -r line; do
+    case "$line" in
+      worktree\ *)
+        path="${line#worktree }"
+        [ "$(cd "$path" 2>/dev/null && pwd -P)" = "$abs" ] && return 0
+        ;;
+    esac
+  done < <(git worktree list --porcelain)
+  return 1
+}
+is_registered || fail "not a registered worktree of this repo: $WT_PATH" 2
+
+# The branch this worktree holds (for optional --branch delete).
+wt_branch="$(git -C "$WT_PATH" symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+
+# Refuse on uncommitted tracked changes; surface them, never --force.
+if [ -n "$(git -C "$WT_PATH" status --porcelain -uno 2>/dev/null)" ]; then
+  fail "worktree has uncommitted changes; not removing. Files:
+$(git -C "$WT_PATH" status --porcelain -uno)" 3
+fi
+
+git worktree remove "$WT_PATH" || fail "could not remove worktree $WT_PATH" 2
+git worktree prune
+
+if [ "$DEL_BRANCH" -eq 1 ] && [ -n "$wt_branch" ]; then
+  if [ "$FORCE_BRANCH" -eq 1 ]; then
+    git branch -D "$wt_branch" 2>/dev/null || true
+  else
+    git branch -d "$wt_branch" 2>/dev/null \
+      || printf 'note: branch %s kept (unmerged; use --force-branch to drop it)\n' "$wt_branch"
+  fi
+fi
+
+printf 'removed worktree %s\n' "$WT_PATH"

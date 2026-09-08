@@ -50,16 +50,18 @@ Each inherited PRD fact re-verified this session:
   (both `.git`)** — verified via: `git rev-parse --git-dir
   --git-common-dir` in the repo root, 2026-09-04. This equality is the
   detector for "am I in a worktree" (they differ iff linked worktree).
-- **`embo-deliver` reconcile + idempotency machinery** exists and is
-  reusable for the merge-back finish flow — verified via: RLM subcall
-  reading `plugin/bin/embo-deliver:205-266,334-456`, 2026-09-04.
+- **`embo-deliver` establishes the bin-wrapper conventions** the new
+  worktree wrappers follow (bare command, no expansion) — verified via:
+  RLM subcall reading `plugin/bin/embo-deliver:205-266,334-456`,
+  2026-09-04. (Its merge/reconcile machinery is not reused; the remove
+  helper only cleans up.)
 
 ## Past Decisions (Claude-Mem)
 
 - **#35670 / #35848** — the `bin/` wrapper pattern exists specifically
-  to avoid `${...}`/`$(...)` approval prompts; any new bin wrapper for
-  the finish flow must follow it (bare command, self-resolving path, no
-  expansion in the command string).
+  to avoid `${...}`/`$(...)` approval prompts; the new worktree wrappers
+  must follow it (bare command, self-resolving path, no expansion in the
+  command string).
 - **#40504** — OMC keeps its state inside the worktree and loses it on
   cleanup unless `OMC_STATE_DIR` is set. v1's whole point is to avoid
   this: state resolves to the main tree, so worktree deletion is safe.
@@ -76,9 +78,13 @@ Three independent changes, smallest-blast-radius first:
 2. **Write serialization in `rlm_repl.py`** (correctness). Guard the
    index-writing code paths with an advisory OS file lock in the state
    root.
-3. **A local merge-back finish flow** (UX). A new bin wrapper that
-   tests → merges into the local integration branch → cleans up
-   conservatively, reusing `embo-deliver` patterns.
+3. **Worktree lifecycle helpers** (UX). Bin wrappers to create a
+   worktree with a derived name (`embo-worktree-start`) and to remove
+   one safely afterwards (`embo-worktree-remove`). No auto-merge — the
+   user merges via their normal PR/merge flow.
+4. **Correction-capture hook** resolves `.claude` to the main tree, so
+   a correction recorded from inside a worktree is not lost when the
+   worktree is removed (same primitive as the RLM resolver).
 
 ### Components
 
@@ -149,13 +155,20 @@ Three independent changes, smallest-blast-radius first:
   - Pure read paths (`status`, queries that do not call `_save_state`)
     take no lock.
 
-**New: `plugin/bin/embo-worktree-finish`** (bare wrapper)
+**New: `plugin/bin/embo-worktree-remove`** (bare wrapper)
 
-- Purpose: one-command local merge-back for a worktree branch.
-- Follows the wrapper pattern (self-resolving, no expansion, matches a
-  `Bash(embo-worktree-finish *)` allow rule).
-- Sequence (see below); reuses `embo-deliver`'s branch-reconcile and
-  the "locate the checkout that owns the base" logic.
+- Purpose: safely clean up a worktree after its work has merged. There
+  is deliberately NO auto-merge step: for interactive sessions the user
+  merges however they normally do (a PR, or a manual merge), so a
+  "finish that merges for you" was cut as over-build (see the
+  Trade-offs note). This command only removes.
+- `embo-worktree-remove <path>`: refuses if the worktree has uncommitted
+  tracked changes (surfaces them, exit 3, never `--force`); otherwise
+  `git worktree remove` + `git worktree prune`.
+- `--branch` also deletes the worktree's branch with `git branch -d`
+  (kept, with a note, if unmerged); `--force-branch` uses `-D` to drop
+  an unmerged branch on explicit request.
+- Follows the wrapper pattern; matches `Bash(embo-worktree-remove *)`.
 
 **New: `plugin/bin/embo-worktree-start`** (bare wrapper) — FR-7
 
@@ -196,55 +209,38 @@ with index_write_lock(state_root):   # fcntl.flock, non-blocking
   #                    is re-indexing <state_root>"
 ```
 
-### Communication Pattern — finish flow (sequence)
+### Communication Pattern — remove flow (sequence)
 
 ```
-embo-worktree-finish <base>
-  1. run tests in the worktree; red -> abort, no merge
-  2. resolve <base>; ensure <base> not DIRTY in its owning checkout
-  3. git worktree list --porcelain -> find checkout holding <base>
-       - held by a worktree, clean -> merge FROM that checkout
-       - held by a worktree, dirty -> abort, ask user to finish it first
-       - not checked out anywhere  -> see "base-not-checked-out" below
-  4. merge the worktree branch into <base> (no force)
-  5. re-run tests on the MERGED result; red -> stop, preserve worktree
-  6. cleanup (only if steps 1-5 green): git worktree remove <path>
-     (no --force; dirty -> abort + surface files) ; git worktree prune
-  7. git branch -d <branch>   (never -D except explicit discard)
+embo-worktree-remove <path> [--branch [--force-branch]]
+  1. validate: in a git repo; <path> is a registered worktree of it
+  2. if the worktree has DIRTY tracked changes -> abort (exit 3),
+     surface the files, remove nothing
+  3. git worktree remove <path> ; git worktree prune
+  4. --branch given: git branch -d <wt-branch>  (kept with a note if
+     unmerged); --force-branch -> git branch -D (explicit drop)
 ```
 
-**Definition of DIRTY** (critique #4, pinned): "dirty" means
-`git status --porcelain -uno` reports any line — i.e. staged or
-unstaged changes to **tracked** files. Untracked files (`-uno`
-excludes them) do NOT count as dirty, so generated build artifacts
-never block a finish; matches the PRD's "uncommitted work is surfaced"
-(tracked changes) intent.
+**Definition of DIRTY** (pinned): "dirty" means `git status --porcelain
+-uno` reports any line — staged or unstaged changes to **tracked**
+files. Untracked files (`-uno` excludes them) do NOT count, so
+generated build artifacts never block removal.
 
-**base-not-checked-out path** (critique #5, narrowed): the naive
-"check out `<base>` in the main tree and merge" would mutate the
-developer's live main session if the main tree is on another branch.
-So:
-  - main tree is CLEAN and on `<base>` already -> merge there.
-  - main tree is CLEAN but on another branch -> create a **temporary
-    worktree** for `<base>`, merge there, remove it (never switch the
-    main tree's branch out from under a live session).
-  - main tree is DIRTY -> abort; ask the user to resolve or name the
-    checkout to use. Never force-checkout.
-
-Simultaneous finish from two worktrees into the same `<base>` is
-serialized at the git level: step 3's dirty-abort plus git's own
-refusal to check out a branch already checked out elsewhere prevents
-two concurrent merges into one base. A file lock on `<base>` is **not**
-added in v1 (git's own guard suffices); revisit if real
-concurrent-finish races appear.
+**No merge, by design.** Removal does not merge, test, or touch any base
+branch — those are the user's normal PR/merge workflow. This is the
+scope correction from live testing: an auto-merging "finish" command
+was built, then cut because interactive worktree use merges via PR like
+any other branch, so the automation solved a problem the user does not
+have. Only create (`embo-worktree-start`) and clean-up
+(`embo-worktree-remove`) remain.
 
 ### Integration Points
 
 - `rlm_repl.py` state resolution — the one code site every RLM caller
   flows through (verified: wrapper delegates to it).
-- `embo-deliver` — the finish flow reuses its reconcile/idempotency
-  logic rather than duplicating; extend `embo-deliver` only if the
-  local-merge path needs a mode it lacks (assess during impl).
+- `capture-correction.sh` — resolves `.claude` to the main tree via the
+  same `--git-common-dir` primitive, so corrections captured from a
+  worktree are shared, not stranded.
 - `.gitignore` — add `.worktrees/` so any repo-adjacent worktree (and
   the verified probe location) is never staged.
 
@@ -254,9 +250,9 @@ concurrent-finish races appear.
   no crash (RLM works outside git).
 - Lock unavailable → exit non-zero with a clear "index busy" message;
   caller retries or waits. Never silent-overwrite.
-- Finish flow: any red test or dirty tree → abort before any
-  destructive step; the worktree and branch are preserved. No `--force`
-  / `-D` anywhere except an explicit user "discard".
+- Remove flow: a dirty worktree → abort (exit 3), surface the files,
+  remove nothing. No `--force`; `-D` on the branch only via an explicit
+  `--force-branch`.
 
 ### Testing Strategy
 
@@ -274,11 +270,9 @@ lockfile), THEN launch the second writer and assert it exits non-zero
 with "index busy". Without the backgrounded holder the test gives false
 confidence.
 
-**Finish-menu scope** (critique low #2): the PRD Story 2 offers
-merge-local / push-PR / keep-as-is. v1 designs only the **merge-local**
-path in full. The other two are thin dispatches at the decision point:
-`pr` → `embo-deliver` in pr mode; `keep` → exit after step 5 without
-cleanup. These are stubs to wire, not new machinery.
+**Remove test** exercises: clean removal; dirty-worktree refusal (exit
+3, files surfaced); `--branch` deleting a merged branch; `--branch`
+keeping an unmerged one; rejecting a non-worktree path.
 
 ### Verification Approach
 
@@ -289,8 +283,9 @@ cleanup. These are stubs to wire, not new machinery.
 | FR-3: serialized writes | `auto-test` | unit | test.sh: second concurrent writer gets "index busy" non-zero, first index intact |
 | FR-4: shared claude-mem | `manual-run-claude` | integration | worktree session sees main-tree memory (claude-mem project scope) |
 | FR-6: state survives worktree delete | `auto-test` | integration | test.sh: `git worktree remove` leaves main-tree state.pkl intact |
-| FR-2: local merge-back | `auto-test` | integration | test.sh: finish flow merges to base, re-tests, removes worktree, deletes branch; dirty tree aborts |
-| FR-2: base-owned-elsewhere | `auto-test` | unit | test.sh: base held by another worktree → merge from there, no force-checkout |
+| FR-4: shared corrections | `auto-test` | unit | capture-correction.test.sh green; hook resolves `.claude` to main tree from a worktree |
+| FR-2: safe remove | `auto-test` | unit | test.sh: clean removal ok; dirty worktree → exit 3, surfaced, not removed |
+| FR-2: branch delete | `auto-test` | unit | test.sh: `--branch` deletes a merged branch; keeps an unmerged one with a note |
 
 ## Trade-offs
 
@@ -319,8 +314,8 @@ cleanup. These are stubs to wire, not new machinery.
 ## Implementation Constraints
 
 - **From RLM:** the wrapper pattern (no expansion, self-resolving) is
-  mandatory for `embo-worktree-finish`. RLM must keep working outside
-  git (stdlib-only, no hard git dependency) — hence the fallback.
+  mandatory for the `embo-worktree-*` wrappers. RLM must keep working
+  outside git (stdlib-only, no hard git dependency) — hence the fallback.
 - **From claude-mem (#40504):** never place state inside the worktree.
 - **The branch-shaped-index tradeoff** (PRD): v1 shares one index
   read-mostly; sessions on diverged branches may see foreign symbols.
@@ -330,13 +325,17 @@ cleanup. These are stubs to wire, not new machinery.
 ## Files to Create/Modify
 
 **Create**:
-- `plugin/bin/embo-worktree-finish` — local merge-back finish flow.
-- `plugin/bin/embo-worktree-finish.test.sh` — fixture test.
-- (extend) `plugin/rlm_scripts/` test coverage for the resolver + lock.
+- `plugin/bin/embo-worktree-start` (+ `.test.sh`) — create a worktree
+  with a derived name; `--list`.
+- `plugin/bin/embo-worktree-remove` (+ `.test.sh`) — safe cleanup.
+- `plugin/rlm_scripts/rlm_repl.test.sh` — resolver + lock + fcntl-absent
+  + state-survival coverage.
 
 **Modify**:
 - `plugin/rlm_scripts/rlm_repl.py:56` and its state-path call sites —
   add `resolve_state_path()` + `index_write_lock()`.
+- `plugin/hooks/capture-correction.sh` — resolve `.claude` to the main
+  tree.
 - `.gitignore` — add `.worktrees/`.
 
 ## Dependencies
@@ -346,14 +345,14 @@ cleanup. These are stubs to wire, not new machinery.
 `msvcrt.locking` or a portable fallback; confirm the Windows story at
 impl (embo supports Windows per README).
 
-**Internal**: `embo-deliver` (reconcile/idempotency, reused by the
-finish flow).
+**Internal**: none beyond git. (The removed finish flow would have
+reused `embo-deliver`; the remove helper does not.)
 
 ## Security Considerations
 
-No new external surface. The finish flow runs only git + tests locally;
-it never force-deletes or force-checks-out. The lock is advisory and
-local.
+No new external surface. The worktree helpers run only local git; they
+never force-remove or force-delete a branch except on an explicit
+`--force-branch`. The lock is advisory and local.
 
 ## Performance Considerations
 
@@ -366,8 +365,8 @@ performance win that motivates FR-3.
 
 Each change is independent and revertible: the resolver falls back to
 today's exact behavior when git is absent, so reverting it restores the
-status quo; the lock only affects write paths; the finish flow is a new
-file that changes nothing until invoked.
+status quo; the lock only affects write paths; the worktree wrappers are
+new files that change nothing until invoked.
 
 ## References
 

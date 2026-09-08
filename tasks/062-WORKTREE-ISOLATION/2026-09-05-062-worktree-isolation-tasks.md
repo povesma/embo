@@ -8,24 +8,27 @@
 - [plugin/rlm_scripts/rlm_repl.py](../../plugin/rlm_scripts/rlm_repl.py)
   :: State-path resolver + write lock added here (state path at :56;
   `_save_state` sites at :944, :994, :1158).
-- [plugin/bin/embo-worktree-finish](../../plugin/bin/embo-worktree-finish)
-  :: NEW bare wrapper — one-command local merge-back finish flow.
-- [plugin/bin/embo-worktree-finish.test.sh](../../plugin/bin/embo-worktree-finish.test.sh)
-  :: NEW fixture test for the finish flow.
+- [plugin/bin/embo-worktree-start](../../plugin/bin/embo-worktree-start)
+  :: NEW bare wrapper — create a worktree with a derived name; `--list`.
+- [plugin/bin/embo-worktree-remove](../../plugin/bin/embo-worktree-remove)
+  :: NEW bare wrapper — safe cleanup (dirty-guard, optional `--branch`).
+- [plugin/hooks/capture-correction.sh](../../plugin/hooks/capture-correction.sh)
+  :: MODIFIED — resolves `.claude` to the main tree so corrections from
+  a worktree are shared, not stranded.
 - [plugin/rlm_scripts/rlm_repl.test.sh](../../plugin/rlm_scripts/rlm_repl.test.sh)
-  :: NEW/extended fixture test for resolver + lock concurrency +
+  :: NEW fixture test for resolver + lock concurrency + fcntl-absent +
   state-survival.
-- [plugin/bin/embo-deliver](../../plugin/bin/embo-deliver)
-  :: Reused reconcile/idempotency patterns (:205-266) for the finish
-  flow.
 - [.gitignore](../../.gitignore)
   :: Add `.worktrees/` so repo-adjacent worktrees are never staged.
+
+Note: `embo-worktree-finish` (+ test) was created then removed — see the
+Scope correction under story 4.0.
 
 ## Notes
 - Tests follow the repo's `*.test.sh` fixture pattern (see
   `embo-deliver.test.sh`, `subagent-rules.test.sh`): build a temp git
   repo, `git worktree add` into a repo-adjacent path, assert, tear down.
-- Run a test script directly: `bash plugin/bin/embo-worktree-finish.test.sh`.
+- Run a test script directly: `bash plugin/bin/embo-worktree-remove.test.sh`.
 - The lock-concurrency test MUST hold the lock in a backgrounded
   process before launching the second writer (a sequential test passes
   vacuously — see tech-design Testing Strategy).
@@ -37,10 +40,11 @@
 - [X] 0.0 **User Story:** As the implementer, I want the test files
   scaffolded first, so that every later TDD subtask has a file to write
   into.
-  - [X] 0.1 Create `plugin/rlm_scripts/rlm_repl.test.sh` and
-    `plugin/bin/embo-worktree-finish.test.sh` with the repo's standard
+  - [X] 0.1 Create the worktree test files with the repo's standard
     fixture boilerplate (shebang, assert helpers, temp-repo setup/
     teardown) as used by `embo-deliver.test.sh` [verify: code-only]
+    (note: the initial `embo-worktree-finish.test.sh` scaffolded here
+    was later removed with its script — see story 4.0)
     → both scaffolds run clean (0 passed, 0 failed, exit 0) [live]
     (2026-09-05)
 
@@ -112,38 +116,33 @@
     → conditional import + one-time warning; 21 passed, 0 failed [live]
     (2026-09-05)
 
-- [X] 4.0 **User Story:** As a developer finishing a feature, I want a
-  one-command local merge-back (`embo-worktree-finish`) that tests,
-  merges into the local base, and cleans up safely, so that I never
-  hand-manage git worktree bookkeeping.
-  - [X] 4.1 Write finish-flow tests (happy path): green worktree tests →
-    merge into a clean base → re-test merged → remove worktree → prune →
-    delete branch [verify: auto-test]
-    → happy path merges + cleans up, exit 0 [live] (2026-09-05)
-  - [X] 4.2 Write tests for the DIRTY guard: base dirty → abort (exit 4),
-    no merge; dirty worktree at cleanup → abort (exit 7) + surface files,
-    no `--force` [verify: auto-test]
-    → both guards abort as specified [live] (2026-09-05)
-  - [X] 4.3 Write tests for base ownership: unheld base + main tree on
-    another branch → temp worktree, main tree untouched; (dirty-abort and
-    owned-elsewhere paths covered by the script's branches) [verify: auto-test]
-    → temp-worktree path merges to dev, main stays on main [live]
-    (2026-09-05)
-  - [X] 4.4 Write tests for the abort-on-red-merge case: merged result
-    fails tests → exit 6, worktree + branch preserved [verify: auto-test]
-    → poison-on-base marker: step 1 passes, step 5 fails, exit 6, kept
-    [live] (2026-09-05)
-  - [X] 4.5 Implement `embo-worktree-finish` as a bare wrapper (self-
-    resolving, no `${...}`/`$(...)`), reusing `embo-deliver` reconcile
-    patterns; steps 1-7 per tech-design [verify: auto-test]
-    → 20 passed, 0 failed [live] (2026-09-05)
-  - [X] 4.6 Implement the finish menu dispatch: `merge` (steps 6-7),
-    `pr` (embo-deliver hand-off), `keep` (merge, no cleanup)
+- [X] 4.0 **User Story:** As a developer done with a worktree (work
+  already merged via my normal PR/merge flow), I want one command to
+  clean it up safely, so that I never hand-manage worktree removal,
+  prune, and branch deletion, or risk losing uncommitted work.
+  - [X] 4.1 Write remove tests: clean removal succeeds; non-worktree
+    path rejected (exit 2) [verify: auto-test]
+    → covered in embo-worktree-remove.test.sh [live] (2026-09-08)
+  - [X] 4.2 Write DIRTY-guard test: worktree with uncommitted tracked
+    changes → abort (exit 3), files surfaced, nothing removed
     [verify: auto-test]
-    → keep merges + preserves worktree; pr hands off; both exit 0 [live]
-    (2026-09-05)
-  - [X] 4.7 Document the `Bash(embo-worktree-finish *)` allow opt-in in
-    README (mirroring embo-deliver's opt-in) [verify: code-only]
+    → dirty worktree refused, not removed [live] (2026-09-08)
+  - [X] 4.3 Write `--branch` tests: deletes a merged branch; keeps an
+    unmerged one with a note (no `--force-branch`) [verify: auto-test]
+    → merged branch deleted; unmerged kept [live] (2026-09-08)
+  - [X] 4.4 Implement `embo-worktree-remove` as a bare wrapper (validate
+    registered worktree, dirty-guard, remove+prune, optional `--branch`/
+    `--force-branch`) [verify: auto-test]
+    → 13 passed, 0 failed [live] (2026-09-08)
+  - [X] 4.5 Document the `Bash(embo-worktree-remove *)` allow opt-in in
+    README [verify: code-only]
+
+  > **Scope correction (2026-09-08):** an auto-merging
+  > `embo-worktree-finish` (test → merge into a local base → re-test →
+  > cleanup, modes merge/pr/keep) was built and tested first, then CUT
+  > after live testing showed interactive worktree work merges via the
+  > normal PR/merge flow — the automation solved a problem the user
+  > does not have. It was replaced by the remove-only helper above.
 
 - [X] 5.0 **User Story:** As a developer using repo-adjacent worktrees,
   I want `.worktrees/` gitignored, so that worktree checkouts are never
@@ -193,4 +192,14 @@
     both in absolute form (relative-vs-absolute would false-positive)
     [live] (2026-09-05)
   - [X] 7.4 Document the `Bash(embo-worktree-start *)` allow opt-in in
-    README alongside the finish opt-in [verify: code-only]
+    README alongside the remove opt-in [verify: code-only]
+
+- [X] 8.0 **User Story:** As a developer emitting a correction from
+  inside a worktree, I want it recorded in the main tree, so that
+  removing the worktree does not lose it (part of FR-4, found in live
+  testing when a session's corrections landed in `.worktrees/.claude/`).
+  - [X] 8.1 Resolve `.claude` in `capture-correction.sh` to the main
+    tree via `--path-format=absolute --git-common-dir` + parent, with a
+    CWD fallback outside git [verify: auto-test]
+    → 43 passed, 0 failed; verified live that a worktree resolves to the
+    main tree's .claude [live] (2026-09-08)

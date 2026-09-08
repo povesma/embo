@@ -375,23 +375,32 @@ never touches the shared state (it lives in the main tree). Index writes
 are serialized across sessions, so two live worktrees cannot corrupt the
 index.
 
-Start one with `embo-worktree-start <branch>` — it creates
-`.worktrees/<name>` (name derived from the branch, so you never invent
-one) and refuses to nest; `embo-worktree-start --list` shows the
-worktrees you have open. Native `claude --worktree` works too; this just
-removes the naming and tracking chore.
+The workflow, start to finish:
 
-Finish a worktree locally with `embo-worktree-finish <base>`: it runs
-your tests, merges the branch into the local base, re-tests the merged
-result, and removes the worktree — never forcing, never touching a dirty
-tree. Modes: `--mode merge` (default), `pr` (hand off to
-`embo-deliver`), or `keep` (merge, leave the worktree).
+```bash
+embo-worktree-start feat/my-thing   # creates .worktrees/feat-my-thing
+cd .worktrees/feat-my-thing
+claude                              # a normal session, sharing the index
+# ...work, commit, push, open a PR exactly as you always do...
+embo-worktree-remove .worktrees/feat-my-thing --branch   # after it merges
+```
 
-**One-time opt-in (required).** Add both to your `permissions.allow`:
+`embo-worktree-start <branch>` creates `.worktrees/<name>` (name derived
+from the branch, so you never invent one) and refuses to nest;
+`embo-worktree-start --list` shows the worktrees you have open. You
+merge however you normally do — a PR, or a manual merge — so there is no
+special "finish" step. `embo-worktree-remove <path>` cleans up
+afterwards: it refuses if the worktree has uncommitted changes (surfaces
+them, never `--force`), and `--branch` also deletes the branch when it is
+merged (`--force-branch` to drop an unmerged one). Native
+`claude --worktree` works too; these just remove the naming, tracking,
+and cleanup chores.
+
+**One-time opt-in (required).** Add to your `permissions.allow`:
 
 ```json
 "Bash(embo-worktree-start *)",
-"Bash(embo-worktree-finish *)"
+"Bash(embo-worktree-remove *)"
 ```
 
 Without them the commands prompt once per run; with them they run

@@ -19,9 +19,11 @@ one command; embo must not rebuild that. What embo adds on top:
 2. **Shared claude-mem memory across worktrees** — same anchoring. (FR-4)
 3. **State-survival guarantee** — embo state never lives inside a
    deletable worktree. (FR-6)
-4. **A thin, docs-first local merge-back flow** — test → merge into the
-   local integration branch → conservative cleanup, which native CC
-   does not opinionate. (FR-2)
+4. **Safe cleanup after a worktree's work merges** — a remove helper
+   that refuses on uncommitted changes and optionally deletes a merged
+   branch. NO auto-merge: interactive worktree work merges via the
+   normal PR/merge flow, so an auto-merging "finish" was cut as
+   over-build (see the History note). (FR-2)
 5. **Start-side ergonomics** — a `start` helper that creates a
    repo-adjacent worktree with a **derived** name (from the branch, so
    the user need not invent one) and a `list` that shows existing
@@ -94,8 +96,8 @@ built (Spec-Kit chose sub-agents over worktrees for parallel tasks).
 Second, native `claude --worktree` already provides the worktree
 lifecycle (setup, branch, isolated session) — so the gap embo should
 fill is NOT worktree mechanics but the layer native CC lacks: a
-**shared index and memory across parallel worktrees**, plus a
-docs-first local merge-back. See "Chosen Scope (v1)" above.
+**shared index and memory across parallel worktrees**, plus thin
+create/cleanup helpers. See "Chosen Scope (v1)" above.
 
 The real motivation, stated by the maintainer who will use this:
 **"I don't start simultaneous Claude Code sessions on different
@@ -183,9 +185,9 @@ subagents share one tree.
 ### Primary Goal
 
 Let a developer start a parallel Claude Code session in an isolated
-git worktree with one command, and finish it — merge back into a local
-integration branch and clean up — with one command, while **all
-parallel worktrees share the same RLM index and claude-mem memory**.
+git worktree with one command, and clean it up with one command after
+the work merges (via their normal PR/merge flow), while **all parallel
+worktrees share the same RLM index and claude-mem memory**.
 
 ### Secondary Goals
 
@@ -243,27 +245,22 @@ bookkeeping or a painful local merge-back.
    - [ ] It installs project dependencies and runs the baseline test
      suite, reporting "ready" only on a clean baseline.
 
-2. **As a** developer finishing a feature in a worktree
-   **I want** one command that merges it into a local integration
-   branch and cleans up
-   **So that** I never hand-manage checkout order, branch deletion, or
-   the "branch already checked out elsewhere" error.
+2. **As a** developer done with a worktree (its work already merged via
+   my normal PR/merge flow)
+   **I want** one command to clean it up safely
+   **So that** I never hand-manage `git worktree remove`, prune, and
+   branch deletion, or risk losing uncommitted work.
 
    **Acceptance Criteria**:
-   - [ ] The finish flow runs tests on the feature branch, aborts if
-     red, and does not merge.
-   - [ ] It locates whichever checkout owns the integration branch and
-     merges from there; it never force-checks-out a branch held by
-     another worktree.
-   - [ ] It re-runs tests on the **merged result** before any cleanup;
-     a red merge preserves the worktree and stops.
-   - [ ] Cleanup order is: remove worktree, prune, then delete branch —
-     and only for worktrees embo created.
-   - [ ] It never force-removes a dirty worktree or force-deletes an
-     unmerged branch; uncommitted work is surfaced and the user is
-     asked.
-   - [ ] The finish flow offers, at minimum: merge locally / push +
-     open PR / keep as-is (user chooses; never automatic).
+   - [ ] `embo-worktree-remove <path>` removes the worktree and prunes;
+     it only accepts a path that is a registered worktree of this repo.
+   - [ ] It never force-removes a dirty worktree: uncommitted tracked
+     changes cause an abort that surfaces the files, removing nothing.
+   - [ ] `--branch` deletes the worktree's branch with `-d` (kept, with
+     a note, if unmerged); `--force-branch` uses `-D` on explicit
+     request only.
+   - [ ] It does NOT merge, test, or touch any base branch — merging is
+     the user's normal PR/merge flow, deliberately out of scope.
 
 3. **As a** developer running write-capable subagents in parallel
    **I want** embo to isolate those subagents in their own worktrees
@@ -302,12 +299,15 @@ bookkeeping or a painful local merge-back.
    - **Dependencies**: git worktree; project dependency manager
      detection; RLM/claude-mem state anchoring.
 
-2. **FR-2**: One-command local finish flow (test → locate base owner →
-   merge → re-test merged → conservative cleanup), with a
-   user-chosen finish menu.
+2. **FR-2**: One-command safe cleanup (`embo-worktree-remove`): remove a
+   worktree, refusing on uncommitted changes; `--branch` deletes a
+   merged branch. No merge/test of any base — merging is the user's
+   normal PR/merge flow.
    - **Priority**: High
-   - **Rationale**: The merge-back half — the primary stated pain.
-   - **Dependencies**: `embo-deliver` reconcile/idempotency machinery.
+   - **Rationale**: Removes the cleanup chore without automating a merge
+     the user already does via PR. (An auto-merging finish was built
+     then cut after live testing — see History.)
+   - **Dependencies**: git worktree.
 
 3. **FR-3**: Shared RLM index across all worktrees of one repo.
    - **Priority**: High
@@ -351,7 +351,7 @@ bookkeeping or a painful local merge-back.
 2. **NFR-2**: Performance — per-worktree dependency cost minimized
    (e.g. content-addressed store / shared venv where the ecosystem
    supports it); worktrees share one `.git` (no full clone).
-3. **NFR-3**: Idempotency — setup and finish are safe to re-run; a
+3. **NFR-3**: Idempotency — start and remove are safe to re-run; a
    partial failure leaves a recoverable state, matching `embo-deliver`.
 4. **NFR-4**: No-nest — the setup command detects existing isolation
    and refuses to create a worktree inside a worktree.
@@ -375,8 +375,8 @@ bookkeeping or a painful local merge-back.
 
 - Automated swarm / fan-out parallelism (embo stays focused, not swarm).
 - Per-subagent isolation for **read-only** agents (cost without benefit).
-- Remote-first PR workflows as the primary path (local merge-back is
-  the point; PR remains an offered option).
+- Any merge automation (local or PR): merging a worktree's branch is
+  the user's normal flow, deliberately not embo's job in v1.
 - A GUI/TUI worktree dashboard (Claude Squad / Conductor territory).
 - Cross-*developer* shared memory (this is cross-*worktree*, one dev,
   one machine; multi-developer sharing is the claude-mem server-beta
@@ -385,11 +385,11 @@ bookkeeping or a painful local merge-back.
 ## Success Metrics
 
 1. Starting a parallel feature session: from N manual steps to **1
-   command**, reaching a verified clean baseline.
-2. Finishing a feature locally: from manual multi-step git to **1
-   command**, with **zero** force operations and zero lost uncommitted
-   work in the finish flow.
-3. Worktree deletion destroys **0** shared index/memory state.
+   command**.
+2. Cleaning up a worktree: **1 command**, with **zero** force
+   operations and zero lost uncommitted work.
+3. Worktree deletion destroys **0** shared index/memory/correction
+   state.
 4. The maintainer actually runs parallel sessions (the behavior the
    friction currently prevents) — qualitative adoption signal.
 
@@ -414,9 +414,10 @@ bookkeeping or a painful local merge-back.
 ### From Live Research (2026-09, competitor + real-world)
 
 - Superpowers `using-git-worktrees` + `finishing-a-development-branch`
-  skills — the proven setup and local-finish contract embo copies
-  (no-nest, `.worktrees/` default, deps+baseline, user-chosen finish
-  menu, provenance-scoped never-force cleanup).
+  skills — prior art studied for the setup + cleanup contract embo
+  adopts in part (no-nest, `.worktrees/` default, provenance-scoped
+  never-force cleanup). embo does NOT copy the auto-merge finish; that
+  was built then cut after live testing (see History).
 - Native Claude Code `--worktree` — proves one-command setup; its
   auto-GC has open bugs (#46444, #74719) deleting dirty work → embo's
   cleanup must be conservative.
