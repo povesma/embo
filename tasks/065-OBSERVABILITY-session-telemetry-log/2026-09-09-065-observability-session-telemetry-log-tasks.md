@@ -199,12 +199,17 @@
       showed 2 tools, 5m00s, /embo:impl; demo record cleaned up [live]
       (2026-09-09)
 
-- [ ] 7.0 **User Story:** As an embo user, I want the feature documented
+- [X] 7.0 **User Story:** As an embo user, I want the feature documented
   and released, so that I know it exists and how to read my usage
-  - [ ] 7.1 Add a README section describing the telemetry log and
+  - [X] 7.1 Add a README section describing the telemetry log and
     `embo-usage` (behavior, not internals) [verify: code-only]
-  - [ ] 7.2 Add the permission-allow entry for `embo-usage` if the bin
+    → docs/REFERENCE.md: three hooks in the hooks table + a "Session
+      telemetry (embo-usage)" subsection
+  - [X] 7.2 Add the permission-allow entry for `embo-usage` if the bin
     needs one, matching the `embo-profile`/`embo-tokens` pattern
     [verify: code-only]
-  - [ ] 7.3 Add a CHANGELOG entry for the released version
+    → `"Bash(embo-usage *)"` documented in the REFERENCE subsection and
+      the CHANGELOG entry
+  - [X] 7.3 Add a CHANGELOG entry for the released version
     [verify: code-only]
+    → CHANGELOG [Unreleased] Added: session telemetry + embo-usage

@@ -6,6 +6,16 @@ All notable changes to the embo plugin are documented here.
 
 ### Added
 
+- Session telemetry: embo records one line per session under
+  `.claude/embo_state/telemetry/` with the active profile, session
+  duration, tool-call count, a per-tool breakdown (subagent calls
+  included), failed-call count, and the embo commands used. Read it with
+  `embo-usage` — a table by default, `--last N` / `--profile NAME` to
+  filter, `--stats` and `--json` for aggregates — to check whether a
+  profile change actually changed how much a session does. Records are
+  per-session files (parallel worktree sessions never collide) and
+  sweep after 90 days. Opt in with `"Bash(embo-usage *)"` in
+  `permissions.allow`. No API token counts are recorded.
 - Parallel git-worktree sessions share one RLM index, claude-mem
   memory, and correction capture: a Claude session started in a worktree
   reads the main tree's index with no re-index, corrections it records
