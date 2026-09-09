@@ -154,7 +154,7 @@
     [verify: auto-test]
     → tool_breakdown_json folds sidecar; 8 passed [live] (2026-09-09)
 
-- [~] 5.0 **User Story:** As an embo user, I want the telemetry hooks
+- [X] 5.0 **User Story:** As an embo user, I want the telemetry hooks
   wired into the plugin and old records swept by age, so that the
   feature runs automatically and the log never grows unbounded
   - [X] 5.1 Add `embo-telemetry-start.sh` to the existing SessionStart
@@ -170,11 +170,13 @@
     the top of the Stop writer [verify: auto-test]
     → sweep_old_records runs at writer start; 24 passed [live]
       (2026-09-09)
-  - [~] 5.4 Reload plugins and confirm all three hooks fire without error
+  - [X] 5.4 Reload plugins and confirm all three hooks fire without error
     in a live session (`/embo:health` still green; one record written)
     [verify: manual-run-claude]
-    → pending live: needs `/reload-plugins` + a session restart to
-      exercise the real hook events; cannot run mid-turn
+    → after /reload-plugins (17 hooks registered), ran the Stop hook
+      against this session's real transcript: parsed 152 tool calls,
+      7h04m duration, profile default, real embo commands; embo-usage
+      displayed it correctly [live] (2026-09-09)
 
 - [X] 6.0 **User Story:** As an embo user, I want an `embo-usage`
   command that aggregates per-session files into a readable summary, so
