@@ -75,6 +75,15 @@ done
 
 fail() { printf 'embo-deliver: %s\n' "$1" >&2; exit "$2"; }
 
+# Shared branch<->task rule. Resolved before the cd to the repo root.
+# Absent on a partial install: the branch check is skipped, delivery
+# proceeds.
+EMBO_BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" || EMBO_BIN_DIR=""
+if [ -n "$EMBO_BIN_DIR" ]; then
+  # shellcheck source=../lib/branch-task-lib.sh
+  . "$EMBO_BIN_DIR/../lib/branch-task-lib.sh" 2>/dev/null || true
+fi
+
 [ -n "$PLAN" ] || { usage; exit 2; }
 [ -f "$PLAN" ] || fail "plan file not found: $PLAN" 2
 
@@ -253,6 +262,31 @@ if [ "$DRYRUN" -eq 0 ]; then
   current_branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
   [ "$current_branch" = "$BRANCH" ] \
     || fail "after reconcile, HEAD is '$current_branch' not plan.branch '$BRANCH'; aborting before commit." 7
+fi
+
+# --- branch<->task correspondence check (warn only) -----------------------
+# Derive the task from plan.files and warn if plan.branch does not
+# reference it. Warn-only: the exit code is unchanged. The match rule is
+# shared with the SessionStart hook so both layers answer alike.
+
+check_branch_task_match() {
+  local branch="$1" current_task="$2"
+
+  branch_task_matches "$branch" "$current_task" && return 0
+
+  printf 'embo-deliver: WARNING: branch %s does not appear to match task %s.\n' \
+    "$branch" "$current_task" >&2
+  printf 'embo-deliver: WARNING: work for task %s should live on a branch whose name references it.\n' \
+    "$current_task" >&2
+  printf 'embo-deliver: WARNING: fix: cherry-pick these commits onto a task-matching branch, or confirm this delivery is intentional.\n' \
+    >&2
+}
+
+if type branch_task_matches >/dev/null 2>&1; then
+  CURRENT_TASK="$(printf '%s\n' "${FILES[@]}" | branch_task_derive_from_paths)"
+  if [ -n "$CURRENT_TASK" ] && [ -n "$BRANCH" ]; then
+    check_branch_task_match "$BRANCH" "$CURRENT_TASK"
+  fi
 fi
 
 # --- run helper: dry-run prints, real run executes ------------------------
