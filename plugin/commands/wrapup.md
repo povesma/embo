@@ -42,9 +42,21 @@ docs-first violations, task progress not yet reflected in status markers,
 decisions or findings written nowhere, doc references (paths, tools,
 tasks) in this session's touched docs that no longer resolve, and
 corrections captured this session that are not yet workflow rules.
-Propose each update to the doc whose rules cover it (PRD / tech-design /
-tasks), via `AskUserQuestion`; apply only what the user confirms. If
-nothing is flagged, say so.
+
+**Write each update to the doc whose rules cover it (PRD /
+tech-design / tasks). Do not ask first.** Recording what the session
+established is this command's purpose, not a menu: you hold the
+session context and the user does not, so "which of these should be
+written down?" asks them to ratify a judgment only you have the
+evidence for — and the answer is almost always "all of them".
+
+Ask — via `AskUserQuestion`, for that item only — only on genuine
+doubt: the correct content is ambiguous, two docs conflict and
+picking a winner is a real decision, or the update targets a file
+outside the docs tree (a user's global `CLAUDE.md`, a shipped
+command file). Everything else: write it.
+
+If nothing is flagged, say so.
 
 ### 3. Compact each file
 
@@ -52,8 +64,16 @@ For each file:
 - Read it.
 - Apply the compaction rule to every `[X]` subtask's body lines.
   Leave `[ ]` and `[~]` subtask bodies untouched.
-- Show the user: `N lines → M lines (−K)` and ask for confirmation
-  via `AskUserQuestion` before writing. On rejection, skip that file.
+- **Write it. Do not ask for confirmation.** The compaction rule
+  already decides what goes ("when in doubt, retain"), the change is
+  in git, and the user cannot judge a line count without re-reading
+  the file themselves.
+- **Report it only when the saving is substantial** — at least 20%
+  of the file, or at least 50 lines. Below that, write the file and
+  say nothing about it: a few lines saved is not worth the user's
+  reading time, and a report they must parse to conclude "that was
+  nothing" costs more than the compaction gained. Time is more
+  precious than tokens.
 
 ### 4. Surface uncommitted work
 
@@ -66,5 +86,8 @@ If non-empty, list the files and ask via `AskUserQuestion`: commit now
 
 ### 5. Report
 
-One-line summary of what was done: doc updates applied, files
-compacted, commit status.
+- Doc updates applied (Step 2) — the doc and what was written.
+- Files compacted (Step 3) — `N lines → M lines (−K)` and what kind
+  of content was dropped.
+- Anything deferred for genuine doubt — what, and why undecided.
+- Commit status (Step 4).
