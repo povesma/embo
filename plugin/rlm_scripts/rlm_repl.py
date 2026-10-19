@@ -736,9 +736,9 @@ def _format_filter_stats(stats: Optional[Dict[str, Any]]) -> List[str]:
 def _discover_git_files(repo_root: Path) -> List[Path]:
     """Use git to discover all tracked and untracked files (respects .gitignore)."""
     try:
-        # Get tracked files
+        # Get tracked files, including files inside initialized submodules
         result = subprocess.run(
-            ['git', 'ls-files'],
+            ['git', 'ls-files', '--recurse-submodules'],
             cwd=repo_root,
             capture_output=True,
             text=True,
