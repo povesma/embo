@@ -296,16 +296,50 @@ replaced by one command file — see the Scope correction under story 9.0.
       hands the user `git worktree remove`. The force path is
       `discard_changes: true`, named explicitly as forbidden. The
       native location `.claude/worktrees/<name>/` is now stated.
-  - [ ] 9.3 Live-test the open path: `/embo:worktree <branch>` from the
+  - [X] 9.3b LIVE RUN 2026-10-20 — the whole command exercised end to
+    end from the main tree on `feat/062-worktree-isolation`:
+    - tool gate: `EnterWorktree` present; nest check `--git-dir` ==
+      `--git-common-dir`, correctly read as the main tree
+    - open: worktree created at `.claude/worktrees/wt-062-livetest` on
+      branch `worktree-wt-062-livetest`, session switched into it
+    - base ref: HEAD was `1c88b65` (the feature branch tip), NOT
+      `origin/main` — `worktree.baseRef: "head"` took effect WITHOUT a
+      session restart, contradicting the prediction that it needed one
+    - **shared index (FR-3/FR-6): state file resolved to the MAIN tree**
+      (`/Users/dnipro/home/AI/embo/.claude/rlm_state/state.pkl`), 267
+      files, no re-index — the core feature proven on a real worktree,
+      not a fixture
+    - **shared corrections (FR-4): the worktree's `.claude/` held only
+      tracked content; the main tree's `corrections.jsonl` was modified
+      during the test** — nothing stranded in a deletable directory
+    - list: both worktrees reported with paths and branches
+    - gitignore: `.claude/worktrees/wt-062-livetest` matched
+      `.gitignore:46` (without this session's fix it would have shown
+      as untracked)
+    - remove refusal: with one uncommitted file, `ExitWorktree
+      action:"remove"` REFUSED, named the count, and pointed at
+      `discard_changes: true`; the command's no-force rule held and the
+      choice went to the user
+    - remove: after the probe was deleted, removal succeeded; session
+      back in the main tree, directory gone, branch deleted, no stray
+      state [verify: manual-run-claude]
+  - [X] 9.3 Live-test the open path: `/embo:worktree <branch>` from the
     main tree — derived name used, base-ref consequence stated before
     entering, landing branch confirmed [verify: manual-run-claude]
-  - [ ] 9.4 Live-test the nest refusal and the tool gate: invoke from
+    → covered by the 9.3b live run (2026-10-20)
+  - [~] 9.4 Live-test the nest refusal and the tool gate: invoke from
     inside a linked worktree (must stop); confirm the command does not
     fall back to `git worktree add` when `EnterWorktree` is absent
     [verify: manual-run-claude]
-  - [ ] 9.5 Live-test the remove path: clean worktree removed via
+    → HALF covered by 9.3b: the nest check was verified from the main
+      tree (paths equal -> proceeds). NOT tested: invoking from INSIDE
+      a worktree (paths differ -> must stop), and the tool-gate branch,
+      which needs a session where `EnterWorktree` is genuinely absent.
+  - [X] 9.5 Live-test the remove path: clean worktree removed via
     `ExitWorktree`; a dirty one is NOT forced — files surfaced, choice
     put to the user, nothing removed [verify: manual-run-claude]
+    → covered by the 9.3b live run: refusal with one uncommitted file,
+      then clean removal after it was deleted (2026-10-20)
   - [ ] 9.6 Record the enforcement downgrade in the docs: the no-force
     / no-`-D` / no-nest rules are now agent-followed prose, not a
     script's exit code — and open a follow-up for a PreToolUse hook
