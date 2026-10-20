@@ -19,17 +19,49 @@ one command; embo must not rebuild that. What embo adds on top:
 2. **Shared claude-mem memory across worktrees** — same anchoring. (FR-4)
 3. **State-survival guarantee** — embo state never lives inside a
    deletable worktree. (FR-6)
-4. **Safe cleanup after a worktree's work merges** — a remove helper
-   that refuses on uncommitted changes and optionally deletes a merged
-   branch. NO auto-merge: interactive worktree work merges via the
-   normal PR/merge flow, so an auto-merging "finish" was cut as
-   over-build (see the History note). (FR-2)
-5. **Start-side ergonomics** — a `start` helper that creates a
-   repo-adjacent worktree with a **derived** name (from the branch, so
-   the user need not invent one) and a `list` that shows existing
+4. **Safe cleanup after a worktree's work merges** — `/embo:worktree
+   remove [path]`, which refuses to force, surfaces uncommitted changes
+   and puts the choice to the user, and treats branch deletion as a
+   separate explicit `-d` step. NO auto-merge: interactive worktree work
+   merges via the normal PR/merge flow, so an auto-merging "finish" was
+   cut as over-build (see the History note). (FR-2)
+5. **Start-side ergonomics** — `/embo:worktree <branch>` opens a
+   worktree whose name is **derived** from the branch (slashes →
+   hyphens, so the user need not invent one), warns which base ref the
+   worktree will actually have, and `/embo:worktree list` shows existing
    worktrees + their branches, so the user never hand-tracks them.
-   Native `claude --worktree` remains fully supported; this removes the
+   Native worktree entry remains fully supported; this removes the
    naming/tracking friction it leaves. (FR-7)
+
+### Scope decision (2026-10): a command, not shell helpers
+
+Items 4 and 5 were first built as two bare `bin/` wrappers
+(`embo-worktree-start`, `embo-worktree-remove`) that called `git
+worktree add` / `git worktree remove` directly. They have been
+**removed** and replaced by one command file, `/embo:worktree`, with
+three modes: `<branch>` (open), `list`, `remove [path]`.
+
+The reason is prior art plus this PRD's own stated principle:
+
+- No comparable Claude Code project ships a standalone shell script for
+  worktrees. Superpowers uses a skill; Oh-My-ClaudeCode uses a compiled
+  TypeScript library serving its agent swarm; claude-workflow-template
+  uses a slash command that wraps the **native** `EnterWorktree` /
+  `ExitWorktree` tools. Spec-Kit has no worktree support at all.
+- Superpowers names bypassing the native tool **"the #1 mistake — it
+  creates phantom state your harness can't see or manage."**
+- This PRD already said v1 "must not rebuild" the native lifecycle. The
+  two scripts had drifted past that principle: they created worktrees
+  the harness did not know about.
+
+`/embo:worktree` follows claude-workflow-template's thin-wrapper
+approach — it gates on `EnterWorktree` being available and refuses to
+fall back to raw `git worktree add`, so embo never creates phantom
+worktrees. What the scripts added over bare git (derived name,
+nest-refusal, no-force cleanup, listing) is preserved as command steps.
+
+One honest cost is recorded under NFR-1: those safety rules are now
+instructions an agent follows, not a script's exit code.
 
 **Out for v1:** embo does NOT build worktree setup/isolation mechanics
 (FR-1 as originally written) — that is native CC's job and is listed
@@ -252,13 +284,17 @@ bookkeeping or a painful local merge-back.
    branch deletion, or risk losing uncommitted work.
 
    **Acceptance Criteria**:
-   - [ ] `embo-worktree-remove <path>` removes the worktree and prunes;
-     it only accepts a path that is a registered worktree of this repo.
-   - [ ] It never force-removes a dirty worktree: uncommitted tracked
-     changes cause an abort that surfaces the files, removing nothing.
-   - [ ] `--branch` deletes the worktree's branch with `-d` (kept, with
-     a note, if unmerged); `--force-branch` uses `-D` on explicit
-     request only.
+   - [ ] `/embo:worktree remove [path]` removes the worktree via the
+     native `ExitWorktree` tool — `action: "remove"` from inside it, or
+     named from the main tree.
+   - [ ] It never force-removes a dirty worktree: when removal is
+     refused for uncommitted or unmerged work, the command shows the
+     files (`git -C <path> status --porcelain -uno`) and puts the
+     choice to the user — commit them, or confirm discarding them
+     explicitly. It does not retry with a force flag.
+   - [ ] Deleting the branch is a separate, explicit `git branch -d`
+     step (which itself refuses unmerged work); `-D` only when the user
+     asks for it in those terms, having been told what it drops.
    - [ ] It does NOT merge, test, or touch any base branch — merging is
      the user's normal PR/merge flow, deliberately out of scope.
 
@@ -299,15 +335,19 @@ bookkeeping or a painful local merge-back.
    - **Dependencies**: git worktree; project dependency manager
      detection; RLM/claude-mem state anchoring.
 
-2. **FR-2**: One-command safe cleanup (`embo-worktree-remove`): remove a
-   worktree, refusing on uncommitted changes; `--branch` deletes a
-   merged branch. No merge/test of any base — merging is the user's
-   normal PR/merge flow.
+2. **FR-2**: One-command safe cleanup (`/embo:worktree remove [path]`):
+   remove a worktree through the native `ExitWorktree` tool, never
+   forcing; on refusal, surface the uncommitted files and put the
+   choice to the user. Branch deletion is a separate explicit `-d`
+   step. No merge/test of any base — merging is the user's normal
+   PR/merge flow.
    - **Priority**: High
    - **Rationale**: Removes the cleanup chore without automating a merge
      the user already does via PR. (An auto-merging finish was built
-     then cut after live testing — see History.)
-   - **Dependencies**: git worktree.
+     then cut after live testing — see History. The bare-script form,
+     `embo-worktree-remove`, was later replaced by this command — see
+     "Scope decision (2026-10)".)
+   - **Dependencies**: the native `ExitWorktree` tool; git.
 
 3. **FR-3**: Shared RLM index across all worktrees of one repo.
    - **Priority**: High
@@ -334,27 +374,53 @@ bookkeeping or a painful local merge-back.
      the index/memory on cleanup.
    - **Dependencies**: FR-3, FR-4.
 
-7. **FR-7**: Start-side ergonomics — `start` creates a repo-adjacent
-   worktree with a name derived from the branch (no user-invented
-   name); `list` shows existing worktrees + branches for tracking.
-   - **Priority**: Medium (removes real friction; native
-     `claude --worktree` remains supported).
+7. **FR-7**: Start-side ergonomics — `/embo:worktree <branch>` opens a
+   worktree via the native `EnterWorktree` tool under a name derived
+   from the branch (slashes → hyphens, no user-invented name), refuses
+   to nest, and states which base ref the worktree will have before
+   entering; `/embo:worktree list` shows existing worktrees + branches
+   for tracking.
+   - **Priority**: Medium (removes real friction; native worktree entry
+     remains supported).
    - **Rationale**: Native setup leaves the user to invent names and
-     hand-track worktrees — the "spin-up" friction the PRD names.
-   - **Dependencies**: git worktree; `.worktrees/` default location.
+     hand-track worktrees — the "spin-up" friction the PRD names. Live
+     use added a second friction the scripts did not cover: native
+     worktrees branch from the **remote default branch**
+     (`worktree.baseRef: "fresh"`), not from current HEAD, so a
+     worktree opened off a feature branch silently lacks that branch's
+     work and any uncommitted or unpushed files. The command must name
+     that before entering, and name `worktree.baseRef: "head"` as the
+     user's remedy — it must not set the setting for them.
+   - **Dependencies**: the native `EnterWorktree` tool; git.
 
 ### Non-Functional Requirements
 
 1. **NFR-1**: Safety — never `--force` a worktree removal, never `-D`
    an unmerged branch, never force-checkout a branch held elsewhere;
    uncommitted work is always surfaced, never silently discarded.
+   - **Enforcement, stated honestly:** these were a script's exit
+     codes (a dirty worktree exited 3 and removed nothing, mechanically
+     and regardless of what any agent intended). In the command form
+     they are prose instructions the agent is asked to follow. That is
+     a **real reduction in enforcement strength** — nothing stops a
+     model that ignores the instruction from running `git worktree
+     remove --force`. The mitigation is that the native `ExitWorktree`
+     tool is the only sanctioned path and itself refuses dirty
+     removals; the "don't force" rule guards only against the agent
+     working around that refusal. Converting this back into a
+     mechanism (a PreToolUse hook rejecting `--force` / `-D` on
+     worktree commands) is the open follow-up, per the repo's
+     enforce-don't-ask principle.
 2. **NFR-2**: Performance — per-worktree dependency cost minimized
    (e.g. content-addressed store / shared venv where the ecosystem
    supports it); worktrees share one `.git` (no full clone).
 3. **NFR-3**: Idempotency — start and remove are safe to re-run; a
    partial failure leaves a recoverable state, matching `embo-deliver`.
-4. **NFR-4**: No-nest — the setup command detects existing isolation
-   and refuses to create a worktree inside a worktree.
+4. **NFR-4**: No-nest — the open path detects existing isolation
+   (`--git-dir` differs from `--git-common-dir`) and refuses to create
+   a worktree inside a worktree. Same rule as before; now a step in
+   `/embo:worktree <branch>` rather than a script guard (see NFR-1 on
+   what that costs in enforcement strength).
 
 ### Technical Constraints
 
@@ -362,7 +428,11 @@ bookkeeping or a painful local merge-back.
   side effects, the existing worktree upstream-tracking fix).
 - Should follow patterns: bare `bin/` wrappers invoked as plain
   commands (no `${...}`/`$(...)`) to stay auto-approved; explicit file
-  staging (never `git add -A`/`.`).
+  staging (never `git add -A`/`.`). The worktree surface itself is no
+  longer a wrapper — it is a command file driving the native worktree
+  tools (see "Scope decision (2026-10)") — but the bare-command rule
+  still binds every `bin/` script this feature touches, `rlm_repl`
+  included.
 - Cannot change: `.gitignore` entries that keep state out of git;
   claude-mem worker-runtime tooling (no server-beta migration here);
   the no-force safety rules.

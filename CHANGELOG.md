@@ -14,13 +14,13 @@ All notable changes to the embo plugin are documented here.
   so two live sessions cannot corrupt the index (unavailable on
   platforms without `fcntl`, where writes fall back to unserialized with
   a warning).
-- `embo-worktree-start <branch>` creates a worktree named after the
-  branch (no invented names) and `--list` shows the ones you have open;
-  `embo-worktree-remove <path>` cleans one up — refusing if it has
-  uncommitted changes (surfaced, never forced), and with `--branch` also
-  deleting a merged branch. You merge however you normally do (a PR or a
-  manual merge). Opt in with `"Bash(embo-worktree-start *)"` and
-  `"Bash(embo-worktree-remove *)"` in `permissions.allow`.
+- `/embo:worktree <branch>` opens a parallel worktree, `list` shows the
+  ones you have open, and `remove` cleans one up after its work lands.
+  It drives Claude Code's own worktree tools and adds what they leave
+  to you: a directory name derived from the branch, a heads-up when the
+  worktree's base ref is not the branch you are on, and a cleanup that
+  refuses to discard uncommitted files. You merge however you normally
+  do (a PR or a manual merge).
 
 ## [0.2.11] - 2026-09-03
 

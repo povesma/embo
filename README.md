@@ -284,6 +284,7 @@ Two invariants shape every embo command:
 | Planning | `/embo:check` | Audit task completion status |
 | Development | `/embo:impl` | Implement subtasks one at a time, evidence-gated |
 | Development | `/embo:git` | Commit/PR messages, styles, and one-shot `deliver` |
+| Development | `/embo:worktree` | Open, list, or clean up a parallel worktree sharing this repo's index and memory |
 | Development | `/embo:wrapup` | Session-end idempotency check: untracked work to docs, evidence compacted, uncommitted changes surfaced |
 | Research | `/embo:research:examine` | Independent two-pass critique of a decision or doc → reconciled recommendation |
 | Research | `/embo:research:verify` | Prove a chosen approach meets its acceptance criteria before building |
@@ -375,36 +376,26 @@ never touches the shared state (it lives in the main tree). Index writes
 are serialized across sessions, so two live worktrees cannot corrupt the
 index.
 
-The workflow, start to finish:
+Open one with `/embo:worktree <branch>`, see them with
+`/embo:worktree list`, and clean one up with `/embo:worktree remove`
+once its work has landed. The command drives Claude Code's own
+worktree tools and adds what they leave to you: a directory name
+derived from the branch, a warning when the base ref is not what you
+expect, and a cleanup that refuses to discard uncommitted files.
 
-```bash
-embo-worktree-start feat/my-thing   # creates .worktrees/feat-my-thing
-cd .worktrees/feat-my-thing
-claude                              # a normal session, sharing the index
-# ...work, commit, push, open a PR exactly as you always do...
-embo-worktree-remove .worktrees/feat-my-thing --branch   # after it merges
-```
+Native `claude --worktree` works too, and so does `git worktree` by
+hand — the shared index applies to any worktree of the repo, however
+it was made.
 
-`embo-worktree-start <branch>` creates `.worktrees/<name>` (name derived
-from the branch, so you never invent one) and refuses to nest;
-`embo-worktree-start --list` shows the worktrees you have open. You
-merge however you normally do — a PR, or a manual merge — so there is no
-special "finish" step. `embo-worktree-remove <path>` cleans up
-afterwards: it refuses if the worktree has uncommitted changes (surfaces
-them, never `--force`), and `--branch` also deletes the branch when it is
-merged (`--force-branch` to drop an unmerged one). Native
-`claude --worktree` works too; these just remove the naming, tracking,
-and cleanup chores.
+**Worth knowing about the base branch.** A native worktree branches
+from the remote default branch, not from where you are standing
+(`worktree.baseRef: "fresh"`). Opening one off a feature branch
+therefore gives you a tree without that branch's work, and unpushed
+or uncommitted files will not be there. Set `worktree.baseRef: "head"`
+in your settings to branch from the current HEAD instead.
 
-**One-time opt-in (required).** Add to your `permissions.allow`:
-
-```json
-"Bash(embo-worktree-start *)",
-"Bash(embo-worktree-remove *)"
-```
-
-Without them the commands prompt once per run; with them they run
-without per-command prompts.
+You merge however you normally do — a PR, or a manual merge — so there
+is no special "finish" step.
 
 ## Behavioral rule reminders
 

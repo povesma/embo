@@ -8,10 +8,15 @@
 - [plugin/rlm_scripts/rlm_repl.py](../../plugin/rlm_scripts/rlm_repl.py)
   :: State-path resolver + write lock added here (state path at :56;
   `_save_state` sites at :944, :994, :1158).
-- [plugin/bin/embo-worktree-start](../../plugin/bin/embo-worktree-start)
-  :: NEW bare wrapper — create a worktree with a derived name; `--list`.
-- [plugin/bin/embo-worktree-remove](../../plugin/bin/embo-worktree-remove)
-  :: NEW bare wrapper — safe cleanup (dirty-guard, optional `--branch`).
+- [plugin/commands/worktree.md](../../plugin/commands/worktree.md)
+  :: NEW command — `/embo:worktree` with three modes: `<branch>`
+  (open via native `EnterWorktree`, derived name, nest-refusal,
+  base-ref warning), `list`, `remove [path]` (native `ExitWorktree`,
+  never forced). Supersedes both bin wrappers below.
+- ~~`plugin/bin/embo-worktree-start` (+ `.test.sh`)~~
+  :: REMOVED — superseded by `/embo:worktree <branch>` / `list`.
+- ~~`plugin/bin/embo-worktree-remove` (+ `.test.sh`)~~
+  :: REMOVED — superseded by `/embo:worktree remove [path]`.
 - [plugin/hooks/capture-correction.sh](../../plugin/hooks/capture-correction.sh)
   :: MODIFIED — resolves `.claude` to the main tree so corrections from
   a worktree are shared, not stranded.
@@ -22,13 +27,18 @@
   :: Add `.worktrees/` so repo-adjacent worktrees are never staged.
 
 Note: `embo-worktree-finish` (+ test) was created then removed — see the
-Scope correction under story 4.0.
+Scope correction under story 4.0. The two remaining wrappers
+(`embo-worktree-start`, `embo-worktree-remove`) were later removed too,
+replaced by one command file — see the Scope correction under story 9.0.
 
 ## Notes
 - Tests follow the repo's `*.test.sh` fixture pattern (see
   `embo-deliver.test.sh`, `subagent-rules.test.sh`): build a temp git
   repo, `git worktree add` into a repo-adjacent path, assert, tear down.
-- Run a test script directly: `bash plugin/bin/embo-worktree-remove.test.sh`.
+- Run a test script directly: `bash plugin/rlm_scripts/rlm_repl.test.sh`.
+  (The two `embo-worktree-*.test.sh` suites are gone with their
+  scripts; `/embo:worktree` is prose and is verified by
+  `manual-run-claude`, not by a fixture.)
 - The lock-concurrency test MUST hold the lock in a backgrounded
   process before launching the second writer (a sequential test passes
   vacuously — see tech-design Testing Strategy).
@@ -44,7 +54,9 @@ Scope correction under story 4.0.
     fixture boilerplate (shebang, assert helpers, temp-repo setup/
     teardown) as used by `embo-deliver.test.sh` [verify: code-only]
     (note: the initial `embo-worktree-finish.test.sh` scaffolded here
-    was later removed with its script — see story 4.0)
+    was later removed with its script — see story 4.0; the
+    `embo-worktree-start`/`-remove` scaffolds went the same way in
+    2026-10 — see story 9.0)
     → both scaffolds run clean (0 passed, 0 failed, exit 0) [live]
     (2026-09-05)
 
@@ -120,22 +132,36 @@ Scope correction under story 4.0.
   already merged via my normal PR/merge flow), I want one command to
   clean it up safely, so that I never hand-manage worktree removal,
   prune, and branch deletion, or risk losing uncommitted work.
-  - [X] 4.1 Write remove tests: clean removal succeeds; non-worktree
-    path rejected (exit 2) [verify: auto-test]
-    → covered in embo-worktree-remove.test.sh [live] (2026-09-08)
-  - [X] 4.2 Write DIRTY-guard test: worktree with uncommitted tracked
+  > **The story (FR-2) still stands; its delivery moved.** All subtasks
+  > below are SUPERSEDED — they built `embo-worktree-remove`, which was
+  > deleted in 2026-10. FR-2 is now delivered by `/embo:worktree
+  > remove` (story 9.0). History kept below, not deleted.
+  - [X] ~~4.1 Write remove tests: clean removal succeeds; non-worktree
+    path rejected (exit 2) [verify: auto-test]~~
+    → SUPERSEDED (2026-10): script + its 13 tests deleted; FR-2 is now
+    `/embo:worktree remove` — see story 9.0.
+    → (historical) covered in embo-worktree-remove.test.sh [live] (2026-09-08)
+  - [X] ~~4.2 Write DIRTY-guard test: worktree with uncommitted tracked
     changes → abort (exit 3), files surfaced, nothing removed
-    [verify: auto-test]
-    → dirty worktree refused, not removed [live] (2026-09-08)
-  - [X] 4.3 Write `--branch` tests: deletes a merged branch; keeps an
-    unmerged one with a note (no `--force-branch`) [verify: auto-test]
-    → merged branch deleted; unmerged kept [live] (2026-09-08)
-  - [X] 4.4 Implement `embo-worktree-remove` as a bare wrapper (validate
+    [verify: auto-test]~~
+    → SUPERSEDED (2026-10): the refusal now comes from native
+    `ExitWorktree`; the command surfaces the files instead.
+    → (historical) dirty worktree refused, not removed [live] (2026-09-08)
+  - [X] ~~4.3 Write `--branch` tests: deletes a merged branch; keeps an
+    unmerged one with a note (no `--force-branch`) [verify: auto-test]~~
+    → SUPERSEDED (2026-10): branch deletion is a separate explicit
+    `git branch -d` step in the command, not a script flag.
+    → (historical) merged branch deleted; unmerged kept [live] (2026-09-08)
+  - [X] ~~4.4 Implement `embo-worktree-remove` as a bare wrapper (validate
     registered worktree, dirty-guard, remove+prune, optional `--branch`/
-    `--force-branch`) [verify: auto-test]
-    → 13 passed, 0 failed [live] (2026-09-08)
-  - [X] 4.5 Document the `Bash(embo-worktree-remove *)` allow opt-in in
-    README [verify: code-only]
+    `--force-branch`) [verify: auto-test]~~
+    → SUPERSEDED (2026-10): script deleted; replaced by the `remove`
+    mode of `/embo:worktree` — see story 9.0.
+    → (historical) 13 passed, 0 failed [live] (2026-09-08)
+  - [X] ~~4.5 Document the `Bash(embo-worktree-remove *)` allow opt-in in
+    README [verify: code-only]~~
+    → SUPERSEDED (2026-10): no script, so no Bash allow-rule to
+    document; the command needs no permission opt-in.
 
   > **Scope correction (2026-09-08):** an auto-merging
   > `embo-worktree-finish` (test → merge into a local base → re-test →
@@ -178,21 +204,34 @@ Scope correction under story 4.0.
 - [X] 7.0 **User Story:** As a developer starting a parallel session, I
   want embo to create and name the worktree and let me list existing
   ones, so that I don't invent names or hand-track worktrees.
-  - [X] 7.1 Write tests for `embo-worktree-start <branch>`: creates
+  > **The story (FR-7) still stands; its delivery moved.** All subtasks
+  > below are SUPERSEDED — they built `embo-worktree-start`, deleted in
+  > 2026-10. FR-7 is now delivered by `/embo:worktree <branch>` and
+  > `/embo:worktree list` (story 9.0). History kept below.
+  - [X] ~~7.1 Write tests for `embo-worktree-start <branch>`: creates
     `.worktrees/<derived-name>` on `<branch>` (slashes → `-`); refuses
     to nest when already inside a worktree; prints the path
-    [verify: auto-test]
-    → derived name, nest-guard, path-conflict all pass [live] (2026-09-05)
-  - [X] 7.2 Write tests for `embo-worktree-start --list`: prints existing
-    worktrees + their branches [verify: auto-test]
-    → list shows main tree + created worktree [live] (2026-09-05)
-  - [X] 7.3 Implement `embo-worktree-start` as a bare wrapper (create +
-    derived name + nest-guard + list) [verify: auto-test]
-    → 11 passed, 0 failed; nest-guard compares --git-dir/--git-common-dir
-    both in absolute form (relative-vs-absolute would false-positive)
+    [verify: auto-test]~~
+    → SUPERSEDED (2026-10): the derived name and the nest-refusal are
+    now steps in `/embo:worktree <branch>`; the native `EnterWorktree`
+    tool chooses the directory, so `.worktrees/` is not embo's to pick.
+    → (historical) derived name, nest-guard, path-conflict all pass
     [live] (2026-09-05)
-  - [X] 7.4 Document the `Bash(embo-worktree-start *)` allow opt-in in
-    README alongside the remove opt-in [verify: code-only]
+  - [X] ~~7.2 Write tests for `embo-worktree-start --list`: prints existing
+    worktrees + their branches [verify: auto-test]~~
+    → SUPERSEDED (2026-10): listing is now `/embo:worktree list`.
+    → (historical) list shows main tree + created worktree [live] (2026-09-05)
+  - [X] ~~7.3 Implement `embo-worktree-start` as a bare wrapper (create +
+    derived name + nest-guard + list) [verify: auto-test]~~
+    → SUPERSEDED (2026-10): script deleted — it called `git worktree
+    add` directly, creating worktrees the harness cannot see.
+    → (historical) 11 passed, 0 failed; nest-guard compares
+    --git-dir/--git-common-dir both in absolute form
+    (relative-vs-absolute would false-positive) [live] (2026-09-05)
+  - [X] ~~7.4 Document the `Bash(embo-worktree-start *)` allow opt-in in
+    README alongside the remove opt-in [verify: code-only]~~
+    → SUPERSEDED (2026-10): no script, so no Bash allow-rule to
+    document.
 
 - [X] 8.0 **User Story:** As a developer emitting a correction from
   inside a worktree, I want it recorded in the main tree, so that
@@ -203,3 +242,64 @@ Scope correction under story 4.0.
     CWD fallback outside git [verify: auto-test]
     → 43 passed, 0 failed; verified live that a worktree resolves to the
     main tree's .claude [live] (2026-09-08)
+
+- [~] 9.0 **User Story:** As a developer who wants parallel worktree
+  sessions without phantom state, I want one `/embo:worktree` command
+  that drives Claude Code's own worktree tools, so that every worktree
+  embo opens is one the harness can see, track, and clean up.
+
+  > **Scope correction (2026-10):** stories 4.0 and 7.0 shipped two
+  > bare wrappers (`embo-worktree-start`, `embo-worktree-remove`) that
+  > called `git worktree add` / `remove` themselves. Research into
+  > comparable projects found nobody ships a standalone shell script
+  > for worktrees: Superpowers uses a skill, Oh-My-ClaudeCode a
+  > compiled TypeScript library for its agent swarm, and
+  > claude-workflow-template a slash command wrapping the native
+  > `EnterWorktree`/`ExitWorktree` tools; Spec-Kit has no worktree
+  > support. Superpowers calls bypassing the native tool "the #1
+  > mistake — it creates phantom state your harness can't see or
+  > manage." The PRD already said v1 "must not rebuild" the native
+  > lifecycle, and the scripts had drifted past that. Both scripts and
+  > their 24 tests (11 + 13) were deleted and replaced by one command
+  > file following the thin-wrapper approach. FR-2 and FR-7 are
+  > unchanged as requirements; only their delivery moved. FR-3, FR-4
+  > and FR-6 (shared index, shared memory, state survival) are
+  > untouched.
+
+  - [X] 9.1 Delete `plugin/bin/embo-worktree-start`,
+    `plugin/bin/embo-worktree-remove` and both `.test.sh` suites
+    [verify: code-only]
+    → all four files removed from `plugin/bin/`
+  - [~] 9.2 Write `plugin/commands/worktree.md` — `/embo:worktree` with
+    three modes (`<branch>`, `list`, `remove [path]`): gate on
+    `EnterWorktree` and refuse a raw-git fallback; refuse to nest
+    (`--git-dir` vs `--git-common-dir`); warn that the native base ref
+    is the remote default branch, not HEAD, and name
+    `worktree.baseRef: "head"` as the user's remedy without setting it;
+    derive the worktree name from the branch (slashes → hyphens);
+    on remove never force, surface uncommitted files via
+    `git -C <path> status --porcelain -uno` and put the choice to the
+    user, with branch deletion a separate explicit `-d` step; state
+    that it does not merge, does not install dependencies, and that
+    subagents never call the worktree tools [verify: manual-run-claude]
+    → written, NOT yet live-tested
+  - [ ] 9.3 Live-test the open path: `/embo:worktree <branch>` from the
+    main tree — derived name used, base-ref consequence stated before
+    entering, landing branch confirmed [verify: manual-run-claude]
+  - [ ] 9.4 Live-test the nest refusal and the tool gate: invoke from
+    inside a linked worktree (must stop); confirm the command does not
+    fall back to `git worktree add` when `EnterWorktree` is absent
+    [verify: manual-run-claude]
+  - [ ] 9.5 Live-test the remove path: clean worktree removed via
+    `ExitWorktree`; a dirty one is NOT forced — files surfaced, choice
+    put to the user, nothing removed [verify: manual-run-claude]
+  - [ ] 9.6 Record the enforcement downgrade in the docs: the no-force
+    / no-`-D` / no-nest rules are now agent-followed prose, not a
+    script's exit code — and open a follow-up for a PreToolUse hook
+    that would restore mechanical enforcement [verify: code-only]
+  - [X] 9.7 Update README and CHANGELOG for `/embo:worktree`, removing
+    the two `Bash(embo-worktree-* *)` allow opt-ins that no longer
+    apply [verify: code-only]
+    → README worktree section rewritten around the command and the
+      base-ref caveat; command table row added; CHANGELOG Unreleased
+      bullet replaced; CLAUDE.md command counts 19 -> 20 (2026-10-20)
