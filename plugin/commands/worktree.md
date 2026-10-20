@@ -141,8 +141,7 @@ in those terms, having been told what it drops.
 ## Enforcement note
 
 The safety rules above — no `discard_changes: true`, no `git branch
--D`, no nesting — are prose that this agent follows. They are not
-enforced by a script's exit code or a PreToolUse hook. A future hook
-could intercept `ExitWorktree(discard_changes: true)` and
-`git branch -D` calls and refuse them without agent cooperation, but
-that hook does not exist yet (tracked as task 067).
+-D`, no nesting — are prose that this agent follows. Nothing enforces
+them mechanically: there is no exit code and no hook behind them. Treat
+them as rules to apply deliberately, not as guarantees the tooling
+provides.
