@@ -816,5 +816,77 @@ HAS_TAG=0
 git -C "$REPO_H" rev-parse -q --verify refs/tags/v9.9.9 >/dev/null 2>&1 && HAS_TAG=1
 assert_exit "release halt: no tag created (tail never reached)" 0 "$HAS_TAG"
 
+# --- T066 A: branch<->task mismatch on another feature branch (safety net)
+# The delivery-time check must warn to stderr when the current branch does
+# not reference the task derived from plan.files, and continue with exit 0
+# (warn-only, no gate, no flag). Fixture: HEAD on `feat/062-worktree`, plan
+# targets task 066 -- the exact shape of the observed task-065 failure.
+BARE_A="$WORK/bareT066A.git"
+git init -q --bare "$BARE_A"
+REPO_A="$WORK/repoT066A"
+mkdir -p "$REPO_A/tasks/066-BRANCH-STACKING-DISCIPLINE"
+git -C "$REPO_A" init -q -b main
+git -C "$REPO_A" config user.email t@t.t
+git -C "$REPO_A" config user.name t
+printf 'seed\n' > "$REPO_A/tasks/066-BRANCH-STACKING-DISCIPLINE/design.md"
+git -C "$REPO_A" add -A
+git -C "$REPO_A" commit -qm init
+git -C "$REPO_A" remote add origin "$BARE_A"
+git -C "$REPO_A" push -qu origin main
+git -C "$REPO_A" switch -q -c feat/062-worktree
+printf 'edit\n' > "$REPO_A/tasks/066-BRANCH-STACKING-DISCIPLINE/design.md"
+
+PLAN_A="$(write_plan t066-mismatch.txt 'branch: feat/062-worktree
+mode: push
+file: tasks/066-BRANCH-STACKING-DISCIPLINE/design.md
+message:
+docs(066): refine design')"
+OUT_A="$(cd "$REPO_A" && bash "$BIN" --plan "$PLAN_A" 2>&1)"
+RC_A=$?
+assert_exit "T066 A: mismatch feat/062-worktree -> exit 0 (warn-only)" 0 "$RC_A"
+assert_contains "T066 A: WARNING phrase 'does not appear to match'" \
+  "does not appear to match" "$OUT_A"
+assert_contains "T066 A: WARNING names task 066" \
+  "task 066" "$OUT_A"
+
+# --- T066 B: branch<->task match -> no WARNING ----------------------------
+# The check must be silent when the current branch name references the
+# task as a whole token. Fixture: HEAD on `feat/066-x`, plan targets 066.
+BARE_B="$WORK/bareT066B.git"
+git init -q --bare "$BARE_B"
+REPO_B="$WORK/repoT066B"
+mkdir -p "$REPO_B/tasks/066-BRANCH-STACKING-DISCIPLINE"
+git -C "$REPO_B" init -q -b main
+git -C "$REPO_B" config user.email t@t.t
+git -C "$REPO_B" config user.name t
+printf 'seed\n' > "$REPO_B/tasks/066-BRANCH-STACKING-DISCIPLINE/design.md"
+git -C "$REPO_B" add -A
+git -C "$REPO_B" commit -qm init
+git -C "$REPO_B" remote add origin "$BARE_B"
+git -C "$REPO_B" push -qu origin main
+git -C "$REPO_B" switch -q -c feat/066-x
+printf 'edit\n' > "$REPO_B/tasks/066-BRANCH-STACKING-DISCIPLINE/design.md"
+
+PLAN_B="$(write_plan t066-match.txt 'branch: feat/066-x
+mode: push
+file: tasks/066-BRANCH-STACKING-DISCIPLINE/design.md
+message:
+docs(066): refine design')"
+OUT_B="$(cd "$REPO_B" && bash "$BIN" --plan "$PLAN_B" 2>&1)"
+RC_B=$?
+assert_exit "T066 B: match feat/066-x -> exit 0" 0 "$RC_B"
+assert_not_contains "T066 B: match -> no mismatch WARNING" \
+  "does not appear to match" "$OUT_B"
+
+# --- T066 C: exit-code regression -- protected push still exits 7 --------
+# The new check must not disturb the existing protected-branch guard.
+PLAN_C="$(write_plan t066-reg-prot.txt 'branch: main
+mode: push
+file: a.py
+message:
+x')"
+run_dry "$PLAN_C"
+assert_exit "T066 C: regression -- push to main still exits 7" 7 "$RC"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

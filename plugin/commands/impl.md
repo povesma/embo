@@ -277,6 +277,13 @@ ls tasks/{feature-id}-{feature-name}/*-test-plan.md 2>/dev/null
   `/tasks/[JIRA-ID]-[feature-name]/`
 - Identify the next incomplete sub-task
 - Extract requirements and acceptance criteria
+- **Notice the current branch.** Compare `git symbolic-ref --short -q
+  HEAD` against the task ID from the folder name. If the branch name
+  does not reference the task, look for an existing local branch that
+  does (`git branch --list '*<task-id>*'`) and suggest switching to
+  it; if none exists, mention the mismatch and continue. One line to
+  the user; no gate. `embo-deliver` warns again at delivery as a
+  safety net.
 
 ### 3. RLM-Powered Context Discovery
 

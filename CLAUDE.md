@@ -220,6 +220,11 @@ plugin/                          # THE PLUGIN ROOT (${CLAUDE_PLUGIN_ROOT})
 │   ├── corrections-lib.sh       # sourceable enable/disable/curation/
 │   │                              # list-pending/mode fns
 │   └── corrections-lib.test.sh  # fixture tests for corrections-lib.sh
+├── lib/                         # shared sourceable functions
+│   └── branch-task-lib.sh       # branch↔task match rule + task
+│                                  # derivation; one definition sourced
+│                                  # by bin/embo-deliver and
+│                                  # hooks/branch-task-check.sh
 ├── profiles/                    # default.yaml (canonical fallback) +
 │                                  # quality/fast/minimal/research.yaml
 ├── hooks/
@@ -228,6 +233,9 @@ plugin/                          # THE PLUGIN ROOT (${CLAUDE_PLUGIN_ROOT})
 │   ├── behavioral-reminder.sh   # Behavioral rule reminder hook
 │   ├── subagent-rules.sh        # SubagentStart: filtered judgment-rule
 │   │                              # injection into every spawned subagent
+│   ├── branch-task-check.sh     # SessionStart: warns when the branch
+│   │                              # does not match the task the
+│   │                              # uncommitted changes belong to
 │   ├── approve-compound.sh      # Auto-approve compound Bash + rewrite
 │   ├── embo-capture.sh          # Output capture wrapper (helper, not
 │   │                              # a registered hook)
