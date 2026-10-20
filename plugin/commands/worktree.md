@@ -137,3 +137,12 @@ in those terms, having been told what it drops.
   at the command.
 - **Subagents do not call these tools.** The worktree lifecycle
   belongs to the session that opened it; a subagent cannot exit one.
+
+## Enforcement note
+
+The safety rules above — no `discard_changes: true`, no `git branch
+-D`, no nesting — are prose that this agent follows. They are not
+enforced by a script's exit code or a PreToolUse hook. A future hook
+could intercept `ExitWorktree(discard_changes: true)` and
+`git branch -D` calls and refuse them without agent cooperation, but
+that hook does not exist yet (tracked as task 067).
