@@ -170,14 +170,19 @@ replaced by one command file — see the Scope correction under story 9.0.
   > normal PR/merge flow — the automation solved a problem the user
   > does not have. It was replaced by the remove-only helper above.
 
-- [X] 5.0 **User Story:** As a developer using repo-adjacent worktrees,
-  I want `.worktrees/` gitignored, so that worktree checkouts are never
+- [X] 5.0 **User Story:** As a developer using worktrees, I want their
+  checkout directories gitignored, so that worktree contents are never
   accidentally staged.
   - [X] 5.1 Add `.worktrees/` to `.gitignore` [verify: code-only]
   - [X] 5.2 Assert `git check-ignore .worktrees/probe` exits 0 in a
     fixture test [verify: auto-test]
     → check-ignore reports it ignored (was NOT-IGNORED before) [live]
     (2026-09-05)
+  - [X] 5.3 Add `.claude/worktrees/` to `.gitignore` — the native
+    `EnterWorktree` tool puts worktrees there, and only `.worktrees/`
+    (the deleted scripts' location) was covered, so a native worktree
+    showed as untracked and could be staged [verify: code-only]
+    → both paths now ignored (2026-10-20)
 
 - [~] 6.0 **User Story:** As a maintainer verifying the feature, I want
   the full suite green and the shared-state guarantees proven, so that
@@ -283,6 +288,14 @@ replaced by one command file — see the Scope correction under story 9.0.
     that it does not merge, does not install dependencies, and that
     subagents never call the worktree tools [verify: manual-run-claude]
     → written, NOT yet live-tested
+    → CORRECTED 2026-10-20 against the loaded tool definitions (the
+      first draft was written from the docs): `ExitWorktree` acts ONLY
+      on a worktree the same session entered via `EnterWorktree` and is
+      a no-op anywhere else, so "name the worktree to remove from the
+      main tree" was wrong — the command now reports that it cannot and
+      hands the user `git worktree remove`. The force path is
+      `discard_changes: true`, named explicitly as forbidden. The
+      native location `.claude/worktrees/<name>/` is now stated.
   - [ ] 9.3 Live-test the open path: `/embo:worktree <branch>` from the
     main tree — derived name used, base-ref consequence stated before
     entering, landing branch confirmed [verify: manual-run-claude]

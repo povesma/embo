@@ -63,8 +63,9 @@ instead; name it, do not set it for them.
 
 **3. Enter.** Call `EnterWorktree` with `name` set to the branch with
 slashes replaced by hyphens (`feat/my-thing` -> `feat-my-thing`), so
-the directory is recognisable and nobody has to invent a name. Reusing
-a name resumes that worktree.
+the directory is recognisable and nobody has to invent a name. The
+worktree lands in `.claude/worktrees/<name>/` and the session switches
+into it. Reusing a name resumes that worktree.
 
 **4. Confirm where you landed:**
 
@@ -88,21 +89,34 @@ Report each path with its branch. Mark the one you are in, if any.
 Only after the work has landed (merged, or abandoned on purpose).
 There is no merge step here: you merge however you normally do.
 
-**Inside the worktree being removed**, call `ExitWorktree` with
-`action: "remove"`. **From the main tree**, name the worktree to
-remove.
+`ExitWorktree` only acts on a worktree **this session entered with
+`EnterWorktree`**. Anywhere else it is a no-op — it will not touch a
+worktree made by hand, or one left by an earlier session. So there are
+two cases:
 
-If removal is refused for uncommitted or unmerged work, **do not
-force it and do not retry with a force flag.** Show the files:
+**This session is in the worktree:** call `ExitWorktree` with
+`action: "remove"`. The session returns to where it started.
+
+**Any other worktree:** `ExitWorktree` cannot remove it. Say so, and
+hand the user the command rather than running a removal they did not
+ask for:
+
+```
+git worktree remove <path> && git worktree prune
+```
+
+If removal is refused for uncommitted or unmerged work, the tool lists
+what it found. **Do not set `discard_changes: true` and do not retry
+with a force flag.** Show the files:
 
 ```bash
 git -C <path> status --porcelain -uno
 ```
 
-Then put the choice to the user: commit them to the branch, or
-confirm explicitly that they are to be discarded. Files that exist
-only in a worktree exist nowhere else — a forced removal destroys
-them permanently.
+Then put the choice to the user: commit them to the branch, or confirm
+explicitly that they are to be discarded. Files that exist only in a
+worktree exist nowhere else — a forced removal destroys them
+permanently.
 
 Deleting the branch too is a separate, explicit step: `git branch -d`
 (which refuses unmerged work). Never `-D` unless the user asks for it

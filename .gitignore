@@ -41,7 +41,9 @@ Desktop.ini
 # Scratch dir for redirected command output (read back via the Read tool)
 tmp/
 
-# Repo-adjacent git worktrees (embo-worktree-finish default location)
+# Git worktrees: the native location, plus the repo-adjacent one used
+# by hand-made worktrees.
+.claude/worktrees/
 .worktrees/
 
 # Logs
