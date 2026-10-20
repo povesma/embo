@@ -387,12 +387,18 @@ Native `claude --worktree` works too, and so does `git worktree` by
 hand — the shared index applies to any worktree of the repo, however
 it was made.
 
-**Worth knowing about the base branch.** A native worktree branches
-from the remote default branch, not from where you are standing
-(`worktree.baseRef: "fresh"`). Opening one off a feature branch
-therefore gives you a tree without that branch's work, and unpushed
-or uncommitted files will not be there. Set `worktree.baseRef: "head"`
-in your settings to branch from the current HEAD instead.
+**Worth knowing about the base branch.** A worktree branches from the
+remote default branch, not from where you are standing — so one opened
+off a feature branch arrives without that branch's work, and without
+anything uncommitted. To branch from your current HEAD instead, add to
+`.claude/settings.json` (or `~/.claude/settings.json` for all
+projects):
+
+```json
+"worktree": { "baseRef": "head" }
+```
+
+`/embo:worktree` offers to add this when it would matter.
 
 You merge however you normally do — a PR, or a manual merge — so there
 is no special "finish" step.

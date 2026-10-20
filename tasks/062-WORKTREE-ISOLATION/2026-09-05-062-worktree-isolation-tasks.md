@@ -340,6 +340,14 @@ replaced by one command file — see the Scope correction under story 9.0.
     put to the user, nothing removed [verify: manual-run-claude]
     → covered by the 9.3b live run: refusal with one uncommitted file,
       then clean removal after it was deleted (2026-10-20)
+  - [~] 9.8 Offer the base-ref fix instead of only naming it. Shipped
+    0.3.0 warned that a worktree branches from the remote default
+    branch and named `worktree.baseRef`, leaving the user to find out
+    where a setting lives — too thin to act on. The command now shows
+    the JSON, names both settings files, and offers to merge it in
+    (once per session, user approves the write); README matches
+    [verify: manual-run-claude]
+    → written, NOT live-tested: the offer path has not been exercised
   - [ ] 9.6 Record the enforcement downgrade in the docs: the no-force
     / no-`-D` / no-nest rules are now agent-followed prose, not a
     script's exit code — and open a follow-up for a PreToolUse hook

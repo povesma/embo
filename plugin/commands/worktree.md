@@ -55,11 +55,18 @@ branch (`worktree.baseRef: "fresh"`), NOT from where you are. So a
 worktree opened off a feature branch will not contain that branch's
 work, and uncommitted or unpushed files will be missing inside it.
 
-Before entering, say in one line which base the worktree will have and
-what that means for the files in play — above all when the current
-branch is not the default one, or when `git status --porcelain` is not
-empty. The user may want `worktree.baseRef: "head"` in settings
-instead; name it, do not set it for them.
+Say in one line which base the worktree will have and what that means
+for the files in play.
+
+If the branch is not the default one, or the tree is dirty, show the
+fix and offer to apply it (`AskUserQuestion`, once per session):
+
+```json
+"worktree": { "baseRef": "head" }
+```
+
+`.claude/settings.json` for this project, `~/.claude/settings.json` for
+all. On accept, merge into the existing file; never overwrite it.
 
 **3. Enter.** Call `EnterWorktree` with `name` set to the branch with
 slashes replaced by hyphens (`feat/my-thing` -> `feat-my-thing`), so
