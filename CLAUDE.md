@@ -334,6 +334,14 @@ version exists.
   user; keep internals (which API or library the code calls, and how
   the check is computed) out unless that detail is itself the
   user-facing change.
+- **One or two lines per change. A whole release fits on a screen.**
+  A reader who sees a wall of text does not start reading, so a long
+  entry communicates less than a short one. No thresholds, no library
+  or syscall names, no list of the cases a check skips — those belong
+  in the docs tree. If an entry needs a second sentence to be
+  understood, the first sentence is describing the mechanism.
+  Rewriting for clarity must make an entry shorter; when it grows,
+  that is the signal to cut, not to keep explaining.
 
 ## Safety Rules
 
