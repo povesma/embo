@@ -59,7 +59,23 @@ if [ -z "$TRANSCRIPT_PATH" ] || [ ! -f "$TRANSCRIPT_PATH" ]; then
   exit 0
 fi
 
-OUT_DIR=".claude"
+# Resolve .claude to the MAIN working tree so a correction emitted from
+# inside a git worktree is recorded once, in the shared location — not in
+# the worktree's own .claude/ (which vanishes when the worktree is
+# removed). --git-common-dir points at the main tree's .git from any
+# worktree; its parent is the main root. Absolute form so the parent is
+# meaningful. Falls back to CWD-relative .claude outside a git repo.
+resolve_claude_dir() {
+  local common main_root
+  common="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || {
+    printf '.claude'; return
+  }
+  [ -n "$common" ] || { printf '.claude'; return; }
+  main_root="$(dirname "$common")"
+  printf '%s/.claude' "$main_root"
+}
+
+OUT_DIR="$(resolve_claude_dir)"
 OUT_FILE="$OUT_DIR/corrections.jsonl"
 mkdir -p "$OUT_DIR" 2>/dev/null || {
   log_err "cannot create $OUT_DIR in $(pwd)"

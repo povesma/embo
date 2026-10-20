@@ -66,10 +66,14 @@ mcp__plugin_claude-mem_mcp-search__get_observations(
 ### Step 3: RLM Analysis of Current Capabilities
 
 **3a. Find related existing features**:
-```bash
-rlm_repl exec <<'PY'
-keywords = ['feature_term', 'related_concept']  # fill with terms from the feature name and problem domain
 
+Write the probe to `tmp/rlm-probe.py`, then execute with
+`rlm_repl exec -c "$(cat tmp/rlm-probe.py)"`. The `-c` flag is
+required; heredoc syntax (`<<'PY'`) is not supported by `rlm_repl exec`.
+
+```python
+# tmp/rlm-probe.py
+keywords = ['feature_term', 'related_concept']
 relevant = []
 for kw in keywords:
     relevant += find_symbol(kw, type='function')
@@ -78,7 +82,6 @@ for f in list(set(relevant))[:5]:
     relevant += get_related_files(f)
 paths = write_file_chunks(list(set(relevant))[:20], strategy='file')
 import json; print(json.dumps(paths))
-PY
 ```
 
 **3b. Analyze architecture patterns** (if relevant files found):

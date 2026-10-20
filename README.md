@@ -284,6 +284,7 @@ Two invariants shape every embo command:
 | Planning | `/embo:check` | Audit task completion status |
 | Development | `/embo:impl` | Implement subtasks one at a time, evidence-gated |
 | Development | `/embo:git` | Commit/PR messages, styles, and one-shot `deliver` |
+| Development | `/embo:worktree` | Open, list, or clean up a parallel worktree sharing this repo's index and memory |
 | Development | `/embo:wrapup` | Session-end idempotency check: untracked work to docs, evidence compacted, uncommitted changes surfaced |
 | Research | `/embo:research:examine` | Independent two-pass critique of a decision or doc → reconciled recommendation |
 | Research | `/embo:research:verify` | Prove a chosen approach meets its acceptance criteria before building |
@@ -365,6 +366,36 @@ makes the plan write silent — deliveries then run with **no approval at
 all** after you ask for one. Only add this if you consciously want
 unattended delivery; there is no way for the agent to warn you at
 delivery time that the gate is gone.
+
+### Parallel worktree sessions
+
+Work several features at once in separate git worktrees
+(`claude --worktree <branch>`) and they share **one** RLM index and
+claude-mem memory — no per-worktree re-index, and deleting a worktree
+never touches the shared state (it lives in the main tree). Index writes
+are serialized across sessions, so two live worktrees cannot corrupt the
+index.
+
+Open one with `/embo:worktree <branch>`, see them with
+`/embo:worktree list`, and clean one up with `/embo:worktree remove`
+once its work has landed. The command drives Claude Code's own
+worktree tools and adds what they leave to you: a directory name
+derived from the branch, a warning when the base ref is not what you
+expect, and a cleanup that refuses to discard uncommitted files.
+
+Native `claude --worktree` works too, and so does `git worktree` by
+hand — the shared index applies to any worktree of the repo, however
+it was made.
+
+**Worth knowing about the base branch.** A native worktree branches
+from the remote default branch, not from where you are standing
+(`worktree.baseRef: "fresh"`). Opening one off a feature branch
+therefore gives you a tree without that branch's work, and unpushed
+or uncommitted files will not be there. Set `worktree.baseRef: "head"`
+in your settings to branch from the current HEAD instead.
+
+You merge however you normally do — a PR, or a manual merge — so there
+is no special "finish" step.
 
 ## Behavioral rule reminders
 

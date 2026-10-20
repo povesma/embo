@@ -88,7 +88,7 @@ Two consequences, both load-bearing:
      claude-mem or RLM
 
 4. **Commands** (`plugin/commands/`)
-   - 19 commands: 17 flat (`/embo:<name>`) + `research/` subdir
+   - 20 commands: 18 flat (`/embo:<name>`) + `research/` subdir
      (`/embo:research:examine`, `/embo:research:verify`). The flat set
      includes `/embo:enable-corrections` and
      `/embo:disable-corrections` (opt-in correction capture, task 041).
@@ -149,6 +149,16 @@ python3 ~/.claude/rlm_scripts/rlm_repl.py init-repo .
 python3 ~/.claude/rlm_scripts/rlm_repl.py status
 ```
 
+### Run RLM code inline
+
+`rlm_repl exec` requires `-c <code>`. Heredocs (`<<'PY'`) are not
+supported. For multi-line scripts, write to a temp file first:
+
+```bash
+# write probe to tmp/rlm-probe.py, then:
+rlm_repl exec -c "$(cat tmp/rlm-probe.py)"
+```
+
 ### Modify Commands
 Edit `plugin/commands/<name>.md` directly.
 
@@ -200,7 +210,7 @@ plugin/                          # THE PLUGIN ROOT (${CLAUDE_PLUGIN_ROOT})
 │   ├── examine-advisor.md       # /embo:research:examine agent
 │   ├── approach-validator.md    # /embo:research:verify agent
 │   └── visual-qa-reviewer.md    # /embo:visual-impl judge (experimental)
-├── commands/                    # 19 commands; research/ → nested ns
+├── commands/                    # 20 commands; research/ → nested ns
 │   ├── visual-impl.md           # design-to-code loop (experimental)
 │   ├── enable-corrections.md    # opt-in correction capture (task 041)
 │   ├── disable-corrections.md   # reverse enable-corrections

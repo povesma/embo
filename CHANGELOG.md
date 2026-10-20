@@ -2,6 +2,26 @@
 
 All notable changes to the embo plugin are documented here.
 
+## [Unreleased]
+
+### Added
+
+- Parallel git-worktree sessions share one RLM index, claude-mem
+  memory, and correction capture: a Claude session started in a worktree
+  reads the main tree's index with no re-index, corrections it records
+  land in the main tree, and removing a worktree never destroys the
+  shared state. Concurrent index writes across worktrees are serialized,
+  so two live sessions cannot corrupt the index (unavailable on
+  platforms without `fcntl`, where writes fall back to unserialized with
+  a warning).
+- `/embo:worktree <branch>` opens a parallel worktree, `list` shows the
+  ones you have open, and `remove` cleans one up after its work lands.
+  It drives Claude Code's own worktree tools and adds what they leave
+  to you: a directory name derived from the branch, a heads-up when the
+  worktree's base ref is not the branch you are on, and a cleanup that
+  refuses to discard uncommitted files. You merge however you normally
+  do (a PR or a manual merge).
+
 ## [0.2.11] - 2026-09-03
 
 ### Fixed
