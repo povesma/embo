@@ -348,10 +348,12 @@ replaced by one command file — see the Scope correction under story 9.0.
     (once per session, user approves the write); README matches
     [verify: manual-run-claude]
     → written, NOT live-tested: the offer path has not been exercised
-  - [ ] 9.6 Record the enforcement downgrade in the docs: the no-force
+  - [X] 9.6 Record the enforcement downgrade in the docs: the no-force
     / no-`-D` / no-nest rules are now agent-followed prose, not a
     script's exit code — and open a follow-up for a PreToolUse hook
     that would restore mechanical enforcement [verify: code-only]
+    → `plugin/commands/worktree.md` §Enforcement note added; task 067
+      seed created for the PreToolUse hook (2026-10-21)
   - [X] 9.7 Update README and CHANGELOG for `/embo:worktree`, removing
     the two `Bash(embo-worktree-* *)` allow opt-ins that no longer
     apply [verify: code-only]
