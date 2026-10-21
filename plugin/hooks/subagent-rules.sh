@@ -17,10 +17,13 @@ trap 'exit 0' ERR
 
 HEADER='=== BINDING SUBAGENT RULES (you are a subagent: you have NO channel to ask the human — DECIDE, do not stall) ==='
 
-PREAMBLE='[SUBAGENT DECIDE-OR-ASK] Question tools and approval prompts reach no one. Resolve every recoverable
-choice yourself with evidence (peer files, tests, docs) and state the choice + reason in your report. Never
-perform an irreversible or destructive action (delete, force-push, merge, overwrite shared state) — report it
-as a blocker instead of acting.
+PREAMBLE='[SUBAGENT DECIDE-OR-ASK] Question tools reach no one — you have no channel to ask the human.
+Resolve every recoverable choice yourself with evidence (peer files, tests, docs) and state the choice +
+reason in your report. Never perform an irreversible or destructive action (delete, force-push, merge,
+overwrite shared state) — report it as a blocker instead of acting.
+[SUBAGENT PERMISSION PROMPTS] An approval prompt is different: it DOES reach the human, surfacing in the
+main session and stalling you until they answer. So a non-allowlisted command interrupts your user and
+blocks your run. Keep every call in the simplest, most routine shape that does the job.
 [SUBAGENT RESEARCH-VERIFY] Your own confidence is not evidence. Before asserting any tool, API, or library
 behavior, check the current documentation; if you cannot verify a claim, mark it provisional in your report.'
 
