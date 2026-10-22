@@ -74,6 +74,21 @@ doctree_validate_amend() {
   return 1
 }
 
+# doctree_effective_model <override> <phase>
+# The resolution order for a phase's model: a non-empty <override> (from a
+# --model-<phase> argument) wins; otherwise fall back to the profile value
+# or built-in default via doctree_resolve_model. Prints the chosen model;
+# returns doctree_resolve_model's code (1 on an unknown phase) when no
+# override is given, 0 when the override is used.
+doctree_effective_model() {
+  local override="$1" phase="$2"
+  if [ -n "$override" ]; then
+    printf '%s' "$override"
+    return 0
+  fi
+  doctree_resolve_model "$phase"
+}
+
 # doctree_should_halt <mode> <blocked-count>
 # The escalation decision. `halt` stops the run as soon as one item is
 # blocked; `collect` records blocked items and never halts mid-run (they

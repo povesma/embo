@@ -173,6 +173,26 @@ research.yaml|opus|opus|sonnet|halt|2|24
     "$(pget default.yaml doctree.models.nope)"
 }
 
+# ---- 7.3/7.4: doctree_effective_model (override wins over profile) ----
+
+test_effective_model_override_wins() {
+  stub_profile_returns "opus"   # profile would say opus for every phase
+  assert_eq "effective_model: override wins over profile" "fable" \
+    "$(doctree_effective_model fable prd)"
+  assert_eq "effective_model: no override → profile value" "opus" \
+    "$(doctree_effective_model "" prd)"
+}
+
+test_effective_model_falls_back_to_default() {
+  stub_profile_returns ""        # profile absent → built-in defaults
+  assert_eq "effective_model: no override, absent field → prd default" "opus" \
+    "$(doctree_effective_model "" prd)"
+  assert_eq "effective_model: no override, absent field → tasks default" "sonnet" \
+    "$(doctree_effective_model "" tasks)"
+  assert_eq "effective_model: override still wins when field absent" "haiku" \
+    "$(doctree_effective_model haiku tasks)"
+}
+
 # ---- 2.8: escalation modes (collect / halt) ----
 # doctree_should_halt <mode> <blocked-count> → rc 0 halt, 1 continue,
 # 2 unknown mode.
@@ -281,12 +301,25 @@ test_agent_no_task_refs() {
     "$(grep -Ec 'task(s)? +[0-9]{3}|Story [0-9]' "$AGENT" || true)"
 }
 
+# ---- 7.9: the entry command body has no task numbers or tasks/ paths ----
+
+DOCTREE_CMD="$HERE/../commands/doctree.md"
+
+test_command_no_task_refs() {
+  assert_eq "command: no tasks/<digit> paths" "0" \
+    "$(grep -Ec 'tasks/[0-9]' "$DOCTREE_CMD" || true)"
+  assert_eq "command: no bare task-number references" "0" \
+    "$(grep -Ec 'task(s)? +[0-9]{3}|Story [0-9]' "$DOCTREE_CMD" || true)"
+}
+
 # ---- run all tests ----
 
 test_resolve_model_profile_value
 test_resolve_model_builtin_default
 test_resolve_model_mixed
 test_resolve_model_unknown_phase
+test_effective_model_override_wins
+test_effective_model_falls_back_to_default
 test_phase_doc_path_all
 test_phase_doc_path_trailing_slash
 test_phase_doc_path_unknown_phase
@@ -297,6 +330,7 @@ test_validate_amend_fixtures
 test_validate_amend_edges
 test_agent_canary_matches_hook
 test_agent_no_task_refs
+test_command_no_task_refs
 test_profiles_doctree_fields
 test_parity_fixtures_wellformed
 

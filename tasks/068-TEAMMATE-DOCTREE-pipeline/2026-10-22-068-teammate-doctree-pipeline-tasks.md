@@ -288,28 +288,45 @@ the shell library alone.
   configuration and refuse to start when it would stall, so that an
   unattended run does not stop halfway waiting for a permission dialog
   [9/0]
-  - [ ] 7.1 Create `plugin/commands/doctree.md` following
+  - [X] 7.1 Create `plugin/commands/doctree.md` following
     `research/examine.md`'s thin-spawner pattern [verify: code-only]
-  - [ ] 7.2 Implement argument parsing: feature slug, per-phase model
+  - [X] 7.2 Implement argument parsing: feature slug, per-phase model
     overrides, escalation override [verify: auto-test]
-  - [ ] 7.3 Implement configuration resolution - read every profile
+    (Documented in the Arguments section; the override-resolution rule is
+    tested via doctree_effective_model.)
+  - [X] 7.3 Implement configuration resolution - read every profile
     field, apply overrides - and pass the result into the workflow via
     `args` [verify: auto-test]
-  - [ ] 7.4 Verify an argument override reaches the spawn call and wins
+    (Step 1 reads every doctree.* field with bare embo-profile get and
+    falls back to the built-in defaults; doctree_effective_model encodes
+    override-vs-profile; passed to the workflow via args in Step 4.)
+  - [X] 7.4 Verify an argument override reaches the spawn call and wins
     over the profile value [verify: auto-test]
-  - [ ] 7.5 Implement the pre-flight configuration report, showing each
+    (doctree_effective_model <override> <phase>: non-empty override wins,
+    else profile/default. Tested both directions.)
+  - [~] 7.5 Implement the pre-flight configuration report, showing each
     model's provenance (profile or override), emitted BEFORE any spawn
     [verify: manual-run-claude]
-  - [ ] 7.6 Implement the permission pre-flight: list the exact rules
+    (Command Step 2 specifies the report with per-model provenance and the
+    silent-override caveat line; behavioral proof needs a live run.)
+  - [~] 7.6 Implement the permission pre-flight: list the exact rules
     needed, refuse to start when one is missing, name what to add
     [verify: manual-run-claude]
-  - [ ] 7.7 Implement the MCP precondition check, refusing to start when
+    (Command Step 3a lists the required allow rules and the refuse-to-start
+    behavior; live proof needed.)
+  - [~] 7.7 Implement the MCP precondition check, refusing to start when
     the review server is unreachable [verify: manual-run-claude]
-  - [ ] 7.8 Implement the closing report: blocked items collected and
+    (Command Step 3b checks gemini-notebook-mcp reachability and refuses
+    to start when disconnected; live proof needed.)
+  - [~] 7.8 Implement the closing report: blocked items collected and
     presented together, rounds taken, and token usage
     [verify: manual-run-claude]
-  - [ ] 7.9 Confirm the command body contains no task numbers and no
+    (Command Step 5 specifies the combined closing report; live proof
+    needs a full run, which depends on the Story 5 workflow.)
+  - [X] 7.9 Confirm the command body contains no task numbers and no
     `tasks/` paths [verify: auto-test]
+    (grep check in doctree-lib.test.sh: tasks/<digit> and bare task-number
+    refs both 0.)
 
 - [ ] 8.0 **User Story:** As an embo user, I want a downstream finding
   to amend an upstream document only with evidence and a way back, so
