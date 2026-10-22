@@ -112,11 +112,13 @@ fail with a clear error.
 
 Select the execution path and state in the report which one is running:
 
-- **Workflow path (default).** Launch the `doctree` workflow, passing the
-  resolved configuration via `args`: task directory, feature slug, run
-  date, per-phase models, reviewer family, escalation mode, round cap, and
-  max agents. The workflow owns the phase sequence, the round and budget
-  counters, and the replay loop as runtime properties.
+- **Workflow path (default).** Launch the doc-tree workflow (shipped at
+  the plugin's default `workflows/` location, so it is namespaced by the
+  plugin: invoke it as `embo:doctree`), passing the resolved configuration
+  via `args`: task directory, feature slug, run date, per-phase models,
+  reviewer family, escalation mode, round cap, and max agents. The
+  workflow owns the phase sequence, the round and budget counters, and the
+  replay loop as runtime properties.
 - **Sequential fallback.** When workflows are unavailable (disabled via
   `/config`, `disableWorkflows`, or managed settings), run the same phase
   agent (`doctree-phase`) directly in order — PRD, then tech-design, then

@@ -791,8 +791,9 @@ script holds the loop. Stages do all file I/O (A4).
      stages whose return must be machine-checked.
    - Constraints from A4: no filesystem access, no `import()`, no
      `Date.now()` / `Math.random()` — the run date arrives via `args`.
-   - Requires the `workflows` manifest field or the default
-     `workflows/` location at the plugin root.
+   - Auto-discovered from the default `workflows/` location at the plugin
+     root (verified against current docs); the `workflows` manifest field
+     is optional and only needed to point elsewhere.
 
 1. **`plugin/commands/doctree.md`** — the entry command and the
    fallback orchestrator.
@@ -1245,8 +1246,11 @@ construction, which is the main hedge this design buys.
   `research.yaml` — add the bare `doctree:` block per the table.
 - `plugin/commands/profile.md` (and its tests) — show the new fields;
   FR-4 requires the profile display to carry the assignment.
-- `plugin/.claude-plugin/plugin.json` — the `workflows` manifest field,
-  if the default `workflows/` location is not used.
+- `plugin/.claude-plugin/plugin.json` — no change needed: verified
+  against current docs that a script at the default `plugin/workflows/`
+  location auto-discovers, and the `workflows` manifest field only
+  *replaces* the default scan. The workflow is namespaced by plugin name
+  and invoked as `embo:doctree`.
 - `CLAUDE.md` § File Structure and the command count (20 → 21) — repo
   bookkeeping, not a shipped behavior change.
 - `README.md` — document the command, the new profile fields, the

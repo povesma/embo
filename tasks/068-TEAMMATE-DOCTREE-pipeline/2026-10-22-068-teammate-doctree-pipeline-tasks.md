@@ -243,26 +243,48 @@ the shell library alone.
 - [ ] 5.0 **User Story:** As an embo user, I want the phase sequence and
   its limits enforced by the runtime, so that the round cap and budget
   are mechanical rather than prose the model may ignore [8/0]
-  - [ ] 5.1 Create `plugin/workflows/doctree.js` with its `meta` block
+  - [X] 5.1 Create `plugin/workflows/doctree.js` with its `meta` block
     and the FULL `args` contract: task directory, slug, run date,
     per-phase models, escalation mode, round cap, max agents, reviewer
     family. The script resolves none of these itself
     [verify: code-only]
-  - [ ] 5.2 Implement the three authoring stages in sequence, each
+    (meta is a pure literal with three phases; the body reads only from
+    the `args` global.)
+  - [~] 5.2 Implement the three authoring stages in sequence, each
     spawning the phase agent with its per-stage model from `args`
     [verify: manual-run-claude]
-  - [ ] 5.3 Implement the agent-budget counter and unit-test it against
+    (Coded: the loop spawns embo:doctree-phase per phase with the
+    per-phase model from args and the upstream docs so far. Behavioral
+    proof is 5.8's end-to-end run.)
+  - [X] 5.3 Implement the agent-budget counter and unit-test it against
     its threshold [verify: auto-test]
-  - [ ] 5.4 Implement the round counter as a GLOBAL count, not
+    (budgetAllows(spent, max); tested under/at/over cap in
+    workflows/doctree.test.js.)
+  - [X] 5.4 Implement the round counter as a GLOBAL count, not
     per-phase, and unit-test it [verify: auto-test]
-  - [ ] 5.5 Implement the inlined JS amendment validator, passing the
+    (round is a single counter over a full pass, not per-phase;
+    roundExhausted(round, cap) tested at the threshold.)
+  - [X] 5.5 Implement the inlined JS amendment validator, passing the
     2.10 parity fixtures [verify: auto-test]
-  - [ ] 5.6 Confirm the script calls no `new Date()`, `Date.now()`,
+    (validateAmend, self-contained; the test extracts the ACTUAL inlined
+    function from the source and runs all 10 shared fixtures — identical
+    verdicts to the shell validator, so they cannot drift.)
+  - [X] 5.6 Confirm the script calls no `new Date()`, `Date.now()`,
     `Math.random()` or `import()`, touches no filesystem, and shells
     out nowhere [verify: auto-test]
-  - [ ] 5.7 Register the workflow: add the `workflows` field to
+    (static source scan in the test, comments stripped first so the
+    prohibition-naming comment does not trip it.)
+  - [X] 5.7 Register the workflow: add the `workflows` field to
     `plugin.json` if the default location is not used
     [verify: code-only]
+    (Verified against current Claude Code docs: a script at the plugin's
+    default workflows/ dir auto-discovers with NO manifest field; the
+    `workflows` field only replaces the default scan. Script is at
+    plugin/workflows/doctree.js — the default — so no plugin.json change.
+    The workflow is namespaced by plugin name and invoked as `embo:doctree`
+    (from meta.name + plugin embo); the entry command names it that way.
+    Open: whether the Workflow tool's name param takes `embo:doctree` or
+    bare `doctree` is confirmed at the 5.8 live run.)
   - [ ] 5.8 Run the workflow end to end on a throwaway feature and
     confirm all three documents appear with their expected section
     headings [verify: manual-run-claude]
