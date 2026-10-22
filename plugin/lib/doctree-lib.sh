@@ -38,6 +38,42 @@ doctree_resolve_model() {
   fi
 }
 
+# doctree_validate_amend <json-record>
+# The mechanical malformed-record check for an AMEND record (D7). Reads a
+# single record as a JSON object on the first argument and applies only
+# the checks that need no live resolution:
+#   - every required field present AND non-empty
+#     (target section finding evidence proposed origin severity status
+#      prior_state)
+#   - target   ∈ {prd, tech-design, tasks}
+#   - severity ∈ {high, medium, low, infeasible}
+#   - status   ∈ {open, resolved}
+# It does NOT resolve evidence (file:line existence, URL reachability) or
+# match section against a live heading — those are live checks. Returns 0
+# when the record is well-formed, 1 when it is rejected, 2 on a usage or
+# parse error. Requires jq. The inlined JS validator in the workflow
+# script mirrors these rules; the shared fixtures keep them in step.
+doctree_validate_amend() {
+  local rec="${1:-}"
+  [ -z "$rec" ] && return 2
+  command -v jq >/dev/null 2>&1 || return 2
+  # Reject a non-object or unparseable input as a usage/parse error (rc 2),
+  # distinct from a well-formed-but-invalid record (rc 1).
+  printf '%s' "$rec" | jq -e 'type == "object"' >/dev/null 2>&1 || return 2
+  if printf '%s' "$rec" | jq -e '
+    . as $r
+    | def present($k): ($r|has($k)) and ($r[$k] != null) and (($r[$k]|tostring|length) > 0);
+      (["target","section","finding","evidence","proposed","origin","severity","status","prior_state"]
+         | all(present(.)))
+      and ($r.target   | IN("prd","tech-design","tasks"))
+      and ($r.severity | IN("high","medium","low","infeasible"))
+      and ($r.status   | IN("open","resolved"))
+  ' >/dev/null 2>&1; then
+    return 0
+  fi
+  return 1
+}
+
 # doctree_should_halt <mode> <blocked-count>
 # The escalation decision. `halt` stops the run as soon as one item is
 # blocked; `collect` records blocked items and never halts mid-run (they

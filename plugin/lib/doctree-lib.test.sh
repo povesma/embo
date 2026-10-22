@@ -218,6 +218,42 @@ test_parity_fixtures_wellformed() {
     "$(jq -e '.required_fields|length>0' "$FIXTURES" >/dev/null 2>&1 && echo ok || echo bad)"
 }
 
+# ---- 8.1: doctree_validate_amend against the parity fixtures ----
+# Every fixture case is run through the shell validator; its verdict must
+# match the fixture's expected verdict. The same fixtures drive the JS
+# validator (Story 5.5), so the two cannot diverge.
+
+test_validate_amend_fixtures() {
+  if ! command -v jq >/dev/null 2>&1; then
+    printf 'SKIP: 8.1 validate_amend fixtures (jq not found)\n'
+    return 0
+  fi
+  local n i id expected rec rc got
+  n="$(jq '.cases | length' "$FIXTURES")"
+  i=0
+  while [ "$i" -lt "$n" ]; do
+    id="$(jq -r ".cases[$i].id" "$FIXTURES")"
+    expected="$(jq -r ".cases[$i].verdict" "$FIXTURES")"
+    rec="$(jq -c ".cases[$i].record" "$FIXTURES")"
+    if doctree_validate_amend "$rec"; then got="valid"; else got="rejected"; fi
+    assert_eq "validate_amend[$id]" "$expected" "$got"
+    i=$((i + 1))
+  done
+}
+
+# ---- 8.1: doctree_validate_amend edge cases ----
+
+test_validate_amend_edges() {
+  if ! command -v jq >/dev/null 2>&1; then
+    printf 'SKIP: 8.1 validate_amend edges (jq not found)\n'
+    return 0
+  fi
+  doctree_validate_amend "" 2>/dev/null
+  assert_eq "validate_amend: empty arg → rc 2" "2" "$?"
+  doctree_validate_amend "not json{" 2>/dev/null
+  assert_eq "validate_amend: unparseable → rc 2" "2" "$?"
+}
+
 # ---- run all tests ----
 
 test_resolve_model_profile_value
@@ -230,6 +266,8 @@ test_phase_doc_path_unknown_phase
 test_escalation_collect_never_halts
 test_escalation_halt_stops_on_first
 test_escalation_unknown_mode
+test_validate_amend_fixtures
+test_validate_amend_edges
 test_profiles_doctree_fields
 test_parity_fixtures_wellformed
 

@@ -271,11 +271,21 @@ the shell library alone.
   to amend an upstream document only with evidence and a way back, so
   that review feedback converges on something true instead of
   propagating a plausible error [11/0]
-  - [ ] 8.1 Write fixture tests for `doctree_validate_amend`: rejects an
+  - [X] 8.1 Write fixture tests for `doctree_validate_amend`: rejects an
     uncited record, rejects a malformed record, accepts a well-formed
     one with a resolvable `file:line` or URL [verify: auto-test]
-  - [ ] 8.2 Implement `doctree_validate_amend` in `doctree-lib.sh`
+    (Driven from the shared parity fixtures: all 10 cases checked against
+    their expected verdict, plus empty/unparseable edge cases. The
+    "resolvable file:line/URL" part is the live check, out of the
+    mechanical validator's scope by design — the fixtures use well-formed
+    citations and the mechanical check verifies presence/shape.)
+  - [X] 8.2 Implement `doctree_validate_amend` in `doctree-lib.sh`
     [verify: auto-test]
+    (jq-based: required fields present+non-empty, target/severity/status
+    enums; rc 0 valid, 1 rejected, 2 usage/parse error. Mirrors the rules
+    the inlined JS validator will share via the fixtures. NOTE: Stories
+    8.3-8.11 — run-state, amend/revert/replay paths — stay blocked on the
+    Story 5 workflow script and Story 7's resolved args.)
   - [ ] 8.3 Implement the run-state artifact: round number, per-phase
     status, open findings, and `prior_state` per amendment
     [verify: auto-test]
