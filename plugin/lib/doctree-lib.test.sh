@@ -130,6 +130,94 @@ test_phase_doc_path_unknown_phase() {
   assert_eq "doc_path: unknown phase → rc 1" "1" "$?"
 }
 
+# ---- 2.7: embo-profile get reads doctree.* from every shipped profile ----
+# Runs the real wrapper against each shipped profile via EMBO_PROFILE_ACTIVE,
+# so no ~/.claude is touched. Skipped with a notice if yq is unavailable.
+
+PROFILES_DIR="$HERE/../profiles"
+WRAPPER="$HERE/../bin/embo-profile"
+
+pget() {
+  # pget <profile.yaml> <dotted-field>
+  EMBO_PROFILE_ACTIVE="$PROFILES_DIR/$1" "$WRAPPER" get "$2"
+}
+
+test_profiles_doctree_fields() {
+  if ! command -v yq >/dev/null 2>&1; then
+    printf 'SKIP: 2.7 profile-field checks (yq not found)\n'
+    return 0
+  fi
+  # Expected per the tech-design defaults table.
+  # profile|prd|tech_design|tasks|escalation|round_cap|max_agents
+  local rows="
+default.yaml|opus|opus|sonnet|collect|2|20
+quality.yaml|opus|opus|sonnet|collect|2|20
+fast.yaml|sonnet|sonnet|haiku|collect|1|12
+minimal.yaml|sonnet|sonnet|haiku|collect|1|12
+research.yaml|opus|opus|sonnet|halt|2|24
+"
+  local line p prd td tk esc rc ma
+  while IFS='|' read -r p prd td tk esc rc ma; do
+    [ -z "$p" ] && continue
+    assert_eq "$p doctree.models.prd" "$prd" "$(pget "$p" doctree.models.prd)"
+    assert_eq "$p doctree.models.tech_design" "$td" "$(pget "$p" doctree.models.tech_design)"
+    assert_eq "$p doctree.models.tasks" "$tk" "$(pget "$p" doctree.models.tasks)"
+    assert_eq "$p doctree.escalation" "$esc" "$(pget "$p" doctree.escalation)"
+    assert_eq "$p doctree.round_cap" "$rc" "$(pget "$p" doctree.round_cap)"
+    assert_eq "$p doctree.budget.max_agents" "$ma" "$(pget "$p" doctree.budget.max_agents)"
+    assert_eq "$p doctree.reviewer_model_family" "sonnet" \
+      "$(pget "$p" doctree.reviewer_model_family)"
+  done <<< "$rows"
+  # Absent field → empty string.
+  assert_eq "default.yaml absent field → empty" "" \
+    "$(pget default.yaml doctree.models.nope)"
+}
+
+# ---- 2.8: escalation modes (collect / halt) ----
+# doctree_should_halt <mode> <blocked-count> → rc 0 halt, 1 continue,
+# 2 unknown mode.
+
+test_escalation_collect_never_halts() {
+  doctree_should_halt collect 0; assert_eq "collect, 0 blocked → continue" "1" "$?"
+  doctree_should_halt collect 1; assert_eq "collect, 1 blocked → continue" "1" "$?"
+  doctree_should_halt collect 9; assert_eq "collect, many blocked → continue" "1" "$?"
+}
+
+test_escalation_halt_stops_on_first() {
+  doctree_should_halt halt 0; assert_eq "halt, 0 blocked → continue" "1" "$?"
+  doctree_should_halt halt 1; assert_eq "halt, 1 blocked → halt" "0" "$?"
+  doctree_should_halt halt 3; assert_eq "halt, 3 blocked → halt" "0" "$?"
+}
+
+test_escalation_unknown_mode() {
+  doctree_should_halt bogus 1 2>/dev/null; assert_eq "unknown mode → rc 2" "2" "$?"
+}
+
+# ---- 2.10: parity fixtures are well-formed ----
+# The fixture file is shared by doctree_validate_amend (shell) and the
+# inlined JS validator (workflow script), so they cannot drift. The
+# validators themselves arrive in later stories; this guards the fixtures
+# now: valid JSON, every case has id/verdict/record, verdicts are in set.
+
+FIXTURES="$HERE/doctree-amend-fixtures.json"
+
+test_parity_fixtures_wellformed() {
+  if ! command -v jq >/dev/null 2>&1; then
+    printf 'SKIP: 2.10 fixture checks (jq not found)\n'
+    return 0
+  fi
+  assert_eq "fixtures: file is valid JSON" "ok" \
+    "$(jq -e . "$FIXTURES" >/dev/null 2>&1 && echo ok || echo bad)"
+  assert_eq "fixtures: has at least one valid and one rejected case" "ok" \
+    "$(jq -e '([.cases[]|select(.verdict=="valid")]|length>0) and ([.cases[]|select(.verdict=="rejected")]|length>0)' "$FIXTURES" >/dev/null 2>&1 && echo ok || echo bad)"
+  assert_eq "fixtures: every case has id, verdict, record" "0" \
+    "$(jq '[.cases[]|select((has("id") and has("verdict") and has("record"))|not)]|length' "$FIXTURES")"
+  assert_eq "fixtures: every verdict is valid|rejected" "0" \
+    "$(jq '[.cases[]|select(.verdict|IN("valid","rejected")|not)]|length' "$FIXTURES")"
+  assert_eq "fixtures: required_fields list is present" "ok" \
+    "$(jq -e '.required_fields|length>0' "$FIXTURES" >/dev/null 2>&1 && echo ok || echo bad)"
+}
+
 # ---- run all tests ----
 
 test_resolve_model_profile_value
@@ -139,6 +227,11 @@ test_resolve_model_unknown_phase
 test_phase_doc_path_all
 test_phase_doc_path_trailing_slash
 test_phase_doc_path_unknown_phase
+test_escalation_collect_never_halts
+test_escalation_halt_stops_on_first
+test_escalation_unknown_mode
+test_profiles_doctree_fields
+test_parity_fixtures_wellformed
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

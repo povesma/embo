@@ -106,9 +106,9 @@ the shell library alone.
     pre-flight that enumerates required allow rules; the probe makes that
     enumeration load-bearing rather than redundant. No story is blocked.)
 
-- [ ] 2.0 **User Story:** As an embo user, I want the doc-tree
+- [X] 2.0 **User Story:** As an embo user, I want the doc-tree
   configuration to live in my profile, so that model choice, escalation
-  and limits are set once rather than retyped per run [10/0]
+  and limits are set once rather than retyped per run [0/10]
   - [X] 2.1 Write fixture tests for `doctree_resolve_model <phase>`:
     profile value when set, built-in default when the field or the
     profile is absent [verify: auto-test]
@@ -122,24 +122,35 @@ the shell library alone.
     script cannot call `new Date()`, so the caller supplies the date.
     Recorded in the tech-design.)
   - [X] 2.4 Implement `doctree_phase_doc_path` [verify: auto-test]
-  - [ ] 2.5 Add the commented `doctree:` block to `default.yaml`:
+  - [X] 2.5 Add the commented `doctree:` block to `default.yaml`:
     `models` (prd/tech_design/tasks), `escalation`, `round_cap`,
     `budget.max_agents`, and the reviewer model family
     [verify: code-only]
-  - [ ] 2.6 Add bare `doctree:` blocks to `quality.yaml`, `fast.yaml`,
+    (reviewer model family shipped as `reviewer_model_family: sonnet`,
+    per the tech-design's "both passes run the same family (sonnet)".)
+  - [X] 2.6 Add bare `doctree:` blocks to `quality.yaml`, `fast.yaml`,
     `minimal.yaml`, `research.yaml` per the tech-design defaults table
     [verify: code-only]
-  - [ ] 2.7 Verify `embo-profile get` returns the expected value for
+  - [X] 2.7 Verify `embo-profile get` returns the expected value for
     every field in every shipped profile, and `""` when absent
     [verify: auto-test]
-  - [ ] 2.8 Implement the `escalation` modes themselves - `collect`
+    (36 assertions in doctree-lib.test.sh, all five profiles + absent
+    field; skips cleanly if yq is unavailable.)
+  - [X] 2.8 Implement the `escalation` modes themselves - `collect`
     (record and finish) and `halt` (stop at the first blocked item) -
     not merely the field [verify: auto-test]
-  - [ ] 2.9 Update `plugin/commands/profile.md` so the `doctree:` block
+    (as `doctree_should_halt <mode> <blocked-count>`: rc 0 halt, 1
+    continue, 2 unknown mode.)
+  - [X] 2.9 Update `plugin/commands/profile.md` so the `doctree:` block
     appears in profile output, and extend its tests [verify: auto-test]
-  - [ ] 2.10 Write the parity fixtures: one fixture set exercised by
+    (added a Doc-tree line to the display; extended embo-profile.test.sh
+    with doctree.* read assertions incl. absent-block → empty.)
+  - [X] 2.10 Write the parity fixtures: one fixture set exercised by
     BOTH `doctree_validate_amend` and the inlined JS validator, so the
     two cannot drift [verify: auto-test]
+    (plugin/lib/doctree-amend-fixtures.json: 10 cases, 3 valid / 7
+    rejected, covering each D7 reject reason; a fixture-integrity test
+    guards them now, the two validators consume them in Stories 5.5/8.)
 
 - [ ] 3.0 **User Story:** As the orchestration, I want one phase-runner
   agent that both execution paths spawn, so that phase behavior is

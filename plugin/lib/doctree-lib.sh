@@ -38,6 +38,20 @@ doctree_resolve_model() {
   fi
 }
 
+# doctree_should_halt <mode> <blocked-count>
+# The escalation decision. `halt` stops the run as soon as one item is
+# blocked; `collect` records blocked items and never halts mid-run (they
+# are presented together in the closing report). Returns 0 to halt now,
+# 1 to continue, 2 for an unknown mode (fail loudly on a typo'd profile).
+doctree_should_halt() {
+  local mode="$1" blocked="$2"
+  case "$mode" in
+    halt)    [ "$blocked" -ge 1 ] && return 0 || return 1 ;;
+    collect) return 1 ;;
+    *)       return 2 ;;
+  esac
+}
+
 # doctree_phase_doc_path <taskdir> <run-date> <slug> <phase>
 # The single definition of a phase's write target, so the command and the
 # fallback agree. Returns <taskdir>/<run-date>-<slug>-<suffix>.md.

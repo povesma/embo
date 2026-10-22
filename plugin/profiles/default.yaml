@@ -55,3 +55,30 @@ mcps:
   required: [context7]
   # MCP servers used when present, skipped when absent.
   optional: [playwright, gemini-notebook-mcp]
+
+doctree:
+  # Model per planning phase, used by the doc-tree pipeline. Each value
+  # is an alias (sonnet/opus/haiku/fable) or a full model ID, overridable
+  # per-run with --model-<phase>. An absent field falls back to the
+  # built-in default (prd/tech_design → opus, tasks → sonnet).
+  models:
+    prd: opus
+    tech_design: opus
+    tasks: sonnet
+  # What a phase does with something it cannot decide from evidence.
+  # `collect` = record a blocked item and finish the run; `halt` = stop
+  # the run at the first blocked item.
+  escalation: collect
+  # Review rounds before the run stops for approval regardless of
+  # remaining findings.
+  round_cap: 2
+  # Model family for the two review passes per phase. Both passes run the
+  # same family; `sonnet` keeps self-preference bias reduced at planning
+  # cost.
+  reviewer_model_family: sonnet
+  budget:
+    # Out-of-model spend backstop. The orchestration stops scheduling new
+    # stages at max_agents, below the runtime's own hard cap. A baseline
+    # run is 9 stages; 20 leaves room for one replay round plus
+    # amendments.
+    max_agents: 20

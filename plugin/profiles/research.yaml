@@ -29,3 +29,14 @@ tools:
 mcps:
   required: [context7, gemini-notebook-mcp]
   optional: [playwright]
+
+doctree:
+  models:
+    prd: opus
+    tech_design: opus
+    tasks: sonnet
+  escalation: halt
+  round_cap: 2
+  reviewer_model_family: sonnet
+  budget:
+    max_agents: 24

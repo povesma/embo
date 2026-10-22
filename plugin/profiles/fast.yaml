@@ -24,3 +24,14 @@ tools:
 mcps:
   required: []
   optional: [context7]
+
+doctree:
+  models:
+    prd: sonnet
+    tech_design: sonnet
+    tasks: haiku
+  escalation: collect
+  round_cap: 1
+  reviewer_model_family: sonnet
+  budget:
+    max_agents: 12
