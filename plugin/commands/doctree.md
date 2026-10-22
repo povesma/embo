@@ -42,6 +42,17 @@ want to drive each phase interactively yourself.
 
 ## Process
 
+### Step 0 — Resume check
+
+Before resolving configuration, check whether this feature's task
+directory already holds phase documents from an interrupted run. Reading
+the documents first (not a hidden cache) is how a resumed run recovers:
+if the PRD exists but the tech-design does not, resume from tech-design;
+if both exist, resume from tasks; if all three exist, the run is complete.
+The round number and open findings come from the `doctree-run-state.yaml`
+artifact beside the documents — report that the round was recovered from
+it. A resumed run never re-writes a document that is already present.
+
 ### Step 1 — Resolve configuration
 
 Read every doc-tree field from the active profile with bare
@@ -165,15 +176,35 @@ When the run finishes, report together, in one place:
 
 ## Degradation (loud, never silent)
 
-A degraded run must be loud, and only the user authorizes a fallback:
+A degraded run must be loud, and only the user authorizes a fallback.
+Select the execution path up front and **state in the report which path is
+running**: if the Workflow tool is unavailable (workflows disabled via
+`/config`, `disableWorkflows`, or managed settings), announce that and run
+the sequential fallback — the same `doctree-phase` agent spawned directly
+in phase order, honoring the same round cap and budget. The fallback is a
+shipped alternative, not a silent downgrade, and it produces the same
+three documents.
 
-- A phase's spawn fails → STOP, report which phase and the error, name the
-  interactive fallback (`/embo:prd` → `/embo:tech-design` → `/embo:tasks`).
-- A phase returns no document, or a document with zero decisions while its
-  question steps were skipped → treat as failure, report, offer re-spawn.
-- A review pass degrades mid-run → do not emit a verdict in the same turn;
-  lead with a loud line and ask whether to fix-and-re-run or proceed with
-  one pass. Both passes cannot be silently reduced to one.
-- Interrupted mid-run → documents on disk stay valid; re-invoking offers
-  to resume from the first missing phase, and reports that the round
-  counter restarted.
+The degradation matrix, each failing loudly with its reason:
+
+- **A phase's spawn fails** → STOP, report which phase and the error, name
+  the interactive fallback (`/embo:prd` → `/embo:tech-design` →
+  `/embo:tasks`). Never silently run fewer phases.
+- **A phase returns no document**, or a document with zero decisions while
+  its question steps were skipped → treat as failure, report, offer
+  re-spawn.
+- **A review pass degrades mid-run** → do not emit a verdict in the same
+  turn; lead with a loud line and ask whether to fix-and-re-run or proceed
+  with one pass. Both passes cannot be silently reduced to one.
+- **A requested model is force-substituted** (`CLAUDE_CODE_SUBAGENT_MODEL_FORCE`,
+  an organization allowlist) → report the substitution if detectable;
+  the pre-flight caveat line stands for the cases this command cannot see.
+- **Workflows disabled** → named degradation: report it, run the
+  sequential fallback.
+- **The review MCP server unreachable** → caught by the Step 3b
+  pre-flight; refuse to start rather than run a silently halved review.
+- **A required permission rule missing** → caught by the Step 3a
+  pre-flight; refuse to start rather than stall on a prompt.
+- **Interrupted mid-run** → documents on disk stay valid; re-invoking
+  resumes from the first missing phase (Step 0) and reports that the round
+  number was recovered from the run-state artifact.

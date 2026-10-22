@@ -318,6 +318,49 @@ test_command_no_task_refs() {
     "$(grep -Ec 'task(s)? +[0-9]{3}|Story [0-9]' "$DOCTREE_CMD" || true)"
 }
 
+# ---- 9.2: resume detects the first missing phase document ----
+
+test_resume_phase() {
+  local td="$TMP63/resume"
+  local date="2026-01-02" slug="foo"
+  mkdir -p "$td"
+  # No documents yet → resume from prd.
+  assert_eq "resume: nothing written → prd" "prd" \
+    "$(doctree_resume_phase "$td" "$date" "$slug")"
+  # prd written → resume from tech-design.
+  : > "$td/2026-01-02-foo-prd.md"
+  assert_eq "resume: prd present → tech-design" "tech-design" \
+    "$(doctree_resume_phase "$td" "$date" "$slug")"
+  # prd + tech-design written → resume from tasks.
+  : > "$td/2026-01-02-foo-tech-design.md"
+  assert_eq "resume: prd+tech-design present → tasks" "tasks" \
+    "$(doctree_resume_phase "$td" "$date" "$slug")"
+  # all three written → nothing to resume (empty).
+  : > "$td/2026-01-02-foo-tasks.md"
+  assert_eq "resume: all present → empty" "" \
+    "$(doctree_resume_phase "$td" "$date" "$slug")"
+}
+
+# ---- 9.1: run-state reader recovers round and open findings ----
+
+test_runstate_reader() {
+  if ! command -v yq >/dev/null 2>&1; then
+    printf 'SKIP: 9.1 run-state reader (yq not found)\n'; return 0
+  fi
+  local f="$TMP63/doctree-run-state.yaml"
+  # Absent file → defaults.
+  rm -f "$f"
+  assert_eq "runstate: absent file → round 0" "0" "$(doctree_runstate_round "$f")"
+  assert_eq "runstate: absent file → 0 open findings" "0" \
+    "$(doctree_runstate_open_findings "$f")"
+  # A real artifact with round 2 and two findings (one open, one resolved).
+  printf 'round: 2\nfindings:\n  - {severity: high, status: open, target: prd}\n  - {severity: low, status: resolved, target: tasks}\n' \
+    > "$f"
+  assert_eq "runstate: reads round" "2" "$(doctree_runstate_round "$f")"
+  assert_eq "runstate: counts open findings" "1" \
+    "$(doctree_runstate_open_findings "$f")"
+}
+
 # ---- 6.1: significant-severity threshold ----
 
 test_finding_significant() {
@@ -456,6 +499,8 @@ test_escalation_halt_stops_on_first
 test_escalation_unknown_mode
 test_validate_amend_fixtures
 test_validate_amend_edges
+test_resume_phase
+test_runstate_reader
 test_finding_significant
 test_gate_fr_has_criterion
 test_gate_fr_in_table

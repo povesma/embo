@@ -89,6 +89,55 @@ doctree_effective_model() {
   doctree_resolve_model "$phase"
 }
 
+# --- Resume and run-state (D10, D11) ------------------------------------
+
+# doctree_resume_phase <taskdir> <run-date> <slug>
+# Resumability reads the documents first (D10): prints the phase key
+# (prd | tech-design | tasks) of the FIRST phase whose document is missing
+# on disk, so a resumed run restarts there. Prints nothing (rc 0) when all
+# three documents exist — the run is complete. The phase order is fixed.
+doctree_resume_phase() {
+  local taskdir="$1" date="$2" slug="$3" phase p
+  for phase in prd tech_design tasks; do
+    p="$(doctree_phase_doc_path "$taskdir" "$date" "$slug" "$phase")"
+    if [ ! -f "$p" ]; then
+      case "$phase" in
+        tech_design) printf 'tech-design' ;;
+        *)           printf '%s' "$phase" ;;
+      esac
+      return 0
+    fi
+  done
+  return 0
+}
+
+# doctree_runstate_round <run-state-file>
+# The run-state artifact (D11) carries what the documents do not: the
+# round number and open findings. Prints the round number from the
+# artifact, or 0 when the file or the field is absent. Requires yq.
+doctree_runstate_round() {
+  local f="$1"
+  [ -f "$f" ] || { printf '0'; return 0; }
+  command -v yq >/dev/null 2>&1 || { printf '0'; return 2; }
+  local r
+  r="$(yq -r '.round // 0' "$f" 2>/dev/null)"
+  case "$r" in ''|null|*[!0-9]*) r=0 ;; esac
+  printf '%s' "$r"
+}
+
+# doctree_runstate_open_findings <run-state-file>
+# Prints the count of open findings recorded in the run-state artifact, or
+# 0 when the file or the field is absent. Requires yq.
+doctree_runstate_open_findings() {
+  local f="$1"
+  [ -f "$f" ] || { printf '0'; return 0; }
+  command -v yq >/dev/null 2>&1 || { printf '0'; return 2; }
+  local n
+  n="$(yq -r '[.findings[]? | select(.status=="open")] | length' "$f" 2>/dev/null)"
+  case "$n" in ''|null|*[!0-9]*) n=0 ;; esac
+  printf '%s' "$n"
+}
+
 # --- Findings and the six deterministic gates (D13) ---------------------
 # These gates need no model judgement: each is a pure check, shared by both
 # orchestration paths so a gate is defined once. A gate prints the offending

@@ -417,24 +417,39 @@ the shell library alone.
 - [ ] 9.0 **User Story:** As an embo user, I want a run to survive
   interruption and to degrade loudly, so that a failure costs me a
   restart rather than the whole run [7/0]
-  - [ ] 9.1 Implement the run-state reader: a resumed run recovers the
+  - [X] 9.1 Implement the run-state reader: a resumed run recovers the
     round number and open findings [verify: auto-test]
-  - [ ] 9.2 Implement resume: detect existing documents and restart
+    (doctree_runstate_round / doctree_runstate_open_findings read
+    doctree-run-state.yaml via yq; absent file/field → 0. Tested.)
+  - [X] 9.2 Implement resume: detect existing documents and restart
     from the first missing phase [verify: auto-test]
-  - [ ] 9.3 Test resume by interrupting a run after phase 1 and
+    (doctree_resume_phase returns the first phase whose doc is missing, or
+    empty when all three exist. Tested across all four states. The command
+    Step 0 reads documents first, round from the run-state artifact.)
+  - [~] 9.3 Test resume by interrupting a run after phase 1 and
     restarting it [verify: manual-run-claude]
-  - [ ] 9.4 Implement the sequential fallback in `doctree.md`, spawning
+    (resume logic unit-tested; the interrupt-and-restart live proof needs
+    a full run.)
+  - [X] 9.4 Implement the sequential fallback in `doctree.md`, spawning
     the same phase agent directly in order [verify: manual-run-claude]
-  - [ ] 9.5 Detect workflow availability, select the fallback
+    (Documented in Launch + Degradation: same doctree-phase agent in phase
+    order, same cap/budget; produces the same three documents. Content
+    done; behavioral parity is 9.6.)
+  - [X] 9.5 Detect workflow availability, select the fallback
     automatically, and state in the report which path is running
     [verify: manual-run-claude]
-  - [ ] 9.6 Verify the fallback produces the same three documents, and
+    (Command selects the path up front and states which is running when
+    workflows are disabled. Content done; live confirmation at the run.)
+  - [~] 9.6 Verify the fallback produces the same three documents, and
     honors the round cap and budget, on the same input
     [verify: manual-run-claude]
-  - [ ] 9.7 Cover the degradation matrix, each failing loudly with its
+    (needs a live run on both paths to compare outputs.)
+  - [X] 9.7 Cover the degradation matrix, each failing loudly with its
     reason: `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1`, an organization
     allowlist substituting a model, workflows disabled, the MCP server
     unreachable, a missing permission rule [verify: manual-run-claude]
+    (Full matrix documented in the Degradation section, each with its
+    reason and response; the pre-flight catches the MCP/permission cases.)
 
 - [ ] 10.0 **User Story:** As a prospective embo user, I want the new
   command documented, so that I can discover it and know what it costs
