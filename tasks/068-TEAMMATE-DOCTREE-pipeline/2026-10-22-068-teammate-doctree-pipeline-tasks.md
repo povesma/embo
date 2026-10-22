@@ -152,9 +152,9 @@ the shell library alone.
     rejected, covering each D7 reject reason; a fixture-integrity test
     guards them now, the two validators consume them in Stories 5.5/8.)
 
-- [ ] 3.0 **User Story:** As the orchestration, I want one phase-runner
+- [X] 3.0 **User Story:** As the orchestration, I want one phase-runner
   agent that both execution paths spawn, so that phase behavior is
-  defined once rather than duplicated [7/0]
+  defined once rather than duplicated [0/7]
   - [X] 3.1 Create `plugin/agents/doctree-phase.md` frontmatter:
     `model: inherit`, `permissionMode: acceptEdits`, and a `tools:`
     list limited to what a planning phase needs [verify: code-only]
@@ -187,9 +187,17 @@ the shell library alone.
     [verify: auto-test]
     (grep for tasks/<digit> and bare task-number/Story refs, both 0; the
     literal placeholder tasks/<nnn>-<SLUG>/ is allowed.)
-  - [ ] 3.7 Spawn the agent on a throwaway slug and confirm it produces
+  - [X] 3.7 Spawn the agent on a throwaway slug and confirm it produces
     a document, a digest matching 3.3's shape, and the 3.5 canary
     [verify: manual-run-claude]
+    (Live run 2026-10-22: spawned embo:doctree-phase on a throwaway slug
+    into tmp/doctree-probe/. It wrote
+    2026-10-22-probe-feature-tech-design.md at the exact doc_path, returned
+    the fixed-shape digest, and the canary field held
+    "you have NO channel to ask the human — DECIDE, do not stall" — a
+    verbatim substring of subagent-rules.sh's injected HEADER, so FR-3
+    injection fired live. Also strengthens P-2 from docs-only to
+    live-confirmed for a spawned subagent.)
 
 - [ ] 4.0 **User Story:** As a spawned phase, I want an unattended mode
   in each planning command, so that a question I cannot ask becomes a
@@ -206,12 +214,26 @@ the shell library alone.
     [verify: code-only]
     (Box at Step 4 covers both gates; a direct exception on Step 6 itself
     and on the Interaction-Model restatement.)
-  - [ ] 4.4 Prove FR-11 on one command, in a spawned stage, with a
+  - [X] 4.4 Prove FR-11 on one command, in a spawned stage, with a
     pre-seeded undecidable question: same section headings, a
     Decisions-taken block, and a BLOCKED entry present
     [verify: manual-run-claude]
-  - [ ] 4.5 Confirm separately that an interactive run of the same
+    (Live run 2026-10-22, same spawn as 3.7: the tech-design phase ran
+    unattended against a PRD carrying one deliberately-undecidable question
+    (FR-2 storage backend). The produced document has the normal
+    tech-design sections (acceptance table, data contracts, trade-offs), a
+    "## Decisions-taken (unattended mode)" block with decisions_taken > 0,
+    and BLOCKED-1 recording the undecidable question instead of a guess.)
+  - [~] 4.5 Confirm separately that an interactive run of the same
     command is unchanged [verify: manual-run-claude]
+    (BLOCKED on permission mode: a faithful interactive run must surface
+    the mandatory AskUserQuestion gate, which this auto-approving session
+    suppresses. Structurally the interactive path is unchanged — the
+    unattended branch is purely additive and gated on
+    EMBO_DOCTREE_UNATTENDED (4.6 grep). The faithful proof needs a session
+    in the default permission mode: run /embo:tech-design interactively
+    with the env var UNSET and confirm the AskUserQuestion step fires as
+    before.)
   - [X] 4.6 Confirm by grep that the unattended branch fires only when
     the mode is set, never by default [verify: code-only]
     (Mode signal: the env var `EMBO_DOCTREE_UNATTENDED`. grep over all
