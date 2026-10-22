@@ -1034,10 +1034,10 @@ in the model.
 | NFR-2 loud degradation | `manual-run-claude` | integration | forced failure stops the run and names the sequential fallback — covering workflows disabled, MCP unreachable, missing permission rule, `CLAUDE_CODE_SUBAGENT_MODEL_FORCE`, allowlist substitution |
 | NFR-3 digest not bulk | `code-only` | — | intermediate results live in script variables (A4); the return contract is the fixed digest shape |
 | NFR-4 resumability | `manual-run-claude` | integration | interrupt after phase 1; relaunch; phase-1 doc intact, round recovered from the state artifact |
-| A1 permission-stall risk | `manual-run-claude` | spike | Story 0.3 |
-| A4 `SubagentStart` fires for stages | `manual-run-claude` | spike | Story 0.1 — blocking for FR-3 |
-| A4 per-stage model takes effect | `manual-run-claude` | spike | Story 0.4 |
-| A5 slash command in a stage | `manual-run-claude` | spike | Story 0.2 — blocking for FR-1 |
+| A1 permission-stall risk | `manual-run-claude` | spike | Story 0.3 — **CONFOUNDED** (live run under an auto-approving mode did not stall; a default-mode run is still needed); FR-10 pre-flight is load-bearing. See Story 0 Results |
+| A4 `SubagentStart` fires for stages | `manual-run-claude` | spike | Story 0.1 — **CLOSED** (P-2), hook fires for stages; see Story 0 Results |
+| A4 per-stage model takes effect | `manual-run-claude` | spike | Story 0.4 — **CLOSED** (P-5), parameter is `model`; see Story 0 Results |
+| A5 slash command in a stage | `manual-run-claude` | spike | Story 0.2 — **CLOSED** (P-3), via the Skill tool; see Story 0 Results |
 
 ### Story 0 — blocking probe (narrowed, run FIRST)
 
@@ -1087,6 +1087,48 @@ are the same gate; the mapping, with what each probe resolves:
 | P-4 stage writes to the task dir without a prompt? | Story 0.3 | **Blocking for OD-1's workflow candidate.** Docs confirm stages write files ("Agents read, write, and run commands"), but a real run into a plugin-managed directory is unconfirmed. Pre-approve `Write` on the task directory as part of FR-10's pre-flight. Same probe as the permission-stall check. |
 | P-5 JSON field name of the model parameter? | Story 0.4 | **Blocking for FR-4's implementation.** In a workflow it is named on the `agent()` call; the Agent-tool field name is undocumented. Resolve by observation, not by guessing. |
 | P-6 unattended mode without changing output? | Story 0.5 | **Blocking for FR-11**, and with it FR-1+FR-2+FR-8 jointly. Probe: add the mode to one phase command, run it both ways, and diff the produced document's structure. A passing probe is "same sections, same content rules, one extra Decisions-taken block". |
+
+**Story 0 — Results.** Probes run against **Claude Code 2.1.306**. The
+evidence for each closed probe is the PRD Probe Gate (RESOLVED
+2026-10-22), by row.
+
+| Probe | Status | Evidence | Outcome |
+|---|---|---|---|
+| P-1 | MOOT | PRD Probe Gate, row P-1 | `AskUserQuestion` absent from a spawned agent's loaded and deferred tool lists; moot under D1 (subagents/stages), FR-8 holds regardless. |
+| P-2 | CLOSED | PRD Probe Gate, row P-2 | Rule-injection hook fires for plain subagents AND workflow stages; the "BINDING SUBAGENT RULES" block arrived as SubagentStart context. FR-3 satisfiable; the canary assertion (0.1 / FR-3) stays required because the hook fails open. |
+| P-3 | CLOSED | PRD Probe Gate, row P-3 | No direct slash-command mechanism; `Skill(skill="embo:start")` loads the command body into the agent's context. FR-1/FR-2 buildable via the Skill path. |
+| P-4 | CLOSED-WITH-CAVEAT | PRD Probe Gate, row P-4 | A stage wrote into the task directory with no approval dialog and the call did not block. Caveat: this confirms "did not stall" for an allowlisted write, NOT the permission-stall case the design asks for — an agent cannot observe a prompt auto-approved before it. The open part (a tool call OUTSIDE the allowlist) is Story 0.3 / tasks 1.2–1.3, still to run. |
+| P-5 | CLOSED | PRD Probe Gate, row P-5 | The per-invocation model parameter is `model`, taking `sonnet`/`opus`/`haiku`/`fable`, first in the resolution order ahead of frontmatter. Confirmed by use. |
+| P-6 | CLOSED | PRD Probe Gate, row P-6 | Every interaction point in the phase commands is a prose Markdown instruction, enforced by nothing mechanical; FR-11 is a conditional branch per instruction. (Structural output diff remains the 0.5 acceptance check.) |
+
+**Permission-stall probe — CONFOUNDED, NOT CLEANLY CLOSED (Story 0.3).**
+A live run was done against Claude Code 2.1.306: a single workflow stage
+attempted `touch /Users/Shared/doctree-probe-marker-xyz` — a path outside
+the worktree, matching no rule in `.claude/settings.local.json`. Result:
+the call ran with no approval dialog, exit 0, and the file was created
+(verified, then removed). This did NOT reproduce the predicted stall.
+
+The result is confounded and does not settle A1, for a specific reason:
+**a spawned stage inherits the parent session's permission mode**, and
+the session that ran the probe was in an auto-approving mode (the same
+mode under which this session's own un-allowlisted edits proceeded
+without prompts). "No prompt" is therefore evidence about the *mode the
+run was launched in*, not proof that a default-mode user's run skips the
+prompt. What the probe DID establish: a stage can write outside the
+project when the session's mode permits, so FR-10's pre-flight must still
+enumerate the required allow rules — the unattended claim depends on the
+rules being present OR the run being launched in an auto-approving mode,
+and the pre-flight is what makes the first case safe.
+
+**What a clean probe needs:** run the same single-stage workflow from a
+session in the *default* permission mode (prompts active) and observe
+whether the un-allowlisted `touch` stalls. That run cannot be performed
+from an already-auto-approving session; it is left OPEN as the one
+remaining Story 0 item. Per the task-1.4 rule, this does not invalidate a
+requirement — FR-10 already assumes the stall is possible and guards it
+with the pre-flight — but it means the A1 "stalls on permission prompt"
+prediction is documented-but-not-live-confirmed, and FR-10's refusal-to-
+start enumeration is load-bearing rather than belt-and-suspenders.
 
 **Recommendation on sequencing.** The external review's advice was to
 probe and prototype *before* writing the tech design. That advice is

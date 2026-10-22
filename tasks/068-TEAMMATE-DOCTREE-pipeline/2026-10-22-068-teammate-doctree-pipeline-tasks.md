@@ -82,19 +82,29 @@ the shell library alone.
 - [ ] 1.0 **User Story:** As the implementer, I want the remaining
   platform unknowns closed with recorded evidence, so that no story is
   built on an assumption that turns out false [4/0]
-  - [ ] 1.1 Record the probe results already obtained, citing the PRD
+  - [X] 1.1 Record the probe results already obtained, citing the PRD
     Probe Gate by table row, and capture `claude --version` alongside
     each. Mark P-2 (rule hook fires for stages), P-3 (no slash command;
     Skill loads the body) and P-5 (model parameter accepted) CLOSED
     [verify: code-only]
-  - [ ] 1.2 Mark P-4 CLOSED-WITH-CAVEAT, not closed: the run showed a
+  - [X] 1.2 Mark P-4 CLOSED-WITH-CAVEAT, not closed: the run showed a
     write that did not stall, which is not the probe the tech-design
     asks for. Record the open part: give a stage a tool OUTSIDE the
     allowlist and observe whether it stalls [verify: manual-run-claude]
-  - [ ] 1.3 Probe the permission-stall case from 1.2 and record the
+  - [~] 1.3 Probe the permission-stall case from 1.2 and record the
     outcome [verify: manual-run-claude]
-  - [ ] 1.4 If either probe fails, stop and report which requirement it
+    (RAN under 2.1.306: a stage's un-allowlisted `touch /Users/Shared/...`
+    ran with no prompt, exit 0 — but CONFOUNDED: the stage inherits the
+    session's permission mode and this run was in an auto-approving mode,
+    so "no stall" is not evidence about a default-mode run. A clean probe
+    needs a default-mode session and stays OPEN. Recorded in the
+    tech-design Story 0 Results.)
+  - [X] 1.4 If either probe fails, stop and report which requirement it
     invalidates before any further story starts [verify: code-only]
+    (Assessed: the confounded 1.3 result invalidates NO requirement.
+    FR-10 already assumes a stall is possible and guards it with the
+    pre-flight that enumerates required allow rules; the probe makes that
+    enumeration load-bearing rather than redundant. No story is blocked.)
 
 - [ ] 2.0 **User Story:** As an embo user, I want the doc-tree
   configuration to live in my profile, so that model choice, escalation
