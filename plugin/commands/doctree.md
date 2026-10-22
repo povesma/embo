@@ -130,6 +130,28 @@ Every spawned phase runs with the environment variable
 its unattended branch. Pass each phase its per-phase model, the task
 directory, the feature slug, and the upstream documents already written.
 
+**Review and gates after each phase.** No phase is graded only by a
+context that shares its author's biases:
+
+- **Two review passes**, spawned **by the lead, never by the authoring
+  agent**, run different lenses on the just-written document — a research
+  pass (prior art) and an internal pass (codebase / consistency) — using
+  the configured reviewer model family. Both passes always run; a
+  silently halved review is forbidden (if one degrades mid-run, lead with
+  a loud line and ask whether to fix-and-re-run or proceed with one, never
+  emit a verdict in the same turn).
+- **Deterministic gates** then run — checks that need no model judgement
+  and cannot be talked past: every PRD requirement maps to an acceptance
+  criterion, every requirement appears in the tech-design verification
+  table, every `file:line` citation resolves, every `AMEND` record is
+  grounded and names a real section, no open `infeasible` finding
+  references a PRD requirement, and every phase given skip-steps returned
+  `decisions_taken > 0`. A failed gate is reported like a high-severity
+  finding but is not open to reviewer disagreement.
+- A **significant** finding (severity `high` or `infeasible`) may trigger
+  a section-scoped replay of the affected upstream phase, up to the round
+  cap; `medium`/`low` are recorded but never replay.
+
 ### Step 5 — Closing report
 
 When the run finishes, report together, in one place:

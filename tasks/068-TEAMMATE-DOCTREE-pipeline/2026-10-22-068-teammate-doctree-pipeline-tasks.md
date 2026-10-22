@@ -292,19 +292,33 @@ the shell library alone.
 - [ ] 6.0 **User Story:** As an embo user, I want every phase reviewed
   by two passes and by checks that need no judgement, so that no phase
   is graded only by a context sharing its author's biases [5/0]
-  - [ ] 6.1 Define the findings schema: phase, target section,
+  - [X] 6.1 Define the findings schema: phase, target section,
     severity, status (open/resolved), with "significant" as a severity
     threshold [verify: code-only]
-  - [ ] 6.2 Implement the two review passes per phase, spawned by the
+    (FINDINGS_SCHEMA in the workflow; significant = {high, infeasible},
+    defined once as doctree_finding_is_significant / isSignificant and
+    tested.)
+  - [~] 6.2 Implement the two review passes per phase, spawned by the
     lead and never by the authoring agent, using the configured
     reviewer model family [verify: manual-run-claude]
-  - [ ] 6.3 Write fixtures for the six deterministic gates
+    (Coded: the workflow spawns two examine-advisor passes (research +
+    internal) in parallel after each phase, by the lead, on the configured
+    reviewer family; the command documents the both-passes-always rule and
+    the mid-run degradation stop. Behavioral proof is the live run.)
+  - [X] 6.3 Write fixtures for the six deterministic gates
     [verify: auto-test]
-  - [ ] 6.4 Implement the six gates: every requirement maps to an
+    (good + seeded-bad fixtures for each of the six gates.)
+  - [X] 6.4 Implement the six gates: every requirement maps to an
     acceptance criterion, every cited `file:line` resolves, every
     requirement appears in the verification table [verify: auto-test]
-  - [ ] 6.5 Verify a reviewer is never the authoring agent, by
+    (all six in doctree-lib.sh as pure functions: fr_has_criterion,
+    fr_in_verification_table, citations_resolve, amend_grounded,
+    no_open_infeasible, decisions_taken. Set-comparison gates take
+    caller-extracted ID lists so the logic stays pure.)
+  - [X] 6.5 Verify a reviewer is never the authoring agent, by
     definition identity [verify: auto-test]
+    (test asserts the author is doctree-phase and the reviewer is
+    examine-advisor — distinct shipped definitions, different names.)
 
 - [ ] 7.0 **User Story:** As an embo user, I want the run to show me its
   configuration and refuse to start when it would stall, so that an

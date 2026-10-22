@@ -89,6 +89,137 @@ doctree_effective_model() {
   doctree_resolve_model "$phase"
 }
 
+# --- Findings and the six deterministic gates (D13) ---------------------
+# These gates need no model judgement: each is a pure check, shared by both
+# orchestration paths so a gate is defined once. A gate prints the offending
+# items (one per line) and returns 1 when it fails, prints nothing and
+# returns 0 when it passes. The gates that compare documents operate on
+# ID/citation lists the caller has already extracted, so the gate logic
+# stays pure and testable and the (format-specific) extraction lives in the
+# caller.
+
+# doctree_finding_is_significant <severity>
+# A finding triggers a replay only when significant: severity in
+# {high, infeasible}. medium/low are recorded but never replay. Returns 0
+# when significant, 1 otherwise.
+doctree_finding_is_significant() {
+  case "$1" in
+    high|infeasible) return 0 ;;
+    *)               return 1 ;;
+  esac
+}
+
+# doctree_gate_missing <required-list> <present-list>
+# The shared set-subset check behind gates 1 and 2: every id in the
+# newline-separated <required-list> must appear in <present-list>. Prints
+# each required id that is absent; returns 1 if any is missing, else 0.
+doctree_gate_missing() {
+  local required="$1" present="$2" id missing=0
+  while IFS= read -r id; do
+    [ -z "$id" ] && continue
+    case "
+$present
+" in
+      *"
+$id
+"*) ;;
+      *) printf '%s\n' "$id"; missing=1 ;;
+    esac
+  done <<EOF
+$required
+EOF
+  return "$missing"
+}
+
+# doctree_gate_fr_has_criterion <fr-ids> <frs-with-a-criterion>
+# Gate 1: every FR in the PRD maps to at least one acceptance criterion.
+doctree_gate_fr_has_criterion() {
+  doctree_gate_missing "$1" "$2"
+}
+
+# doctree_gate_fr_in_verification_table <fr-ids> <frs-in-table>
+# Gate 2: every FR appears in the tech-design's verification table.
+doctree_gate_fr_in_verification_table() {
+  doctree_gate_missing "$1" "$2"
+}
+
+# doctree_gate_citations_resolve <doc> <repo-root>
+# Gate 3: every `path:line` citation in <doc> resolves to a real file with
+# at least that many lines. Prints each unresolved citation; returns 1 if
+# any fails. Citations look like `path/to/file.ext:123`.
+doctree_gate_citations_resolve() {
+  local doc="$1" root="${2:-.}" cite path line fail=0
+  [ -f "$doc" ] || { printf 'doc-not-found:%s\n' "$doc"; return 1; }
+  while IFS= read -r cite; do
+    [ -z "$cite" ] && continue
+    path="${cite%:*}"
+    line="${cite##*:}"
+    case "$line" in ''|*[!0-9]*) continue ;; esac
+    if [ ! -f "$root/$path" ]; then
+      printf '%s\n' "$cite"; fail=1; continue
+    fi
+    local n
+    n="$(grep -c '' "$root/$path" 2>/dev/null || echo 0)"
+    [ "$line" -gt "$n" ] && { printf '%s\n' "$cite"; fail=1; }
+  done <<EOF
+$(grep -oE '[A-Za-z0-9_./-]+\.[A-Za-z0-9]+:[0-9]+' "$doc" 2>/dev/null | sort -u)
+EOF
+  return "$fail"
+}
+
+# doctree_gate_amend_grounded <amend-json> <target-doc>
+# Gate 4: an AMEND record must be well-formed (doctree_validate_amend) AND
+# its `section` must match a real heading or requirement ID in the target
+# document. Prints the reason on failure; returns 1 if it fails, 2 on a
+# usage/parse error, 0 if it passes. Requires jq.
+doctree_gate_amend_grounded() {
+  local rec="$1" target_doc="$2"
+  command -v jq >/dev/null 2>&1 || return 2
+  if ! doctree_validate_amend "$rec"; then
+    printf 'malformed-or-ungrounded\n'; return 1
+  fi
+  [ -f "$target_doc" ] || { printf 'target-doc-not-found:%s\n' "$target_doc"; return 1; }
+  local section
+  section="$(printf '%s' "$rec" | jq -r '.section' 2>/dev/null)"
+  # Match the section against a markdown heading or a requirement ID (e.g.
+  # "FR-3") anywhere in the target document.
+  if grep -qF "$section" "$target_doc" 2>/dev/null; then
+    return 0
+  fi
+  printf 'section-not-in-target:%s\n' "$section"
+  return 1
+}
+
+# doctree_gate_no_open_infeasible <findings-json>
+# Gate 5: no open finding of severity 'infeasible' that references a PRD
+# requirement (success metric 4). Input is a JSON array of findings, each
+# {severity, status, target}. Prints the offending targets; returns 1 if
+# any exist. Requires jq.
+doctree_gate_no_open_infeasible() {
+  local findings="$1"
+  command -v jq >/dev/null 2>&1 || return 2
+  local bad
+  bad="$(printf '%s' "$findings" | jq -r '
+    .[] | select(.severity=="infeasible" and .status=="open" and .target=="prd")
+    | (.section // "prd")' 2>/dev/null)"
+  if [ -n "$bad" ]; then printf '%s\n' "$bad"; return 1; fi
+  return 0
+}
+
+# doctree_gate_decisions_taken <decisions-count> <had-skip-steps>
+# Gate 6: a phase given skip_steps must return decisions_taken > 0.
+# <had-skip-steps> is "yes" or "no". Returns 1 when the gate fails.
+doctree_gate_decisions_taken() {
+  local count="$1" had="$2"
+  [ "$had" = "yes" ] || return 0
+  case "$count" in
+    ''|*[!0-9]*) printf 'non-numeric-count:%s\n' "$count"; return 1 ;;
+  esac
+  [ "$count" -gt 0 ] && return 0
+  printf 'zero-decisions-with-skip-steps\n'
+  return 1
+}
+
 # doctree_should_halt <mode> <blocked-count>
 # The escalation decision. `halt` stops the run as soon as one item is
 # blocked; `collect` records blocked items and never halts mid-run (they

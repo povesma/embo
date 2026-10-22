@@ -14,6 +14,12 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=/dev/null
 . "$HERE/doctree-lib.sh"
 
+# Repo root (two levels up from plugin/lib) for citation-resolution tests,
+# and a temp dir for gate fixtures.
+REPO_ROOT="$(cd "$HERE/../.." && pwd)"
+TMP63="$(mktemp -d)"
+trap 'rm -rf "$TMP63"' EXIT
+
 PASS=0
 FAIL=0
 assert_eq() {
@@ -312,6 +318,128 @@ test_command_no_task_refs() {
     "$(grep -Ec 'task(s)? +[0-9]{3}|Story [0-9]' "$DOCTREE_CMD" || true)"
 }
 
+# ---- 6.1: significant-severity threshold ----
+
+test_finding_significant() {
+  doctree_finding_is_significant high;       assert_eq "significant: high" "0" "$?"
+  doctree_finding_is_significant infeasible; assert_eq "significant: infeasible" "0" "$?"
+  doctree_finding_is_significant medium;     assert_eq "significant: medium → no" "1" "$?"
+  doctree_finding_is_significant low;        assert_eq "significant: low → no" "1" "$?"
+}
+
+# ---- 6.3/6.4 Gate 1: every FR maps to a criterion ----
+
+test_gate_fr_has_criterion() {
+  local frs="FR-1
+FR-2
+FR-3"
+  local withcrit="FR-1
+FR-2
+FR-3"
+  assert_eq "gate1: all FRs have a criterion → pass" "0" \
+    "$( doctree_gate_fr_has_criterion "$frs" "$withcrit" >/dev/null; echo $? )"
+  local missing="FR-1
+FR-3"
+  assert_eq "gate1: FR-2 missing a criterion → fail" "1" \
+    "$( doctree_gate_fr_has_criterion "$frs" "$missing" >/dev/null; echo $? )"
+  assert_eq "gate1: names the missing FR" "FR-2" \
+    "$(doctree_gate_fr_has_criterion "$frs" "$missing")"
+}
+
+# ---- 6.3/6.4 Gate 2: every FR in the verification table ----
+
+test_gate_fr_in_table() {
+  local frs="FR-1
+FR-2"
+  assert_eq "gate2: all FRs in table → pass" "0" \
+    "$( doctree_gate_fr_in_verification_table "$frs" "FR-1
+FR-2" >/dev/null; echo $? )"
+  assert_eq "gate2: FR-2 absent from table → fail" "1" \
+    "$( doctree_gate_fr_in_verification_table "$frs" "FR-1" >/dev/null; echo $? )"
+}
+
+# ---- 6.3/6.4 Gate 3: file:line citations resolve ----
+
+test_gate_citations_resolve() {
+  local doc="$TMP63/doc.md"
+  mkdir -p "$TMP63"
+  # A citation to this very test file, a valid line, and a bad one.
+  printf 'see plugin/lib/doctree-lib.sh:1 and plugin/lib/doctree-lib.sh:999999\n' \
+    > "$doc"
+  # Line 1 resolves; 999999 does not.
+  assert_eq "gate3: unresolved citation → fail" "1" \
+    "$( doctree_gate_citations_resolve "$doc" "$REPO_ROOT" >/dev/null; echo $? )"
+  assert_eq "gate3: names the unresolved citation" "plugin/lib/doctree-lib.sh:999999" \
+    "$(doctree_gate_citations_resolve "$doc" "$REPO_ROOT")"
+  printf 'only plugin/lib/doctree-lib.sh:1 here\n' > "$doc"
+  assert_eq "gate3: all citations resolve → pass" "0" \
+    "$( doctree_gate_citations_resolve "$doc" "$REPO_ROOT" >/dev/null; echo $? )"
+}
+
+# ---- 6.3/6.4 Gate 4: AMEND grounded + section matches target ----
+
+test_gate_amend_grounded() {
+  if ! command -v jq >/dev/null 2>&1; then
+    printf 'SKIP: gate4 (jq not found)\n'; return 0
+  fi
+  local target="$TMP63/target.md"
+  mkdir -p "$TMP63"
+  printf '# Target\n\n## FR-3\n\nthe claim.\n' > "$target"
+  local good='{"target":"prd","section":"FR-3","finding":"x","evidence":"plugin/lib/doctree-lib.sh:1","proposed":"y","origin":"tech-design","severity":"high","status":"open","prior_state":"z"}'
+  assert_eq "gate4: well-formed + section present → pass" "0" \
+    "$( doctree_gate_amend_grounded "$good" "$target" >/dev/null; echo $? )"
+  local badsection='{"target":"prd","section":"FR-99","finding":"x","evidence":"plugin/lib/doctree-lib.sh:1","proposed":"y","origin":"tech-design","severity":"high","status":"open","prior_state":"z"}'
+  assert_eq "gate4: section not in target → fail" "1" \
+    "$( doctree_gate_amend_grounded "$badsection" "$target" >/dev/null; echo $? )"
+  local uncited='{"target":"prd","section":"FR-3","finding":"x","evidence":"","proposed":"y","origin":"tech-design","severity":"high","status":"open","prior_state":"z"}'
+  assert_eq "gate4: uncited → fail" "1" \
+    "$( doctree_gate_amend_grounded "$uncited" "$target" >/dev/null; echo $? )"
+}
+
+# ---- 6.3/6.4 Gate 5: no open infeasible finding against a PRD requirement ----
+
+test_gate_no_open_infeasible() {
+  if ! command -v jq >/dev/null 2>&1; then
+    printf 'SKIP: gate5 (jq not found)\n'; return 0
+  fi
+  local clean='[{"severity":"high","status":"open","target":"prd","section":"FR-1"},{"severity":"infeasible","status":"resolved","target":"prd","section":"FR-2"}]'
+  assert_eq "gate5: no open infeasible-vs-prd → pass" "0" \
+    "$( doctree_gate_no_open_infeasible "$clean" >/dev/null; echo $? )"
+  local bad='[{"severity":"infeasible","status":"open","target":"prd","section":"FR-6"}]'
+  assert_eq "gate5: open infeasible-vs-prd → fail" "1" \
+    "$( doctree_gate_no_open_infeasible "$bad" >/dev/null; echo $? )"
+  assert_eq "gate5: names the offending requirement" "FR-6" \
+    "$(doctree_gate_no_open_infeasible "$bad")"
+}
+
+# ---- 6.3/6.4 Gate 6: decisions_taken > 0 when skip_steps was set ----
+
+test_gate_decisions_taken() {
+  assert_eq "gate6: skip-steps + decisions → pass" "0" \
+    "$( doctree_gate_decisions_taken 3 yes >/dev/null; echo $? )"
+  assert_eq "gate6: skip-steps + zero decisions → fail" "1" \
+    "$( doctree_gate_decisions_taken 0 yes >/dev/null; echo $? )"
+  assert_eq "gate6: no skip-steps → pass regardless" "0" \
+    "$( doctree_gate_decisions_taken 0 no >/dev/null; echo $? )"
+}
+
+# ---- 6.5: a reviewer is never the authoring agent (by definition) ----
+
+test_reviewer_not_author() {
+  # The authoring agent and the reviewer are distinct shipped definitions.
+  assert_eq "6.5: phase agent exists" "yes" \
+    "$( [ -f "$HERE/../agents/doctree-phase.md" ] && echo yes || echo no )"
+  assert_eq "6.5: reviewer agent exists" "yes" \
+    "$( [ -f "$HERE/../agents/examine-advisor.md" ] && echo yes || echo no )"
+  local author reviewer
+  author="$(grep -m1 '^name:' "$HERE/../agents/doctree-phase.md" | awk '{print $2}')"
+  reviewer="$(grep -m1 '^name:' "$HERE/../agents/examine-advisor.md" | awk '{print $2}')"
+  assert_eq "6.5: author is doctree-phase" "doctree-phase" "$author"
+  assert_eq "6.5: reviewer is examine-advisor" "examine-advisor" "$reviewer"
+  assert_eq "6.5: reviewer name differs from author" "yes" \
+    "$( [ "$author" != "$reviewer" ] && echo yes || echo no )"
+}
+
 # ---- run all tests ----
 
 test_resolve_model_profile_value
@@ -328,6 +456,14 @@ test_escalation_halt_stops_on_first
 test_escalation_unknown_mode
 test_validate_amend_fixtures
 test_validate_amend_edges
+test_finding_significant
+test_gate_fr_has_criterion
+test_gate_fr_in_table
+test_gate_citations_resolve
+test_gate_amend_grounded
+test_gate_no_open_infeasible
+test_gate_decisions_taken
+test_reviewer_not_author
 test_agent_canary_matches_hook
 test_agent_no_task_refs
 test_command_no_task_refs

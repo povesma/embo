@@ -66,6 +66,50 @@ const DIGEST_SCHEMA = {
   required: ['document', 'summary', 'decisions_taken', 'blocked', 'amend', 'canary'],
 }
 
+// The findings schema a review pass returns. severity in
+// {high, medium, low, infeasible}; status open|resolved; significant =
+// {high, infeasible} (defined once, matches doctree_finding_is_significant).
+const FINDINGS_SCHEMA = {
+  type: 'object',
+  properties: {
+    pass: { type: 'string' },
+    findings: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          phase: { type: 'string' },
+          section: { type: 'string' },
+          severity: { type: 'string', enum: ['high', 'medium', 'low', 'infeasible'] },
+          status: { type: 'string', enum: ['open', 'resolved'] },
+          finding: { type: 'string' },
+        },
+        required: ['severity', 'status', 'finding'],
+      },
+    },
+  },
+  required: ['pass', 'findings'],
+}
+
+function isSignificant(f) {
+  return f && (f.severity === 'high' || f.severity === 'infeasible')
+}
+
+function reviewPrompt(ph, doc, pass, reviewerFamily) {
+  return [
+    `You are the ${pass} review pass for the ${ph.key} phase of a doc-tree run.`,
+    `Review the document at ${doc} independently — you did NOT author it.`,
+    pass === 'research'
+      ? 'Judge it against prior art via the NotebookLM MCP.'
+      : 'Judge it against the codebase and internal consistency.',
+    'Return findings per the schema: each with a severity',
+    '(high | medium | low | infeasible) and a status (open | resolved).',
+    'A high or infeasible finding is significant and may trigger a replay;',
+    'medium and low are recorded but do not. Reviewer family:',
+    `${reviewerFamily || 'sonnet'}.`,
+  ].join('\n')
+}
+
 function docPath(taskDir, runDate, slug, suffix) {
   const dir = taskDir.replace(/\/+$/, '')
   return `${dir}/${runDate}-${slug}-${suffix}.md`
@@ -138,11 +182,39 @@ for (const ph of PHASES) {
   }
   // Keep only well-formed amendments (inlined validator, parity fixtures).
   const amendments = Array.isArray(digest.amend) ? digest.amend.filter(validateAmend) : []
-  produced.push({ phase: ph.key, document: digest.document, decisions_taken: digest.decisions_taken, canary: digest.canary, amendments })
-  upstreamDocs.push(digest.document)
   if (Array.isArray(digest.blocked)) {
     for (const b of digest.blocked) allBlocked.push({ phase: ph.key, ...b })
   }
+
+  // --- Review: two passes, spawned by the lead (never by the authoring
+  // agent), running different lenses. Both must run (FR-5).
+  let findings = []
+  if (budgetAllows(agentCount, maxAgents)) {
+    const reviewerFamily = a.reviewer_model_family || 'sonnet'
+    agentCount += 2
+    const passes = await parallel([
+      () => agent(reviewPrompt(ph, digest.document, 'research', reviewerFamily),
+        { label: `review:${ph.key}:research`, phase: ph.title, model: reviewerFamily, schema: FINDINGS_SCHEMA, agentType: 'embo:examine-advisor' }),
+      () => agent(reviewPrompt(ph, digest.document, 'internal', reviewerFamily),
+        { label: `review:${ph.key}:internal`, phase: ph.title, model: reviewerFamily, schema: FINDINGS_SCHEMA, agentType: 'embo:examine-advisor' }),
+    ])
+    findings = passes.filter(Boolean).flatMap(p => (Array.isArray(p.findings) ? p.findings : []))
+  } else {
+    log(`agent budget (${maxAgents}) reached before reviewing ${ph.key}; review skipped`)
+  }
+  const significant = findings.filter(isSignificant)
+
+  produced.push({
+    phase: ph.key,
+    document: digest.document,
+    decisions_taken: digest.decisions_taken,
+    canary: digest.canary,
+    amendments,
+    findings,
+    significant_count: significant.length,
+  })
+  upstreamDocs.push(digest.document)
+
   // escalation: halt stops at the first blocked item.
   if (a.escalation === 'halt' && Array.isArray(digest.blocked) && digest.blocked.length > 0) {
     log(`escalation=halt: stopping at first blocked item in ${ph.key}`)
