@@ -513,7 +513,19 @@ the shell library alone.
 
 ## Summary
 
-10 user stories, 74 subtasks. Story 1.0 is a blocking gate. Story 8.9
-and 8.10 decide whether back-pressure ships at all: if any of the three
-gate checks fails, 8.11 withdraws it while keeping story 6's review
-passes and deterministic gates intact.
+10 user stories, 74 subtasks. Story 1.0 was the blocking gate (resolved;
+one clean default-mode permission-stall probe remains open, confounded by
+the session's permission mode). Story 8.9/8.10 decided back-pressure's
+fate: all three grounding conditions are mechanically met and auto-tested,
+so **FR-6 back-pressure ships** — the 8.11 withdrawal branch was not taken.
+
+**State:** every story's code and documentation is built and unit-tested
+(60 subtasks `[X]`). The 13 `[~]` items and the single `[ ]` (5.8) are all
+`manual-run-claude` proofs that need one real end-to-end `/embo:doctree`
+run — the orchestration, section-scoped replay-by-diff, resume, fallback
+parity, the pre-flight reports, and the measured token cost (10.4). Two
+proofs (4.5 interactive-unchanged, 1.3 clean permission-stall probe) need
+a session in the default permission mode, which the auto-approving session
+this was built in cannot provide. The phase runner itself was proven live
+(3.7/4.4). Shipped suites green except one pre-existing, unrelated
+claude-mem transform-version failure (10.7).
