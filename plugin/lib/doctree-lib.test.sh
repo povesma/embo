@@ -254,6 +254,33 @@ test_validate_amend_edges() {
   assert_eq "validate_amend: unparseable → rc 2" "2" "$?"
 }
 
+# ---- 3.5: the phase agent carries the FR-3 canary, matching the hook ----
+# The canary phrase the agent is told to echo must be a phrase the
+# SubagentStart hook actually injects, or the canary proves nothing.
+
+AGENT="$HERE/../agents/doctree-phase.md"
+HOOK="$HERE/../hooks/subagent-rules.sh"
+
+test_agent_canary_matches_hook() {
+  assert_eq "agent: references the canary phrase" "yes" \
+    "$(grep -q 'BINDING SUBAGENT RULES' "$AGENT" && echo yes || echo no)"
+  assert_eq "hook: injects the canary phrase" "yes" \
+    "$(grep -q 'BINDING SUBAGENT RULES' "$HOOK" && echo yes || echo no)"
+  assert_eq "agent: has a canary field in the digest" "yes" \
+    "$(grep -q 'canary:' "$AGENT" && echo yes || echo no)"
+}
+
+# ---- 3.6: the phase agent body has no task numbers or tasks/ paths ----
+
+test_agent_no_task_refs() {
+  # A real task-path reference is tasks/ followed by a digit. The input
+  # contract's literal placeholder tasks/<nnn>-<SLUG>/ is allowed.
+  assert_eq "agent: no tasks/<digit> paths" "0" \
+    "$(grep -Ec 'tasks/[0-9]' "$AGENT" || true)"
+  assert_eq "agent: no bare task-number references" "0" \
+    "$(grep -Ec 'task(s)? +[0-9]{3}|Story [0-9]' "$AGENT" || true)"
+}
+
 # ---- run all tests ----
 
 test_resolve_model_profile_value
@@ -268,6 +295,8 @@ test_escalation_halt_stops_on_first
 test_escalation_unknown_mode
 test_validate_amend_fixtures
 test_validate_amend_edges
+test_agent_canary_matches_hook
+test_agent_no_task_refs
 test_profiles_doctree_fields
 test_parity_fixtures_wellformed
 

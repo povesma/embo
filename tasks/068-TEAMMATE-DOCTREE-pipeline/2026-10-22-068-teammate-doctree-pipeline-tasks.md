@@ -155,24 +155,38 @@ the shell library alone.
 - [ ] 3.0 **User Story:** As the orchestration, I want one phase-runner
   agent that both execution paths spawn, so that phase behavior is
   defined once rather than duplicated [7/0]
-  - [ ] 3.1 Create `plugin/agents/doctree-phase.md` frontmatter:
+  - [X] 3.1 Create `plugin/agents/doctree-phase.md` frontmatter:
     `model: inherit`, `permissionMode: acceptEdits`, and a `tools:`
     list limited to what a planning phase needs [verify: code-only]
-  - [ ] 3.2 Write the input contract: phase name, task directory,
+    (tools: Read/Write/Edit/Grep/Glob/Bash, the two claude-mem search
+    tools, the Context7 pair, SendMessage.)
+  - [X] 3.2 Write the input contract: phase name, task directory,
     feature slug, mode (`full` | `section-scoped`), amendment records
     [verify: code-only]
-  - [ ] 3.3 Write the output contract with a FIXED-SHAPE digest:
+    (plus command_file, skip_steps, sections, upstream_docs; partial
+    brief → immediate blocked return, no guessing.)
+  - [X] 3.3 Write the output contract with a FIXED-SHAPE digest:
     name every field, and state that document bulk stays on disk and
     never enters the return value [verify: code-only]
-  - [ ] 3.4 Write the standing instruction to decide-and-log rather
+    (document/summary/decisions_taken/blocked/amend/canary; decisions_taken
+    > 0 required when skip_steps was non-empty.)
+  - [X] 3.4 Write the standing instruction to decide-and-log rather
     than stall, reaching phase instructions via the Skill tool
     [verify: code-only]
-  - [ ] 3.5 Add the FR-3 canary: the agent must echo a string that only
+    (sets EMBO_DOCTREE_UNATTENDED so the phase command takes its own
+    unattended branch — the Story 4 mode and this agent agree on the
+    signal.)
+  - [X] 3.5 Add the FR-3 canary: the agent must echo a string that only
     the injected rule block contains, so a silent injection failure is
     caught (the hook fails open) [verify: auto-test]
-  - [ ] 3.6 Confirm the agent body contains no task numbers and no
+    (canary phrase `BINDING SUBAGENT RULES`; a test asserts the agent's
+    canary phrase matches the phrase subagent-rules.sh actually injects,
+    so the canary cannot test a phrase the hook never sends.)
+  - [X] 3.6 Confirm the agent body contains no task numbers and no
     `tasks/` paths, via a check in `doctree-lib.test.sh`
     [verify: auto-test]
+    (grep for tasks/<digit> and bare task-number/Story refs, both 0; the
+    literal placeholder tasks/<nnn>-<SLUG>/ is allowed.)
   - [ ] 3.7 Spawn the agent on a throwaway slug and confirm it produces
     a document, a digest matching 3.3's shape, and the 3.5 canary
     [verify: manual-run-claude]
