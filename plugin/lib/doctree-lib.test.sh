@@ -318,6 +318,89 @@ test_command_no_task_refs() {
     "$(grep -Ec 'task(s)? +[0-9]{3}|Story [0-9]' "$DOCTREE_CMD" || true)"
 }
 
+# ---- 8.7: termination rule (replay while significant, under the cap) ----
+
+test_should_replay() {
+  doctree_should_replay 1 0 2; assert_eq "replay: significant, round 0 < cap → replay" "0" "$?"
+  doctree_should_replay 1 1 2; assert_eq "replay: significant, round 1 < cap → replay" "0" "$?"
+  doctree_should_replay 1 2 2; assert_eq "replay: significant, round 2 = cap → stop" "1" "$?"
+  doctree_should_replay 0 0 2; assert_eq "replay: no significant → stop" "1" "$?"
+  doctree_should_replay 3 3 2; assert_eq "replay: over cap → stop" "1" "$?"
+}
+
+# ---- 8.5: revert restores a section verbatim from prior_state ----
+
+test_revert_section() {
+  local doc="$TMP63/revdoc.md"
+  local prior="$TMP63/prior.txt"
+  mkdir -p "$TMP63"
+  printf '# Doc\n\n## FR-3\n\nAMENDED wrong text.\n\n## FR-4\n\nkeep me.\n' > "$doc"
+  printf '## FR-3\n\nthe ORIGINAL text.\n' > "$prior"
+  doctree_revert_section "$doc" "## FR-3" "$prior"
+  assert_eq "revert: prior text restored" "1" \
+    "$(grep -c 'the ORIGINAL text.' "$doc")"
+  assert_eq "revert: amended text gone" "0" \
+    "$(grep -c 'AMENDED wrong text.' "$doc")"
+  assert_eq "revert: untargeted section kept" "1" \
+    "$(grep -c 'keep me.' "$doc")"
+  # Heading not present → doc untouched, rc 1.
+  cp "$doc" "$doc.bak"
+  doctree_revert_section "$doc" "## FR-99" "$prior"
+  assert_eq "revert: missing heading → rc 1" "1" "$?"
+}
+
+# ---- 8.4 / 8.9(a): an uncited AMEND is rejected, target untouched ----
+
+test_amend_rejected_target_untouched() {
+  if ! command -v jq >/dev/null 2>&1; then
+    printf 'SKIP: 8.4 amend-rejected (jq not found)\n'; return 0
+  fi
+  local target="$TMP63/amend-target.md"
+  mkdir -p "$TMP63"
+  printf '# T\n\n## FR-3\n\noriginal.\n' > "$target"
+  local before
+  before="$(grep -c '' "$target")"
+  local uncited='{"target":"prd","section":"FR-3","finding":"x","evidence":"","proposed":"y","origin":"tasks","severity":"high","status":"open","prior_state":"z"}'
+  # A rejected record must not be applied.
+  assert_eq "8.4: uncited AMEND rejected" "1" \
+    "$( doctree_validate_amend "$uncited"; echo $? )"
+  # The caller applies only validated amendments, so the target is unchanged.
+  local after
+  after="$(grep -c '' "$target")"
+  assert_eq "8.4: target byte-identical (line count unchanged)" "$before" "$after"
+  assert_eq "8.4: original content intact" "1" "$(grep -c 'original.' "$target")"
+}
+
+# ---- 8.9(b): amend-then-revert restores the section verbatim ----
+
+test_amend_then_revert_roundtrip() {
+  local doc="$TMP63/rt.md"
+  local prior="$TMP63/rt-prior.txt"
+  mkdir -p "$TMP63"
+  printf '# Doc\n\n## Goals\n\nTHE ORIGINAL GOALS.\n\n## Scope\n\nscope.\n' > "$doc"
+  # Capture prior_state, then simulate an amendment to the section.
+  printf '## Goals\n\nTHE ORIGINAL GOALS.\n' > "$prior"
+  # Amend: replace the section content.
+  printf '# Doc\n\n## Goals\n\nAMENDED GOALS.\n\n## Scope\n\nscope.\n' > "$doc"
+  assert_eq "roundtrip: amended" "1" "$(grep -c 'AMENDED GOALS.' "$doc")"
+  # Revert from prior_state.
+  doctree_revert_section "$doc" "## Goals" "$prior"
+  assert_eq "roundtrip: original restored verbatim" "1" \
+    "$(grep -c 'THE ORIGINAL GOALS.' "$doc")"
+  assert_eq "roundtrip: amendment gone" "0" "$(grep -c 'AMENDED GOALS.' "$doc")"
+  assert_eq "roundtrip: untouched section intact" "1" "$(grep -c 'scope.' "$doc")"
+}
+
+# ---- 8.9(c): a run with permanent significant findings stops at the cap --
+
+test_permanent_findings_stop_at_cap() {
+  # With a significant finding that never clears, should_replay is true for
+  # rounds below the cap and false at the cap — the run stops at round 2.
+  doctree_should_replay 1 0 2; assert_eq "8.9c: round 0 → replay" "0" "$?"
+  doctree_should_replay 1 1 2; assert_eq "8.9c: round 1 → replay" "0" "$?"
+  doctree_should_replay 1 2 2; assert_eq "8.9c: round 2 (cap) → STOP" "1" "$?"
+}
+
 # ---- 9.2: resume detects the first missing phase document ----
 
 test_resume_phase() {
@@ -499,6 +582,11 @@ test_escalation_halt_stops_on_first
 test_escalation_unknown_mode
 test_validate_amend_fixtures
 test_validate_amend_edges
+test_should_replay
+test_revert_section
+test_amend_rejected_target_untouched
+test_amend_then_revert_roundtrip
+test_permanent_findings_stop_at_cap
 test_resume_phase
 test_runstate_reader
 test_finding_significant

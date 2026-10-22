@@ -52,6 +52,7 @@ function extractFn(name) {
 const validateAmend = extractFn('validateAmend')
 const budgetAllows = extractFn('budgetAllows')
 const roundExhausted = extractFn('roundExhausted')
+const shouldReplay = extractFn('shouldReplay')
 
 // ---- 5.5: inlined validator against the shared parity fixtures ----
 
@@ -84,6 +85,14 @@ assert('budgetAllows: over cap → false', budgetAllows(21, 20) === false)
 assert('roundExhausted: below cap → false', roundExhausted(1, 2) === false)
 assert('roundExhausted: at cap → true', roundExhausted(2, 2) === true)
 assert('roundExhausted: over cap → true', roundExhausted(3, 2) === true)
+
+// ---- 8.7 parity: the JS termination rule matches the shell rule ----
+
+assert('shouldReplay: significant, round 0 < cap → true', shouldReplay(1, 0, 2) === true)
+assert('shouldReplay: significant, round 1 < cap → true', shouldReplay(1, 1, 2) === true)
+assert('shouldReplay: significant, round 2 = cap → false', shouldReplay(1, 2, 2) === false)
+assert('shouldReplay: no significant → false', shouldReplay(0, 0, 2) === false)
+assert('shouldReplay: over cap → false', shouldReplay(3, 3, 2) === false)
 
 // ---- 5.6: the script uses no forbidden constructs ----
 // Strip line comments so the prohibition-naming comment block doesn't

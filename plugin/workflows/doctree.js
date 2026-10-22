@@ -152,6 +152,14 @@ export function roundExhausted(round, cap) {
   return round >= cap
 }
 
+// shouldReplay(significantCount, round, cap) -> replay the affected phase?
+// The termination rule (D8): replay only while there is a significant
+// finding AND the round counter is below the cap. Mirrors the shell
+// doctree_should_replay so both paths terminate identically.
+export function shouldReplay(significantCount, round, cap) {
+  return significantCount >= 1 && round < cap
+}
+
 const a = args || {}
 
 const maxAgents = typeof a.max_agents === 'number' ? a.max_agents : 20
@@ -214,6 +222,36 @@ for (const ph of PHASES) {
     significant_count: significant.length,
   })
   upstreamDocs.push(digest.document)
+
+  // --- Back-pressure: a significant finding with a grounded amendment
+  // targeting an upstream document re-spawns that phase in section-scoped
+  // mode, bounded by the global round cap (D7/D8). The round counter is
+  // GLOBAL — one increment per replay, not per phase — so the cap bounds
+  // total cost. A medium/low finding never replays.
+  const groundedAmends = amendments.filter(validateAmend)
+  if (shouldReplay(significant.length, round, roundCap)
+      && groundedAmends.length > 0
+      && budgetAllows(agentCount, maxAgents)) {
+    round += 1
+    const amend = groundedAmends[0]
+    agentCount += 1
+    log(`replay round ${round}: ${ph.key} findings amend ${amend.target}#${amend.section}`)
+    await agent(
+      [
+        'You are a section-scoped replay of a doc-tree phase.',
+        `Re-run phase ${amend.target} in section-scoped mode, changing ONLY`,
+        `the section "${amend.section}" per this grounded amendment:`,
+        '```yaml',
+        `finding:  ${amend.finding}`,
+        `evidence: ${amend.evidence}`,
+        `proposed: ${amend.proposed}`,
+        '```',
+        'Leave every other section byte-for-byte unchanged. Set',
+        'EMBO_DOCTREE_UNATTENDED for your run.',
+      ].join('\n'),
+      { label: `replay:${amend.target}:${amend.section}`, phase: PHASES.find(p => p.key === amend.target)?.title || ph.title, schema: DIGEST_SCHEMA, agentType: 'embo:doctree-phase' }
+    )
+  }
 
   // escalation: halt stops at the first blocked item.
   if (a.escalation === 'halt' && Array.isArray(digest.blocked) && digest.blocked.length > 0) {

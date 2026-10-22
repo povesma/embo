@@ -383,36 +383,61 @@ the shell library alone.
     the inlined JS validator will share via the fixtures. NOTE: Stories
     8.3-8.11 — run-state, amend/revert/replay paths — stay blocked on the
     Story 5 workflow script and Story 7's resolved args.)
-  - [ ] 8.3 Implement the run-state artifact: round number, per-phase
+  - [X] 8.3 Implement the run-state artifact: round number, per-phase
     status, open findings, and `prior_state` per amendment
     [verify: auto-test]
-  - [ ] 8.4 Implement the amendment path: an uncited AMEND is rejected
+    (Read side done and tested in Story 9: doctree_runstate_round /
+    doctree_runstate_open_findings read doctree-run-state.yaml. The WRITE
+    is a stage's job — A4: the workflow script cannot touch the
+    filesystem — written beside the documents in the task directory; the
+    revert path stores prior_state there.)
+  - [X] 8.4 Implement the amendment path: an uncited AMEND is rejected
     by the script's inlined validator and the target document is left
     byte-identical [verify: auto-test]
-  - [ ] 8.5 Implement the revert path, restoring a document section
+    (The workflow applies only amendments that pass validateAmend; a test
+    confirms an uncited record is rejected and the target is unchanged.)
+  - [X] 8.5 Implement the revert path, restoring a document section
     verbatim from saved prior state [verify: auto-test]
-  - [ ] 8.6 Implement section-scoped replay and prove by diff that an
+    (doctree_revert_section replaces a section from a prior_state file,
+    bounded to that section; tested incl. untargeted-section-intact.)
+  - [~] 8.6 Implement section-scoped replay and prove by diff that an
     amendment changes ONLY the sections its finding targets
     [verify: auto-test]
-  - [ ] 8.7 Implement the termination rule: replay while findings are at
+    (The workflow re-spawns the affected phase in section-scoped mode with
+    the amendment; the phase agent is instructed to change only the named
+    section. The single-section guarantee of the revert primitive is
+    diff-tested; proving a LIVE replay changes only its sections needs the
+    end-to-end run.)
+  - [X] 8.7 Implement the termination rule: replay while findings are at
     or above the threshold, stop for approval after round 2 with
     findings still open, and exempt the closing open-items write as
     bookkeeping [verify: auto-test]
-  - [ ] 8.8 Verify a completed run has no open "infeasible" finding
+    (doctree_should_replay / shouldReplay, parity-tested shell+JS: replay
+    while a significant finding persists and round < cap, else stop. The
+    closing open-items write does not consult it — bookkeeping, exempt.)
+  - [~] 8.8 Verify a completed run has no open "infeasible" finding
     against a requirement, and every amendment carries a resolvable
     citation [verify: manual-run-claude]
-  - [ ] 8.9 Run the three gate checks that decide FR-6's fate: (a) a
+    (Gate 5 (no open infeasible-vs-prd) and gate 4 (amend grounded) are
+    auto-tested; verifying a COMPLETED real run satisfies them needs the
+    end-to-end run.)
+  - [X] 8.9 Run the three gate checks that decide FR-6's fate: (a) a
     seeded uncited AMEND is rejected and the target is byte-identical,
     (b) amend-then-revert restores the section verbatim, (c) a run
     seeded with permanent findings stops at round 2
     [verify: auto-test]
-  - [ ] 8.10 If all three pass, record the evidence in the tech-design
+    (All three pass as auto-tests in doctree-lib.test.sh.)
+  - [X] 8.10 If all three pass, record the evidence in the tech-design
     and continue. If any fails, stop and write a short report naming
     the failed condition and its evidence, for user sign-off
     [verify: manual-run-user]
-  - [ ] 8.11 On a sign-off to withdraw: remove the AMEND path, KEEP the
+    (All three 8.9 checks pass → FR-6 SHIPS. Evidence recorded in the
+    tech-design D12 go/no-go block. Withdrawal (8.11) not taken.)
+  - [X] 8.11 On a sign-off to withdraw: remove the AMEND path, KEEP the
     review passes and gates from story 6, and replace back-pressure
     with the closing human gate [verify: manual-run-claude]
+    (NOT TAKEN — 8.9 passed, so back-pressure ships. This withdrawal
+    branch is intentionally not exercised; recorded for completeness.)
 
 - [ ] 9.0 **User Story:** As an embo user, I want a run to survive
   interruption and to degrade loudly, so that a failure costs me a

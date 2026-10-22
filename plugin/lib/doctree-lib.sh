@@ -89,6 +89,60 @@ doctree_effective_model() {
   doctree_resolve_model "$phase"
 }
 
+# --- Back-pressure: replay, revert, termination (D7, D8) ----------------
+
+# doctree_should_replay <significant-count> <round> <cap>
+# The termination rule (D8): replay only while there is at least one
+# significant finding AND the global round counter is below the cap. At or
+# above the cap the run CLOSEs and stops for approval regardless of
+# remaining findings. Returns 0 to replay, 1 to stop. The closing
+# open-items write is bookkeeping and is NOT a replay (the caller does not
+# consult this function for it).
+doctree_should_replay() {
+  local sig="$1" round="$2" cap="$3"
+  case "$sig$round$cap" in *[!0-9]*) return 1 ;; esac
+  [ "$sig" -ge 1 ] && [ "$round" -lt "$cap" ] && return 0
+  return 1
+}
+
+# doctree_revert_section <doc> <section-heading> <prior-state-file>
+# The revert path (D7 condition 2): restore one markdown section to its
+# verbatim pre-amendment text, read from <prior-state-file>. The section
+# runs from its heading line up to (not including) the next heading of the
+# same or higher level, or end of file. Rewrites <doc> in place. Returns 1
+# if the heading is not found (doc untouched), 0 on success.
+doctree_revert_section() {
+  local doc="$1" heading="$2" prior="$3"
+  [ -f "$doc" ] || return 1
+  [ -f "$prior" ] || return 1
+  grep -qF "$heading" "$doc" || return 1
+  awk -v h="$heading" -v pf="$prior" '
+    BEGIN {
+      # Count leading # of the target heading to know its level.
+      n = split(h, _ignore, ""); lvl = 0
+      for (i = 1; i <= length(h); i++) { c = substr(h, i, 1); if (c == "#") lvl++; else break }
+    }
+    function emit_prior(   line) { while ((getline line < pf) > 0) print line; close(pf) }
+    {
+      if (!skipping && $0 == h) {
+        emit_prior()
+        skipping = 1
+        next
+      }
+      if (skipping) {
+        # A heading of the same or higher level ends the section.
+        if ($0 ~ /^#+[ \t]/) {
+          hl = 0
+          for (i = 1; i <= length($0); i++) { c = substr($0, i, 1); if (c == "#") hl++; else break }
+          if (hl <= lvl) { skipping = 0; print; next }
+        }
+        next
+      }
+      print
+    }
+  ' "$doc" > "$doc.revert.tmp" && mv "$doc.revert.tmp" "$doc"
+}
+
 # --- Resume and run-state (D10, D11) ------------------------------------
 
 # doctree_resume_phase <taskdir> <run-date> <slug>

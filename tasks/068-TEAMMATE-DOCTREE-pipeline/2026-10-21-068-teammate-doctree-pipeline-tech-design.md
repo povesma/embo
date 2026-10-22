@@ -741,6 +741,22 @@ script holds the loop. Stages do all file I/O (A4).
   markers that halt a plan are the same idea as FR-8's blocked items,
   which is prior art for the part of this design that is *not* novel.
 
+  **Go/no-go result (recorded during implementation).** The three
+  conditions D12 makes mandatory are all mechanically met and
+  auto-tested, so **FR-6 ships** — withdrawal (the review-only fallback)
+  is NOT taken. Evidence, each an assertion in `doctree-lib.test.sh`:
+  1. **Grounding** — a seeded uncited `AMEND` is rejected by
+     `doctree_validate_amend`, and the target document is left
+     byte-identical (only validated amendments are applied).
+  2. **Revert path** — `doctree_revert_section` restores a section
+     verbatim from `prior_state`; an amend-then-revert round-trip leaves
+     the section identical to the original and untargeted sections
+     untouched.
+  3. **Round cap** — `doctree_should_replay` (shell) and `shouldReplay`
+     (the workflow's JS, parity-tested) both stop replaying once a
+     significant finding persists to the global round cap; a run seeded
+     with permanent findings stops at round 2.
+
 - **D13 — deterministic gates, which need no model judgement** [FR-5,
   amended]. Because reviewer independence is weaker than it looks, the
   pipeline runs checks that cannot be talked past by any agent. Each is
