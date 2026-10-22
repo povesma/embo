@@ -98,6 +98,20 @@ Based on files found in 3a and rlm-subcall analysis, explicitly list:
 
 ### Step 4: Ask Clarifying Questions (MANDATORY)
 
+> **Unattended mode.** When the environment variable
+> `EMBO_DOCTREE_UNATTENDED` is set (a non-empty value), this command is
+> running as a spawned doc-tree phase with no channel to a human, so
+> **every `AskUserQuestion` call in this step is replaced** by deciding
+> from evidence: for each question this step would have asked, choose the
+> best-supported answer from the repository, the task text, memory, and
+> docs, and record the choice and its evidence in a **Decisions-taken**
+> block in the PRD. Anything you genuinely cannot decide from evidence
+> becomes a **BLOCKED** item in that block — never a guess, never a stall.
+> What the PRD contains is otherwise unchanged: same sections, same
+> content rules, one added Decisions-taken block. When the variable is
+> unset (the normal interactive case), ignore this box and follow the
+> MANDATORY `AskUserQuestion` flow below exactly.
+
 **🚨 BEFORE writing the PRD, you MUST ask clarifying questions using the
 AskUserQuestion tool.** The goal is to understand the "what" and "why" of the
 feature.

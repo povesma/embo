@@ -129,6 +129,20 @@ Extract:
 
 ### Step 5: Ask Technical Clarifying Questions (MANDATORY)
 
+> **Unattended mode.** When the environment variable
+> `EMBO_DOCTREE_UNATTENDED` is set (a non-empty value), this command is
+> running as a spawned doc-tree phase with no channel to a human, so
+> **every `AskUserQuestion` call in this step is replaced** by deciding
+> from evidence: for each question this step would have asked, choose the
+> best-supported answer from the PRD, the repository, memory, and docs,
+> and record the choice and its evidence in a **Decisions-taken** block in
+> the technical design. Anything you genuinely cannot decide from evidence
+> becomes a **BLOCKED** item in that block — never a guess, never a stall.
+> What the design contains is otherwise unchanged: same sections, same
+> content rules, one added Decisions-taken block. When the variable is
+> unset (the normal interactive case), ignore this box and follow the
+> MANDATORY `AskUserQuestion` flow below exactly.
+
 **🚨 BEFORE writing the technical design, you MUST ask clarifying questions
 using the AskUserQuestion tool.** Adapt questions based on the feature, but
 common technical areas to explore:
@@ -369,6 +383,8 @@ When referencing any library, framework, or external API — use the Context7 MC
 3. Identify integration points via RLM
 4. Learn from historical decisions via claude-mem
 5. **🚨 MANDATORY: Ask technical clarifying questions using AskUserQuestion tool**
+   (in unattended mode — `EMBO_DOCTREE_UNATTENDED` set — decide from
+   evidence and record a Decisions-taken block instead; see Step 5)
 6. Synthesize design incorporating user's answers + RLM + claude-mem insights
 7. Before approval, apply RULE:DELEGATE trigger 2: offer a
    clean-context `examine-advisor` critique of the design (marker

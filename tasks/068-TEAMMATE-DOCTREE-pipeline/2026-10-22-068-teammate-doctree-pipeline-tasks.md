@@ -180,21 +180,29 @@ the shell library alone.
 - [ ] 4.0 **User Story:** As a spawned phase, I want an unattended mode
   in each planning command, so that a question I cannot ask becomes a
   recorded blocked item instead of a stall [6/0]
-  - [ ] 4.1 Add the unattended branch to `plugin/commands/prd.md`,
+  - [X] 4.1 Add the unattended branch to `plugin/commands/prd.md`,
     recording a blocked item and continuing [verify: code-only]
-  - [ ] 4.2 Add the unattended branch to `tech-design.md` at `:133` and
+    (Unattended-mode box at Step 4 "Ask Clarifying Questions"; gated on
+    the env var `EMBO_DOCTREE_UNATTENDED`.)
+  - [X] 4.2 Add the unattended branch to `tech-design.md` at `:133` and
     `:371` [verify: code-only]
-  - [ ] 4.3 Add the unattended branch to `tasks.md` at its clarifying
+    (Box at Step 5; parenthetical on the Final-Instructions restatement.)
+  - [X] 4.3 Add the unattended branch to `tasks.md` at its clarifying
     question AND at the Step 6 "Go" approval stop - two distinct gates
     [verify: code-only]
+    (Box at Step 4 covers both gates; a direct exception on Step 6 itself
+    and on the Interaction-Model restatement.)
   - [ ] 4.4 Prove FR-11 on one command, in a spawned stage, with a
     pre-seeded undecidable question: same section headings, a
     Decisions-taken block, and a BLOCKED entry present
     [verify: manual-run-claude]
   - [ ] 4.5 Confirm separately that an interactive run of the same
     command is unchanged [verify: manual-run-claude]
-  - [ ] 4.6 Confirm by grep that the unattended branch fires only when
+  - [X] 4.6 Confirm by grep that the unattended branch fires only when
     the mode is set, never by default [verify: code-only]
+    (Mode signal: the env var `EMBO_DOCTREE_UNATTENDED`. grep over all
+    three commands shows every "unattended" reference names the variable;
+    none fires by default. No task-number/`tasks/` refs introduced.)
 
 - [ ] 5.0 **User Story:** As an embo user, I want the phase sequence and
   its limits enforced by the runtime, so that the round cap and budget

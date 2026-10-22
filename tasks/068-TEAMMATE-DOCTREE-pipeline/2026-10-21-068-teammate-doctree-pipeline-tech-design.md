@@ -517,6 +517,18 @@ script holds the loop. Stages do all file I/O (A4).
   D3's directive text below remains the content of that mode. The
   mechanical `decisions_taken` check applies either way.
 
+  **Mode signal (set during implementation).** The selector is the
+  environment variable `EMBO_DOCTREE_UNATTENDED`: when set to a non-empty
+  value, each phase command takes its unattended branch (replace the
+  mandatory `AskUserQuestion`, and for `tasks.md` the Step 6 "Go" stop,
+  with a Decisions-taken / BLOCKED record); when unset, the interactive
+  path is unchanged. An environment variable, not prose in the prompt, was
+  chosen so the branch condition is mechanical and grep-verifiable (the
+  FR-11 "fires only when the mode is set" check), matching the repo's
+  existing env-override pattern (`EMBO_PROFILE_*`). The orchestration must
+  set this variable for every spawned phase: the workflow script's
+  `agent()` calls and the sequential fallback both carry it.
+
   The phase commands' mandatory `AskUserQuestion` steps
   (Current Architecture table) cannot execute in a subagent. The
   dispatch prompt therefore carries, as verbatim text (per task 047's

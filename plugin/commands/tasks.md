@@ -86,6 +86,26 @@ PY
 
 ### Step 4: Resolve Scope Uncertainties (MANDATORY)
 
+> **Unattended mode.** When the environment variable
+> `EMBO_DOCTREE_UNATTENDED` is set (a non-empty value), this command is
+> running as a spawned doc-tree phase with no channel to a human. Two
+> gates change, and nothing else:
+> - **This Step 4 `AskUserQuestion`** is replaced by deciding each scope
+>   question from evidence (the tech design, the PRD, the repository,
+>   memory, docs) and recording the choice and its evidence in a
+>   **Decisions-taken** block in the task list. Anything not decidable
+>   from evidence becomes a **BLOCKED** item — never a guess, never a
+>   stall. Then proceed to Step 5.
+> - **Step 6 ("Wait for Confirmation")** is treated as already satisfied:
+>   generate the parent tasks (Step 5) and continue straight to Step 7
+>   (sub-tasks) without pausing for a "Go". This is the task phase not
+>   stopping for approval between subtasks.
+>
+> What the task list contains is otherwise unchanged: same structure, same
+> rules, one added Decisions-taken block. When the variable is unset (the
+> normal interactive case), ignore this box and follow the MANDATORY flow
+> below, including the Step 6 pause, exactly.
+
 **🚨 BEFORE generating the task list, resolve any unclear scope.**
 
 Review the tech design and RLM analysis, then use AskUserQuestion to clarify:
@@ -113,7 +133,10 @@ Respond with 'Go' to proceed."
 
 ### Step 6: Wait for Confirmation
 
-Pause and wait for the user to respond with "Go".
+Pause and wait for the user to respond with "Go". **Unattended mode
+exception:** when `EMBO_DOCTREE_UNATTENDED` is set, do not pause — treat
+the confirmation as given and continue to Step 7 (see the unattended-mode
+box at Step 4).
 
 ### Step 7: Phase 2 - Generate Sub-Tasks
 
@@ -231,7 +254,8 @@ as `code-only` implicitly — no evidence required at completion.
 The process explicitly requires a pause after generating parent tasks to get
 user confirmation ("Go") before proceeding to generate the detailed sub-tasks.
 This ensures the high-level plan aligns with user expectations before diving
-into details.
+into details. In unattended mode (`EMBO_DOCTREE_UNATTENDED` set) this pause
+is skipped — the confirmation is treated as given (see Step 4).
 
 ## Target Audience
 Assume the primary reader of the task list is **Claude Code**, which will
