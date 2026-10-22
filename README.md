@@ -281,6 +281,7 @@ Two invariants shape every embo command:
 | Planning | `/embo:tech-design` | Architecture design grounded in real code |
 | Planning | `/embo:test-plan` | Map stories to verification methods |
 | Planning | `/embo:tasks` | Break tech-design into TDD-ready subtasks |
+| Planning | `/embo:doctree` | Build a feature's whole doc tree (PRD → tech-design → tasks) with spawned agents, each phase independently reviewed |
 | Planning | `/embo:check` | Audit task completion status |
 | Development | `/embo:impl` | Implement subtasks one at a time, evidence-gated |
 | Development | `/embo:git` | Commit/PR messages, styles, and one-shot `deliver` |
@@ -402,6 +403,46 @@ projects):
 
 You merge however you normally do — a PR, or a manual merge — so there
 is no special "finish" step.
+
+### Build the doc tree with agents: `/embo:doctree`
+
+`/embo:doctree <feature-slug>` builds a feature's whole planning doc tree
+— PRD, then technical design, then task list — as a reviewed sequence of
+spawned agents, so the document bulk never enters your session. Each phase
+is authored in its own context and checked by two review passes that did
+not write it, plus deterministic gates that need no model judgement. A
+grounded downstream finding can amend an upstream document, bounded by a
+round cap. The run reports its plan and stops for your go-ahead before
+spawning anything, and refuses to start when it would otherwise stall.
+
+**Profile fields** (under a `doctree:` block; set once, overridable
+per-run with `--model-<phase>` and `--escalation`):
+
+| Field | Meaning |
+|---|---|
+| `models.prd` / `models.tech_design` / `models.tasks` | model per phase |
+| `escalation` | `collect` (record blocked items, finish) or `halt` (stop at the first) |
+| `round_cap` | review rounds before the run stops for approval |
+| `reviewer_model_family` | the model family both review passes run on |
+| `budget.max_agents` | the out-of-model backstop on spawned agents |
+
+**Permission rules a run needs** (the pre-flight refuses to start and
+names any that is missing — add these to `.claude/settings.json`):
+
+```
+Bash(embo-profile get *)
+Bash(embo-profile show)
+```
+
+plus `Write` and `Edit` on the task directory, so the phases can write
+the documents. The two review passes also need the `gemini-notebook-mcp`
+server connected; the pre-flight checks it and refuses to start if it is
+not, rather than running a silently halved review.
+
+**Cost.** A baseline run is three authoring phases plus six review passes
+(two per phase) — nine spawned agents. Replay rounds are the dominant
+multiplier: each round that a significant finding triggers re-runs an
+affected phase, up to `round_cap`. Budget it by `budget.max_agents`.
 
 ## Behavioral rule reminders
 

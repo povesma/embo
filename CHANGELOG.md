@@ -2,6 +2,18 @@
 
 All notable changes to the embo plugin are documented here.
 
+## [Unreleased]
+
+### Added
+
+- `/embo:doctree` builds a feature's whole doc tree (PRD → tech-design →
+  tasks) with spawned agents: each phase is authored in its own context
+  and checked by two independent review passes plus checks that need no
+  judgement, and a grounded finding can correct an upstream document.
+- The run reports its plan and model choices, refuses to start when it
+  would stall on a permission prompt or a disconnected review server, and
+  resumes an interrupted run from the first unfinished phase.
+
 ## [0.3.0] - 2026-10-20
 
 ### Added

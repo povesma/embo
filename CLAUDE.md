@@ -88,10 +88,12 @@ Two consequences, both load-bearing:
      claude-mem or RLM
 
 4. **Commands** (`plugin/commands/`)
-   - 20 commands: 18 flat (`/embo:<name>`) + `research/` subdir
+   - 21 commands: 19 flat (`/embo:<name>`) + `research/` subdir
      (`/embo:research:examine`, `/embo:research:verify`). The flat set
      includes `/embo:enable-corrections` and
-     `/embo:disable-corrections` (opt-in correction capture, task 041).
+     `/embo:disable-corrections` (opt-in correction capture, task 041),
+     and `/embo:doctree` (build a feature's doc tree with spawned agents,
+     task 068).
    - Each integrates RLM + claude-mem via Bash and MCP tools
    - Commands invoke RLM as a bare `rlm_repl` (the `plugin/bin/`
      wrapper) — never inline `${CLAUDE_PLUGIN_ROOT}/...rlm_repl.py`,
@@ -209,24 +211,41 @@ plugin/                          # THE PLUGIN ROOT (${CLAUDE_PLUGIN_ROOT})
 │   │                              # the main context)
 │   ├── examine-advisor.md       # /embo:research:examine agent
 │   ├── approach-validator.md    # /embo:research:verify agent
+│   ├── doctree-phase.md         # /embo:doctree parameterized phase runner
+│   │                              # (PRD/tech-design/tasks; task 068)
 │   └── visual-qa-reviewer.md    # /embo:visual-impl judge (experimental)
-├── commands/                    # 20 commands; research/ → nested ns
+├── commands/                    # 21 commands; research/ → nested ns
+│   ├── doctree.md               # build a feature's doc tree with agents
+│   │                              # (entry command + fallback; task 068)
 │   ├── visual-impl.md           # design-to-code loop (experimental)
 │   ├── enable-corrections.md    # opt-in correction capture (task 041)
 │   ├── disable-corrections.md   # reverse enable-corrections
 │   └── research/                # examine.md, verify.md
+├── workflows/                   # Dynamic Workflow scripts (auto-discovered)
+│   ├── doctree.js               # doc-tree orchestration: phase sequence,
+│   │                              # round/budget counters, inlined AMEND
+│   │                              # validator (task 068)
+│   └── doctree.test.js          # node parity test (validator vs fixtures,
+│                                  # counters, no-Date/import/fs scan)
 ├── claude-mem/                  # claude-mem integration helpers
 │   ├── code-embo.build.jq       # jq: add `correction` type to code mode
 │   ├── corrections-lib.sh       # sourceable enable/disable/curation/
 │   │                              # list-pending/mode fns
 │   └── corrections-lib.test.sh  # fixture tests for corrections-lib.sh
 ├── lib/                         # shared sourceable functions
-│   └── branch-task-lib.sh       # branch↔task match rule + task
-│                                  # derivation; one definition sourced
-│                                  # by bin/embo-deliver and
-│                                  # hooks/branch-task-check.sh
+│   ├── branch-task-lib.sh       # branch↔task match rule + task
+│   │                              # derivation; one definition sourced
+│   │                              # by bin/embo-deliver and
+│   │                              # hooks/branch-task-check.sh
+│   ├── doctree-lib.sh           # /embo:doctree pure functions: model/path
+│   │                              # resolution, escalation, the six gates,
+│   │                              # AMEND validator, revert, resume (task 068)
+│   ├── doctree-lib.test.sh      # fixture tests for doctree-lib.sh
+│   └── doctree-amend-fixtures.json # parity fixtures shared by the shell
+│                                  # and JS AMEND validators (task 068)
 ├── profiles/                    # default.yaml (canonical fallback) +
 │                                  # quality/fast/minimal/research.yaml
+│                                  # (each carries a doctree: block)
 ├── hooks/
 │   ├── hooks.json               # registers the event handlers
 │   ├── context-guard.sh         # Context window warning hook

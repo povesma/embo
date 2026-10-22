@@ -479,22 +479,37 @@ the shell library alone.
 - [ ] 10.0 **User Story:** As a prospective embo user, I want the new
   command documented, so that I can discover it and know what it costs
   [6/0]
-  - [ ] 10.1 Add the command to the README command table
+  - [X] 10.1 Add the command to the README command table
     [verify: code-only]
-  - [ ] 10.2 Write a README section naming the profile fields and the
+    (Planning row for /embo:doctree.)
+  - [X] 10.2 Write a README section naming the profile fields and the
     exact permission rules a run needs, verbatim [verify: code-only]
-  - [ ] 10.3 Document the cost: a baseline run is three phases plus six
+    ("Build the doc tree with agents" section: the doctree: field table
+    and the verbatim allow rules the pre-flight requires.)
+  - [X] 10.3 Document the cost: a baseline run is three phases plus six
     review passes, and replay rounds are the dominant multiplier
     [verify: code-only]
-  - [ ] 10.4 Measure one real run's token cost and record the figure
+    (Cost paragraph in the same section.)
+  - [~] 10.4 Measure one real run's token cost and record the figure
     rather than asserting a published multiple
     [verify: manual-run-claude]
-  - [ ] 10.5 Update CLAUDE.md's file-structure section and the command
+    (Needs a real end-to-end run to measure; the README states the
+    agent-count shape (9 baseline) and names replay as the multiplier
+    without asserting a token figure until one is measured.)
+  - [X] 10.5 Update CLAUDE.md's file-structure section and the command
     count [verify: code-only]
-  - [ ] 10.6 Add the CHANGELOG entry, one or two lines, stating the
+    (Count 20→21; added doctree.md, doctree-phase.md, workflows/,
+    doctree-lib.sh + fixtures, and the profiles' doctree: block.)
+  - [X] 10.6 Add the CHANGELOG entry, one or two lines, stating the
     capability a user gets [verify: code-only]
-  - [ ] 10.7 Run the full hook and library test suites to confirm
+    (Unreleased section: what /embo:doctree does and its refuse-to-start /
+    resume behavior.)
+  - [X] 10.7 Run the full hook and library test suites to confirm
     nothing regressed [verify: auto-test]
+    (All 16 suites run: 15 pass. The one failure — code-embo-build.test.sh,
+    "transform rewrote guidance to 7 options (v13.40.0)" — is a
+    pre-existing claude-mem transform-version issue in files this task
+    never touched (last changed in an unrelated commit), not a regression.)
 
 ## Summary
 
