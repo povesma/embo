@@ -109,14 +109,19 @@ the shell library alone.
 - [ ] 2.0 **User Story:** As an embo user, I want the doc-tree
   configuration to live in my profile, so that model choice, escalation
   and limits are set once rather than retyped per run [10/0]
-  - [ ] 2.1 Write fixture tests for `doctree_resolve_model <phase>`:
+  - [X] 2.1 Write fixture tests for `doctree_resolve_model <phase>`:
     profile value when set, built-in default when the field or the
     profile is absent [verify: auto-test]
-  - [ ] 2.2 Implement `doctree_resolve_model` in
+  - [X] 2.2 Implement `doctree_resolve_model` in
     `plugin/lib/doctree-lib.sh` [verify: auto-test]
-  - [ ] 2.3 Write fixture tests for `doctree_phase_doc_path <taskdir>
+  - [X] 2.3 Write fixture tests for `doctree_phase_doc_path <taskdir>
     <slug> <phase>` across all three phases [verify: auto-test]
-  - [ ] 2.4 Implement `doctree_phase_doc_path` [verify: auto-test]
+    (Signature revised to `doctree_phase_doc_path <taskdir> <run-date>
+    <slug> <phase>` — a run-date arg was added so the path matches the
+    established `<date>-<slug>-<suffix>.md` convention; the workflow
+    script cannot call `new Date()`, so the caller supplies the date.
+    Recorded in the tech-design.)
+  - [X] 2.4 Implement `doctree_phase_doc_path` [verify: auto-test]
   - [ ] 2.5 Add the commented `doctree:` block to `default.yaml`:
     `models` (prd/tech_design/tasks), `escalation`, `round_cap`,
     `budget.max_agents`, and the reviewer model family

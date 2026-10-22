@@ -808,9 +808,14 @@ script holds the loop. Stages do all file I/O (A4).
    `branch-task-lib.sh`'s shape (header naming consumers, no output, no
    side effects, no exits).
    - `doctree_resolve_model <phase>` — profile field → built-in default.
-   - `doctree_phase_doc_path <taskdir> <slug> <phase>` — the one
-     definition of the write target, so the command and any future
-     wrapper agree.
+   - `doctree_phase_doc_path <taskdir> <run-date> <slug> <phase>` — the
+     one definition of the write target, so the command and any future
+     wrapper agree. Returns `<taskdir>/<run-date>-<slug>-<suffix>.md`
+     (`tech_design` → `-tech-design.md`). The `<run-date>` argument was
+     added during implementation: the path must match the established
+     `<date>-<slug>-<suffix>.md` convention, and the workflow script
+     cannot call `new Date()`, so the entry command resolves the date and
+     passes it in (the run date already arrives via `args`).
    - `doctree_validate_amend` — the mechanical malformed-record check
      from D7.
    - Shipped with `plugin/lib/doctree-lib.test.sh` (fixture tests,
