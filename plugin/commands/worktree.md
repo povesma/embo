@@ -147,8 +147,10 @@ in those terms, having been told what it drops.
   *run inside* a worktree with full Bash, file, and git access, but the
   open/exit tools belong to the session that opened the worktree; a
   subagent cannot enter or exit one.
-- **Isolation guard.** A worktree-isolated session refuses some shell
-  constructs that could reach outside the worktree. A command rejected
+- **Isolation guard.** A worktree-isolated session refuses commands
+  whose effect reaches the main checkout — editing it, redirecting git
+  into it, or a git scope it cannot verify. It does not catch everything
+  (plain `cp` and shell redirects are not checked). A command rejected
   inside a worktree that would run in the main tree is this guard, not
   embo — rephrase it rather than working around the guard.
 

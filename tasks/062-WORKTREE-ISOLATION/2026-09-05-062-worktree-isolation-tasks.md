@@ -208,9 +208,12 @@ replaced by one command file — see the Scope correction under story 9.0.
       search returned this project's shared history (0.3.0, task 062/068,
       the worktree follow-up commits). Both halves proven through the
       CLI entry point, not a fixture.
-    → Note: the native `claude --worktree` CLI derives the directory name
-      with slash→`+` (`feat+064-e2e`), distinct from `/embo:worktree`'s
-      slash→`-`; both are valid, different entry points.
+    → Note (observed, not documented): this live run's native
+      `claude --worktree feat/064-e2e` produced a directory named
+      `feat+064-e2e` (slash→`+`), distinct from `/embo:worktree`'s
+      documented slash→`-`. The CC docs do not document a slash rule for
+      the CLI, so treat the `+` as observed behavior, not a spec; both
+      are valid, different entry points.
     → (earlier, 2026-09-05) resolver verified through the bin wrapper
       from a real worktree [live]
 
