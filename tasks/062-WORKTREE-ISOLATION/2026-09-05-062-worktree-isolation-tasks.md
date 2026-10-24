@@ -184,7 +184,7 @@ replaced by one command file — see the Scope correction under story 9.0.
     showed as untracked and could be staged [verify: code-only]
     → both paths now ignored (2026-10-20)
 
-- [~] 6.0 **User Story:** As a maintainer verifying the feature, I want
+- [X] 6.0 **User Story:** As a maintainer verifying the feature, I want
   the full suite green and the shared-state guarantees proven, so that
   v1 is release-ready.
   - [X] 6.1 Write a state-survival test: create worktree, session
@@ -198,13 +198,21 @@ replaced by one command file — see the Scope correction under story 9.0.
     [live] (2026-09-05)
   - [X] 6.3 Update CHANGELOG with the user-facing capability (gate for
     story completion, before E2E) [verify: code-only]
-  - [ ] 6.4 Manual end-to-end: `claude --worktree` a branch, confirm the
+  - [X] 6.4 Manual end-to-end: `claude --worktree` a branch, confirm the
     session sees the main-tree RLM index (no re-index) and claude-mem
     history [verify: manual-run-user]
-    → partial: resolver verified live through the bin wrapper from a real
-    worktree (State file → main tree, 267 files, no re-index); the new
-    interactive `claude --worktree` session check remains for the user
-    [live] (2026-09-05)
+    → VERIFIED live via `claude --worktree feat/064-e2e` (2026-10-24):
+      from inside the native worktree (`.claude/worktrees/feat+064-e2e`,
+      branch `worktree-feat+064-e2e`), `rlm_repl status` resolved the
+      MAIN-tree state file (267 files, no re-index), AND a claude-mem
+      search returned this project's shared history (0.3.0, task 062/068,
+      the worktree follow-up commits). Both halves proven through the
+      CLI entry point, not a fixture.
+    → Note: the native `claude --worktree` CLI derives the directory name
+      with slash→`+` (`feat+064-e2e`), distinct from `/embo:worktree`'s
+      slash→`-`; both are valid, different entry points.
+    → (earlier, 2026-09-05) resolver verified through the bin wrapper
+      from a real worktree [live]
 
 - [X] 7.0 **User Story:** As a developer starting a parallel session, I
   want embo to create and name the worktree and let me list existing
@@ -327,14 +335,33 @@ replaced by one command file — see the Scope correction under story 9.0.
     main tree — derived name used, base-ref consequence stated before
     entering, landing branch confirmed [verify: manual-run-claude]
     → covered by the 9.3b live run (2026-10-20)
-  - [~] 9.4 Live-test the nest refusal and the tool gate: invoke from
+  - [X] 9.4 Live-test the nest refusal and the tool gate: invoke from
     inside a linked worktree (must stop); confirm the command does not
     fall back to `git worktree add` when `EnterWorktree` is absent
     [verify: manual-run-claude]
-    → HALF covered by 9.3b: the nest check was verified from the main
-      tree (paths equal -> proceeds). NOT tested: invoking from INSIDE
-      a worktree (paths differ -> must stop), and the tool-gate branch,
-      which needs a session where `EnterWorktree` is genuinely absent.
+    → NEST REFUSAL verified live (2026-10-24): opened
+      `.claude/worktrees/feat-test-nest`; from inside it `--git-dir`
+      (`.git/worktrees/feat-test-nest`) != `--git-common-dir` (`.git`),
+      command REFUSED and pointed back to the main tree. Correct.
+    → TOOL GATE (the "Test B" absent-tool branch) — CLOSED, no live run
+      needed. The "EnterWorktree genuinely absent" branch is NOT
+      reachable on current Claude Code (checked 2.1.310, 2026-10-24):
+      the worktree tools ship as DEFERRED tools — listed by name, schema
+      loaded on demand via tool-search — in every reachable context
+      (main session and subagent alike). A probe confirmed a subagent
+      fetches `EnterWorktree` via `ToolSearch(select:...)` and calls it.
+      So no in-session test can make the refusal fire; it would require
+      an older build that never had the tools. The refusal path is
+      instead verified by LOGIC + PROBE: a second probe ran the amended
+      gate and confirmed it loads the deferred tool and proceeds, and
+      that a tool-search on a non-existent name returns no schema, which
+      the "conclude unavailable only once that load fails" clause routes
+      to the refusal. Live-untriggerable, logically proven.
+    → FINDING + FIX: the original gate ("if EnterWorktree is not
+      available") misread a deferred-but-unfetched tool as absent, which
+      would wrongly trigger the refusal on current builds. The gate now
+      loads the deferred tool first and refuses only if that load fails.
+      (worktree.md §tool gate, 2026-10-24)
   - [X] 9.5 Live-test the remove path: clean worktree removed via
     `ExitWorktree`; a dirty one is NOT forced — files surfaced, choice
     put to the user, nothing removed [verify: manual-run-claude]
