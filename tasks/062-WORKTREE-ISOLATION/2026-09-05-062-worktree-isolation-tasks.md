@@ -327,14 +327,27 @@ replaced by one command file — see the Scope correction under story 9.0.
     main tree — derived name used, base-ref consequence stated before
     entering, landing branch confirmed [verify: manual-run-claude]
     → covered by the 9.3b live run (2026-10-20)
-  - [~] 9.4 Live-test the nest refusal and the tool gate: invoke from
+  - [X] 9.4 Live-test the nest refusal and the tool gate: invoke from
     inside a linked worktree (must stop); confirm the command does not
     fall back to `git worktree add` when `EnterWorktree` is absent
     [verify: manual-run-claude]
-    → HALF covered by 9.3b: the nest check was verified from the main
-      tree (paths equal -> proceeds). NOT tested: invoking from INSIDE
-      a worktree (paths differ -> must stop), and the tool-gate branch,
-      which needs a session where `EnterWorktree` is genuinely absent.
+    → NEST REFUSAL verified live (2026-10-24): opened
+      `.claude/worktrees/feat-test-nest`; from inside it `--git-dir`
+      (`.git/worktrees/feat-test-nest`) != `--git-common-dir` (`.git`),
+      command REFUSED and pointed back to the main tree. Correct.
+    → TOOL GATE: the "EnterWorktree genuinely absent" branch is NOT
+      reachable on current Claude Code (checked 2.1.310, 2026-10-24).
+      The worktree tools ship as DEFERRED tools — listed by name,
+      schema loaded on demand via tool-search — in every reachable
+      context (main session and subagent alike). A probe confirmed a
+      subagent can fetch `EnterWorktree` via `ToolSearch(select:...)`
+      and call it. So no in-session test can make the gate fire; the
+      refusal only applies to an older build that never had the tools.
+    → FINDING + FIX: the original gate ("if EnterWorktree is not
+      available") misread a deferred-but-unfetched tool as absent,
+      which would wrongly trigger the refusal. The gate now tells the
+      agent to load the deferred tool first and refuse only if that
+      load fails. (worktree.md §tool gate, 2026-10-24)
   - [X] 9.5 Live-test the remove path: clean worktree removed via
     `ExitWorktree`; a dirty one is NOT forced — files surfaced, choice
     put to the user, nothing removed [verify: manual-run-claude]
