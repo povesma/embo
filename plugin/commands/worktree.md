@@ -143,8 +143,14 @@ in those terms, having been told what it drops.
 - **No dependency install.** A fresh worktree may need the project's
   own setup (`npm install` and the like); say so rather than guessing
   at the command.
-- **Subagents do not call these tools.** The worktree lifecycle
-  belongs to the session that opened it; a subagent cannot exit one.
+- **Subagents do not drive the worktree lifecycle.** A subagent may
+  *run inside* a worktree with full Bash, file, and git access, but the
+  open/exit tools belong to the session that opened the worktree; a
+  subagent cannot enter or exit one.
+- **Isolation guard.** A worktree-isolated session refuses some shell
+  constructs that could reach outside the worktree. A command rejected
+  inside a worktree that would run in the main tree is this guard, not
+  embo — rephrase it rather than working around the guard.
 
 ## Enforcement note
 
