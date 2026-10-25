@@ -30,7 +30,7 @@ const PHASES = [
 // evidence or match a live section — those are live checks. Kept
 // self-contained (its enums are local) so it stands alone as an inlined
 // sandbox copy and is extractable for the parity test.
-export function validateAmend(record) {
+function validateAmend(record) {
   const REQUIRED = [
     'target', 'section', 'finding', 'evidence', 'proposed',
     'origin', 'severity', 'status', 'prior_state',
@@ -83,6 +83,14 @@ const FINDINGS_SCHEMA = {
           severity: { type: 'string', enum: ['high', 'medium', 'low', 'infeasible'] },
           status: { type: 'string', enum: ['open', 'resolved'] },
           finding: { type: 'string' },
+          // A significant finding must carry these three as well, or it
+          // cannot become an amendment and so cannot change the document
+          // it is about. target names the document the fix belongs in,
+          // which is not always the reviewed one.
+          target: { type: 'string', enum: ['prd', 'tech-design', 'tasks'] },
+          evidence: { type: 'string' },
+          proposed: { type: 'string' },
+          prior_state: { type: 'string' },
         },
         required: ['severity', 'status', 'finding'],
       },
@@ -95,6 +103,29 @@ function isSignificant(f) {
   return f && (f.severity === 'high' || f.severity === 'infeasible')
 }
 
+// findingToAmend(finding, originPhase) -> an AMEND record, or null.
+// This is the bridge that lets a REVIEW change a document. Without it a
+// reviewer's finding is recorded and nothing else: the replay path only
+// consumes amendments, so review stays advisory and the document it
+// criticises is never corrected. Returns null when the reviewer did not
+// supply the grounding fields; validateAmend is still the gate, so an
+// ungrounded record cannot slip through here.
+function findingToAmend(f, originPhase) {
+  if (!isSignificant(f)) return null
+  if (!f.target || !f.section || !f.evidence || !f.proposed || !f.prior_state) return null
+  return {
+    target: f.target,
+    section: f.section,
+    finding: f.finding,
+    evidence: f.evidence,
+    proposed: f.proposed,
+    origin: originPhase,
+    severity: f.severity,
+    status: f.status || 'open',
+    prior_state: f.prior_state,
+  }
+}
+
 function reviewPrompt(ph, doc, pass, reviewerFamily) {
   return [
     `You are the ${pass} review pass for the ${ph.key} phase of a doc-tree run.`,
@@ -104,9 +135,26 @@ function reviewPrompt(ph, doc, pass, reviewerFamily) {
       : 'Judge it against the codebase and internal consistency.',
     'Return findings per the schema: each with a severity',
     '(high | medium | low | infeasible) and a status (open | resolved).',
-    'A high or infeasible finding is significant and may trigger a replay;',
-    'medium and low are recorded but do not. Reviewer family:',
-    `${reviewerFamily || 'sonnet'}.`,
+    '',
+    'A finding you mark high or infeasible is SIGNIFICANT, and a',
+    'significant finding is expected to fix the document, not merely',
+    'describe what is wrong with it. So for each one also return:',
+    '  target      — which document the fix belongs in (prd |',
+    '                tech-design | tasks); it is not always this one',
+    '  section     — the exact section heading the fix changes',
+    '  evidence    — a resolvable citation: a file:line in this repo, a',
+    '                command and its output, or a reachable URL. Your own',
+    '                reasoning is NOT evidence.',
+    '  proposed    — the replacement text for that section, written out',
+    '  prior_state — the section\'s current text, verbatim, so the change',
+    '                can be reverted',
+    '',
+    'A significant finding missing any of these is dropped: it cannot be',
+    'applied and it will not change the document. If you cannot ground a',
+    'concern in resolvable evidence, mark it medium or low instead of',
+    'inflating its severity — medium and low are recorded as open items',
+    'and never replay.',
+    `Reviewer family: ${reviewerFamily || 'sonnet'}.`,
   ].join('\n')
 }
 
@@ -116,6 +164,7 @@ function docPath(taskDir, runDate, slug, suffix) {
 }
 
 function dispatchPrompt(ph, a, upstreamDocs) {
+  const sources = a.seed_doc ? [a.seed_doc, ...upstreamDocs] : upstreamDocs
   return [
     'You are running as a spawned doc-tree phase. Dispatch brief:',
     '',
@@ -126,8 +175,17 @@ function dispatchPrompt(ph, a, upstreamDocs) {
     `feature_slug:  ${a.feature_slug}`,
     `command_file:  plugin/commands/${ph.key}.md`,
     'skip_steps:    ["the mandatory clarifying-question step"]',
+    `seed_doc:      ${a.seed_doc || '(none)'}`,
     `upstream_docs: ${JSON.stringify(upstreamDocs)}`,
     '```',
+    '',
+    a.feature_description
+      ? `What the feature is: ${a.feature_description}`
+      : 'The brief carries no feature description; the sources below define it.',
+    '',
+    sources.length
+      ? `READ THESE FIRST, in order — they state what the feature is:\n${sources.map(s => `  - ${s}`).join('\n')}`
+      : 'No source documents exist yet; this phase defines the feature from scratch.',
     '',
     `Run date for the document filename: ${a.run_date}.`,
     'Set the environment variable EMBO_DOCTREE_UNATTENDED for your run so',
@@ -142,13 +200,13 @@ function dispatchPrompt(ph, a, upstreamDocs) {
 // without running the whole workflow.
 
 // budgetAllows(spent, max) -> may another agent be spawned?
-export function budgetAllows(spent, max) {
+function budgetAllows(spent, max) {
   return spent < max
 }
 
 // roundExhausted(round, cap) -> has the GLOBAL round counter hit the cap?
 // round is one full pass over all three phases, not a per-phase count.
-export function roundExhausted(round, cap) {
+function roundExhausted(round, cap) {
   return round >= cap
 }
 
@@ -156,7 +214,7 @@ export function roundExhausted(round, cap) {
 // The termination rule (D8): replay only while there is a significant
 // finding AND the round counter is below the cap. Mirrors the shell
 // doctree_should_replay so both paths terminate identically.
-export function shouldReplay(significantCount, round, cap) {
+function shouldReplay(significantCount, round, cap) {
   return significantCount >= 1 && round < cap
 }
 
@@ -170,6 +228,7 @@ let round = 0 // GLOBAL round count: one full pass over all three phases, not pe
 const produced = []
 const upstreamDocs = []
 const allBlocked = []
+let capHitWithFindings = false
 
 round = 1
 for (const ph of PHASES) {
@@ -188,7 +247,8 @@ for (const ph of PHASES) {
     log(`phase ${ph.key} returned no document; stopping`)
     break
   }
-  // Keep only well-formed amendments (inlined validator, parity fixtures).
+  // Amendments the AUTHOR raised about an upstream document. Review-derived
+  // amendments are added below, once the review passes have run.
   const amendments = Array.isArray(digest.amend) ? digest.amend.filter(validateAmend) : []
   if (Array.isArray(digest.blocked)) {
     for (const b of digest.blocked) allBlocked.push({ phase: ph.key, ...b })
@@ -207,6 +267,24 @@ for (const ph of PHASES) {
         { label: `review:${ph.key}:internal`, phase: ph.title, model: reviewerFamily, schema: FINDINGS_SCHEMA, agentType: 'embo:examine-advisor' }),
     ])
     findings = passes.filter(Boolean).flatMap(p => (Array.isArray(p.findings) ? p.findings : []))
+
+    // Convert each significant finding into an amendment, so a review can
+    // CHANGE the document it criticises instead of only describing it.
+    // A significant finding that arrives ungrounded is dropped here and
+    // said so out loud — a silent drop reads as "review found nothing".
+    const sig = findings.filter(isSignificant)
+    const reviewAmends = sig
+      .map(f => findingToAmend(f, ph.key))
+      .filter(Boolean)
+      .filter(validateAmend)
+    const dropped = sig.length - reviewAmends.length
+    if (dropped > 0) {
+      log(`${dropped} of ${sig.length} significant finding(s) on ${ph.key} lacked grounding (target/section/evidence/proposed/prior_state) and cannot amend the document`)
+    }
+    if (reviewAmends.length > 0) {
+      log(`${reviewAmends.length} review finding(s) on ${ph.key} became amendment(s)`)
+      amendments.push(...reviewAmends)
+    }
   } else {
     log(`agent budget (${maxAgents}) reached before reviewing ${ph.key}; review skipped`)
   }
@@ -229,28 +307,56 @@ for (const ph of PHASES) {
   // GLOBAL — one increment per replay, not per phase — so the cap bounds
   // total cost. A medium/low finding never replays.
   const groundedAmends = amendments.filter(validateAmend)
-  if (shouldReplay(significant.length, round, roundCap)
+  if (significant.length > 0 && roundExhausted(round, roundCap)) {
+    log(`round cap (${roundCap}) reached with ${significant.length} significant finding(s) open — CLOSE, stopping for approval`)
+    capHitWithFindings = true
+  } else if (shouldReplay(significant.length, round, roundCap)
       && groundedAmends.length > 0
       && budgetAllows(agentCount, maxAgents)) {
     round += 1
-    const amend = groundedAmends[0]
-    agentCount += 1
-    log(`replay round ${round}: ${ph.key} findings amend ${amend.target}#${amend.section}`)
-    await agent(
-      [
-        'You are a section-scoped replay of a doc-tree phase.',
-        `Re-run phase ${amend.target} in section-scoped mode, changing ONLY`,
-        `the section "${amend.section}" per this grounded amendment:`,
-        '```yaml',
-        `finding:  ${amend.finding}`,
-        `evidence: ${amend.evidence}`,
-        `proposed: ${amend.proposed}`,
-        '```',
-        'Leave every other section byte-for-byte unchanged. Set',
-        'EMBO_DOCTREE_UNATTENDED for your run.',
-      ].join('\n'),
-      { label: `replay:${amend.target}:${amend.section}`, phase: PHASES.find(p => p.key === amend.target)?.title || ph.title, schema: DIGEST_SCHEMA, agentType: 'embo:doctree-phase' }
-    )
+    // ALL grounded amendments are applied, not just the first. Amendments
+    // can name different target documents, so they are grouped by target
+    // and each affected document gets one replay carrying every amendment
+    // for it. Applying one and dropping the rest silently loses findings
+    // that passed every validation gate, and the round cap then denies
+    // them a second chance.
+    const byTarget = new Map()
+    for (const am of groundedAmends) {
+      if (!byTarget.has(am.target)) byTarget.set(am.target, [])
+      byTarget.get(am.target).push(am)
+    }
+    const targets = [...byTarget.keys()]
+    log(`replay round ${round}: ${groundedAmends.length} amendment(s) from ${ph.key} across ${targets.length} document(s): ${targets.join(', ')}`)
+    for (const [target, amends] of byTarget) {
+      if (!budgetAllows(agentCount, maxAgents)) {
+        log(`agent budget (${maxAgents}) reached; ${amends.length} amendment(s) to ${target} NOT applied`)
+        break
+      }
+      agentCount += 1
+      const sections = amends.map(am => am.section)
+      await agent(
+        [
+          'You are a section-scoped replay of a doc-tree phase.',
+          `Re-run phase ${target} in section-scoped mode, changing ONLY`,
+          `these sections: ${sections.map(s => `"${s}"`).join(', ')}.`,
+          'Apply every amendment below to its own named section:',
+          '',
+          ...amends.map(am => [
+            '```yaml',
+            `section:  ${am.section}`,
+            `finding:  ${am.finding}`,
+            `evidence: ${am.evidence}`,
+            `proposed: ${am.proposed}`,
+            '```',
+          ].join('\n')),
+          '',
+          'Leave every other section byte-for-byte unchanged. Apply ALL of',
+          'them — a partial application silently loses a reviewed finding.',
+          'Set EMBO_DOCTREE_UNATTENDED for your run.',
+        ].join('\n'),
+        { label: `replay:${target}:${sections.length} section(s)`, phase: PHASES.find(p => p.key === target)?.title || ph.title, schema: DIGEST_SCHEMA, agentType: 'embo:doctree-phase' }
+      )
+    }
   }
 
   // escalation: halt stops at the first blocked item.
@@ -267,4 +373,5 @@ return {
   rounds: round,
   agents_spawned: agentCount,
   round_cap: roundCap,
+  cap_hit_with_findings: capHitWithFindings,
 }

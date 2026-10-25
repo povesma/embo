@@ -33,9 +33,11 @@ function assertEq(desc, exp, act) {
   }
 }
 
-// Extract one `export function <name>(...) { ... }` block by brace matching.
+// Extract one `function <name>(...) { ... }` block by brace matching.
+// The workflow runtime rejects any `export` but `export const meta`, so the
+// pure helpers are plain declarations and are extracted by name from source.
 function extractFn(name) {
-  const marker = `export function ${name}(`
+  const marker = `function ${name}(`
   const start = SRC.indexOf(marker)
   if (start < 0) throw new Error(`function not found: ${name}`)
   let i = SRC.indexOf('{', start)
@@ -49,10 +51,31 @@ function extractFn(name) {
   return new Function(`${body}; return ${name};`)()
 }
 
+// Extract several functions into ONE scope, for a function that calls
+// another (findingToAmend calls isSignificant); returns the last named.
+function extractFnWithDeps(name, ...deps) {
+  const src = [...deps, name].map(n => {
+    const marker = `function ${n}(`
+    const start = SRC.indexOf(marker)
+    if (start < 0) throw new Error(`function not found: ${n}`)
+    let i = SRC.indexOf('{', start)
+    let depth = 0
+    for (; i < SRC.length; i++) {
+      if (SRC[i] === '{') depth += 1
+      else if (SRC[i] === '}') { depth -= 1; if (depth === 0) { i += 1; break } }
+    }
+    return SRC.slice(start, i)
+  }).join('\n')
+  // eslint-disable-next-line no-new-func
+  return new Function(`${src}; return ${name};`)()
+}
+
 const validateAmend = extractFn('validateAmend')
 const budgetAllows = extractFn('budgetAllows')
 const roundExhausted = extractFn('roundExhausted')
 const shouldReplay = extractFn('shouldReplay')
+const isSignificant = extractFn('isSignificant')
+const findingToAmend = extractFnWithDeps('findingToAmend', 'isSignificant')
 
 // ---- 5.5: inlined validator against the shared parity fixtures ----
 
@@ -105,6 +128,81 @@ for (const bad of ['Date.now(', 'Math.random(', 'new Date(', 'import(', 'require
 for (const fs of ['readFileSync', 'writeFileSync', 'child_process', 'execSync', 'spawnSync']) {
   assert(`5.6: no filesystem/shell (${fs})`, !code.includes(fs))
 }
+
+// ---- the review-to-amendment bridge ----
+// Without this bridge a reviewer's finding is recorded and never applied,
+// so review cannot change the document it criticises. These assert that a
+// grounded significant finding DOES become a valid amendment, and that an
+// ungrounded or non-significant one does not.
+
+const groundedFinding = {
+  severity: 'high',
+  status: 'open',
+  finding: 'FR-3 has no acceptance criterion that can fail',
+  target: 'prd',
+  section: 'FR-3',
+  evidence: 'tasks/x/prd.md:88',
+  proposed: 'FR-3: ... with criterion: hook exits 2 on a protected branch',
+  prior_state: 'FR-3: the guard should generally prevent this',
+}
+
+const amend = findingToAmend(groundedFinding, 'tech-design')
+assert('bridge: a grounded significant finding becomes an amendment', amend !== null)
+assert('bridge: the amendment passes validateAmend', validateAmend(amend))
+assertEq('bridge: origin is the reviewing phase', 'tech-design', amend.origin)
+assertEq('bridge: target is the document to fix', 'prd', amend.target)
+
+for (const missing of ['target', 'section', 'evidence', 'proposed', 'prior_state']) {
+  const f = { ...groundedFinding }
+  delete f[missing]
+  assert(`bridge: significant finding without ${missing} is dropped`,
+    findingToAmend(f, 'tech-design') === null)
+}
+
+for (const sev of ['medium', 'low']) {
+  assert(`bridge: a ${sev} finding never amends, even fully grounded`,
+    findingToAmend({ ...groundedFinding, severity: sev }, 'tech-design') === null)
+}
+
+assert('bridge: an infeasible finding is significant and amends',
+  findingToAmend({ ...groundedFinding, severity: 'infeasible' }, 'prd') !== null)
+
+// The regression this whole bridge exists to prevent: a review pass that
+// returns findings but produces zero amendments, so the document stands
+// uncorrected. A grounded significant finding must never do that.
+assert('bridge: grounded significant findings do not yield an empty amendment set',
+  [groundedFinding].map(f => findingToAmend(f, 'tech-design'))
+    .filter(Boolean).filter(validateAmend).length === 1)
+
+// ---- every grounded amendment is applied, not just the first ----
+// A run that applies amendments[0] and drops the rest silently loses
+// findings that passed every validation gate, and the round cap then
+// denies them a second chance. The source must not index [0] out of the
+// grounded set, and must group by target document.
+
+assert('multi-amend: no groundedAmends[0] single-pick remains',
+  !SRC.includes('groundedAmends[0]'))
+assert('multi-amend: amendments are grouped by target document',
+  SRC.includes('byTarget'))
+
+// The grouping itself, replicated from the source shape: amendments to
+// different documents must not collapse into one replay, and several
+// amendments to the SAME document must travel together in one.
+const sampleAmends = [
+  { target: 'prd', section: 'FR-1' },
+  { target: 'prd', section: 'NFR-2' },
+  { target: 'tech-design', section: 'D-4' },
+]
+const grouped = new Map()
+for (const am of sampleAmends) {
+  if (!grouped.has(am.target)) grouped.set(am.target, [])
+  grouped.get(am.target).push(am)
+}
+assertEq('multi-amend: 3 amendments over 2 documents → 2 replays', 2, grouped.size)
+assertEq('multi-amend: both prd amendments ride one replay', 2, grouped.get('prd').length)
+assertEq('multi-amend: the tech-design amendment is not lost', 1, grouped.get('tech-design').length)
+assertEq('multi-amend: no amendment is dropped', 3,
+  [...grouped.values()].reduce((n, a) => n + a.length, 0))
 
 // ---- report ----
 

@@ -78,6 +78,15 @@ resolved value and is marked "argument". Resolve the task directory and
 the run date here too — the workflow script cannot compute a date, so it
 is resolved now and passed in.
 
+**Resolve what the feature IS.** A phase agent starts with no context
+beyond its brief, so the brief must say what is being built. Look in the
+task directory for an existing seed or brief (`SEED.md` and the like); if
+one is there, pass its path as `seed_doc`. Read it and pass a one- or
+two-sentence `feature_description` as well. When neither exists, say so
+in the pre-flight report — a run whose first phase must invent the
+feature from its slug alone produces a document about the wrong thing,
+and that is worth stopping for rather than discovering at the end.
+
 ### Step 2 — Pre-flight report (before any spawn)
 
 Print the resolved plan and **stop for the user's go-ahead** — the one
@@ -126,8 +135,9 @@ Select the execution path and state in the report which one is running:
 - **Workflow path (default).** Launch the doc-tree workflow (shipped at
   the plugin's default `workflows/` location, so it is namespaced by the
   plugin: invoke it as `embo:doctree`), passing the resolved configuration
-  via `args`: task directory, feature slug, run date, per-phase models,
-  reviewer family, escalation mode, round cap, and max agents. The
+  via `args`: task directory, feature slug, run date, seed document path
+  and feature description, per-phase models, reviewer family, escalation
+  mode, round cap, and max agents. The
   workflow owns the phase sequence, the round and budget counters, and the
   replay loop as runtime properties.
 - **Sequential fallback.** When workflows are unavailable (disabled via
@@ -159,9 +169,15 @@ context that shares its author's biases:
   references a PRD requirement, and every phase given skip-steps returned
   `decisions_taken > 0`. A failed gate is reported like a high-severity
   finding but is not open to reviewer disagreement.
-- A **significant** finding (severity `high` or `infeasible`) may trigger
-  a section-scoped replay of the affected upstream phase, up to the round
-  cap; `medium`/`low` are recorded but never replay.
+- A **significant** finding (severity `high` or `infeasible`) becomes an
+  amendment and may trigger a section-scoped replay of the affected
+  upstream phase, up to the round cap; `medium`/`low` are recorded but
+  never replay. A review is expected to **fix** the document, not just
+  describe what is wrong with it, so a significant finding must name the
+  target document and section and carry resolvable evidence, the proposed
+  replacement text, and the section's current text. One that arrives
+  without them cannot be applied: it is dropped, and the run says so
+  rather than letting it pass as a review that found nothing.
 
 ### Step 5 — Closing report
 
@@ -172,7 +188,12 @@ When the run finishes, report together, in one place:
   user answers them in one sitting (they also live under an "Open
   Questions for the User" heading in each document);
 - the number of review rounds taken;
-- the token cost of the run.
+- the token cost of the run;
+- if `cap_hit_with_findings` is true in the workflow result: a prominent
+  notice that the round cap was reached with significant findings still
+  open, naming the findings, and asking the user whether to re-invoke
+  with a higher `--round-cap` or accept the open findings as recorded
+  items.
 
 ## Degradation (loud, never silent)
 
