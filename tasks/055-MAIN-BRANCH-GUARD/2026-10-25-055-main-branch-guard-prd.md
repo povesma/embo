@@ -32,8 +32,9 @@ branch corresponds to the task being worked on.
 - The profile is read through a plain `embo-profile get <dotted.field>` command that prints an empty string when the field is absent — verified via: `plugin/bin/embo-profile:20-30`, 2026-10-25.
 - The profile has a `rules:` section with grouped sub-sections (code style, testing, ...) in the canonical default profile — verified via: `plugin/profiles/default.yaml:10-22`, 2026-10-25.
 - Every existing hook has a sibling fixture test file (`*.test.sh`) — verified via: `ls plugin/hooks`, 2026-10-25.
-- The exact PreToolUse payload fields and the block/deny output contract for hooks — [assumption, verify in tech-design against current Claude Code hooks docs].
-- Whether a hook can reliably tell that a `Bash` command is a `git commit`/`git push` (including compound or aliased forms) — [assumption, verify in tech-design].
+- The exact PreToolUse payload fields and the block/deny output contract for hooks — RESOLVED against the live hooks docs (2026-10-25): deny is `hookSpecificOutput{hookEventName, permissionDecision: "deny", permissionDecisionReason}` on exit 0 (exit 2 + stderr as fallback); warn uses `additionalContext` with no `permissionDecision`; two PreToolUse hooks on `Bash` resolve by deny > defer > ask > allow, so a guard deny wins over approve-compound's allow.
+- Whether a hook can reliably tell that a `Bash` command is a `git commit`/`git push` (including compound or aliased forms) — best-effort by design (the command is a string; compound/aliased/wrapped forms are not fully decidable); the guard is a guardrail, not a security boundary.
+- **A zero-code stopgap already ships** (PR #76): a `permissions.deny` rule in tracked `.claude/settings.json` blocking `git push origin main`/`master`, enforced by the existing `approve-compound.sh`. It is kept alongside this hook as defense-in-depth (see Out of Scope and the tech-design). VERIFIED: the deny mechanism is sound under bash; a deny rule must use an exact or space-star shape — a glued glob (`main*`) silently fails to match, which is why this feature matches branch names by exact string (D7).
 
 ### Past Similar Features (from claude-mem)
 
@@ -137,6 +138,11 @@ As a developer using embo, I want the agent to be unable to change or publish wo
    - **Priority**: Medium
    - **Rationale**: Closes the wider blindness described in the seed.
    - **Dependencies**: Shared branch/task match rule; implementation command.
+   - **Coverage caveat**: reliable only when `/embo:impl` records the active
+     task in a state file the guard reads (tech-design FR-5 trigger). Without
+     it, the task cannot be derived at a first edit on a clean tree, so
+     coverage is **best-effort** — the check then silently passes rather than
+     firing a false mismatch.
 
 6. **FR-6**: The guard is registered in the plugin hook manifest and has fixture tests.
    - **Priority**: High

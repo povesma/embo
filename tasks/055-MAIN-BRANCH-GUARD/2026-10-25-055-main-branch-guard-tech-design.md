@@ -58,6 +58,24 @@ SessionStart hook chose fail-open for a warn-only check
 (`branch-task-check.sh:15-17`), which does not transfer to a deny-capable
 guard (see Decision D2).
 
+**Independent review (2026-10-25).** The three provisional items below were
+checked against the live Claude Code hooks docs
+(https://code.claude.com/docs/en/hooks) and the actual plugin source, and all
+resolve in this design's favour:
+- Deny contract: `permissionDecision: "deny"` + `permissionDecisionReason` on
+  exit 0 with `hookEventName: "PreToolUse"` present; exit 2 + stderr is a valid
+  deliberate-deny fallback. Confirmed.
+- `additionalContext` for warn: honoured on PreToolUse; emit with NO
+  `permissionDecision`. Confirmed.
+- Two PreToolUse hooks on `Bash`: precedence is **deny > defer > ask > allow**,
+  hooks run in parallel, so the guard's deny wins over approve-compound's
+  allow. Confirmed. One residual gap: approve-compound may emit `updatedInput`
+  (a rewritten command, `approve-compound.sh:443`); the guard sees the
+  ORIGINAL command (both hooks get the same input), so add a fixture with a
+  rewritten compound and confirm the guard still denies. The claim that
+  `embo-profile get` on a flow-style list retains `[a, b]` was not
+  independently re-run — provisional.
+
 ## Proposed Design
 
 ### Architecture
@@ -159,13 +177,17 @@ Hook input: PreToolUse JSON on stdin. Fields used: `tool_name`,
 key names are provisional until fixture-checked against a live payload; the
 test suite includes one captured real payload fixture to pin them.]
 
-Hook output contract:
+Hook output contract (confirmed against the Claude Code hooks docs,
+https://code.claude.com/docs/en/hooks, 2026-10-25):
 
 | Outcome | Emission |
 |---|---|
-| allow | exit 0, no output |
-| deny (`block`) | exit 0 with `hookSpecificOutput` JSON, `permissionDecision: "deny"`, reason text per FR-3 (branch, why, fix). Exit 2 + stderr is the fallback form if JSON emission fails. |
-| warn | exit 0 with `hookSpecificOutput.additionalContext` carrying the same text, so the model sees it; also written to stderr. [provisional: confirm `additionalContext` is honoured for PreToolUse in current docs; if not, stderr alone is the warning] |
+| allow | exit 0, no output. Note: a silent exit 0 is "no decision" — the call continues through the normal permission flow, it is NOT an approval. The guard never emits an explicit `permissionDecision: "allow"` (that would pre-approve a call that would otherwise prompt). |
+| deny (`block`) | exit 0 with `hookSpecificOutput` JSON carrying `hookEventName: "PreToolUse"`, `permissionDecision: "deny"`, and `permissionDecisionReason` per FR-3 (branch, why, fix). The reason is shown to Claude. Exit 2 + stderr is the fallback form ONLY for a deliberate deny if JSON emission fails — never for an internal error (see Error Handling). |
+| warn | exit 0 with `hookSpecificOutput` carrying `hookEventName: "PreToolUse"` and `additionalContext` (the warning text), and NO `permissionDecision` — an explicit "allow" would wrongly pre-approve the call. `additionalContext` is honoured for PreToolUse per the docs field table. A stderr line is secondary (shown to the user/debug log, not reliably to the model). |
+
+`hookEventName: "PreToolUse"` is required inside `hookSpecificOutput`
+(docs). The deny and warn test cases must assert its presence.
 
 Message template: `main-branch-guard: <branch> is a protected branch; <what
 was refused>. Create a feature branch first (git switch -c <type>/<task>-<slug>)
@@ -181,8 +203,8 @@ Classification detail:
   not a modification of tracked history); `git commit` is the choke point that
   prevents it from landing on the protected branch.
 - **Bash**: split into subcommands; for each, deny when it is a git mutation
-  (commit, merge, rebase, cherry-pick, revert, reset, am) while the current
-  branch is protected; `push` is denied when its targets include a protected
+  (commit, merge, rebase, cherry-pick, am) while the current branch is
+  protected; `push` is denied when its targets include a protected
   branch (current branch implicit, `HEAD`, explicit refspec, `--all`,
   `--mirror`) so that `git push origin feature` while on `main` is allowed but
   `git push origin HEAD:main` from a feature branch is also denied; shell
@@ -191,6 +213,24 @@ Classification detail:
   `eval`, `bash -c`, `sh -c`): treated as a candidate and denied in `block`
   mode only if it contains a literal `git commit|push|merge` or write token;
   otherwise allowed (best-effort limit, documented).
+- **Branch-create in a compound must NOT be a false denial.** The branch is
+  read once, before the command runs, so a compound whose *first* act leaves
+  the protected branch — `git switch -c <b> && git commit`,
+  `git checkout -b <b> && …`, `git worktree add …` — would otherwise be denied
+  for being "on main", which is the exact corrective action the deny message
+  recommends. The classifier tracks a simulated current branch across the
+  split subcommands: a leading branch-changer (`switch -c`/`--create`,
+  `checkout -b`/`-B`, `git branch <new>` then a switch, `git worktree add`)
+  updates the simulated branch, and a later mutation is judged against it.
+  Simplest safe rule: if a branch-creating/-switching subcommand precedes the
+  mutation in the same compound, the mutation is not on the protected branch.
+- **Mutation classification is per subcommand AND per flag, not per verb.**
+  `git reset` (default, non-destructive unstage) and `git revert` are NOT
+  blanket mutations; `git reset --hard` on a protected branch is a plausible
+  deliberate user action — decide by flag, and state the chosen policy in the
+  test matrix. Bare `switch`/`checkout`/`fetch`/`pull`/`stash`/`add`/`status`
+  are never mutations. Whether `git pull` (fast-forward) on a protected branch
+  is allowed is an explicit matrix entry (default: allowed).
 - The push-to-protected-branch rule applies even when the checked-out branch is
   not protected (incident variant), so branch lookup precedes but does not gate
   the push check.
@@ -202,15 +242,28 @@ Classification detail:
 - `branch-task-lib.sh`: `branch_task_matches`, `branch_task_derive_from_paths`
   reused for FR-5; no second match definition (story 4 AC3).
 - `hooks.json`: new PreToolUse entry. `approve-compound.sh` is unchanged.
-- FR-5 trigger: PRD leaves hook-vs-command open. Decided as hook-side (D5): on
+- FR-5 trigger: PRD leaves hook-vs-command open. Decided as hook-side (D5), on
   the first mutating call of a session (marker file keyed by `session_id`
   under the guard's own state dir in the project git-ignored `tmp/`, never
-  `/tmp`), derive the task from the call's target path (`tasks/NNN-*` or the
-  uncommitted-changes derivation used by the SessionStart hook) and compare to
-  the branch. Mismatch in `warn` mode emits one line and records the marker;
-  in `block` mode it denies once with the suggestion and records the marker so
-  the agent's retry after acknowledging proceeds only if the branch changed or
-  the mode is relaxed. Fail open when no single task is derivable.
+  `/tmp`).
+  - **Task source (revised — the path-only derivation is too weak).** At the
+    first edit the tree is usually clean and code-file edits carry no task
+    number, so deriving the task from the call's target path or from
+    uncommitted changes silently no-ops in the seed's own incident (code work
+    on a finished task's branch). `/embo:impl` therefore records the active
+    task number in a small state file (an `embo-profile`-style bin writing the
+    project git-ignored `tmp/`), and the guard reads THAT as the primary
+    source, falling back to the path/uncommitted derivation only when the
+    state file is absent. Without the `/embo:impl` state file, FR-5 coverage
+    is best-effort and the PRD claim must be marked so.
+  - **Block-mode semantics (made consistent).** The marker suppresses repeats
+    in BOTH modes: `warn` emits one line and records the marker; `block`
+    denies once with the create/switch suggestion and records the marker, and
+    the agent's retry is then NOT re-denied by this check — the one denial has
+    delivered the guidance, and re-denying on every subsequent call would
+    wedge the run. (The protected-branch guard FR-1/FR-2 still applies on its
+    own terms; FR-5 is the softer branch/task-match nudge.) Fail open when no
+    single task is derivable.
 
 ### Error Handling
 
@@ -360,17 +413,45 @@ question was decided from evidence.
 6. **D6 Tracked-path rule**: block only tracked files for Edit/Write; allow new
    untracked files. Evidence: PRD story 1 AC3.
 7. **D7 Branch list matching**: exact names, no globs, flow- and block-style
-   YAML parsed. Evidence: observed `embo-profile get` list output shape.
+   YAML parsed. Evidence for flow/block parsing: observed `embo-profile get`
+   list output shape. Evidence for no-glob: a glued glob is a known trap —
+   in the existing `approve-compound.sh` deny matcher a rule like
+   `Bash(… main*)` silently fails to match (its matcher supports only exact,
+   space-star `cmd *`, and colon-star `cmd:*` shapes), verified by executing
+   that hook under bash. Exact string equality avoids re-introducing that
+   class of silent-no-match bug here. Globs are a possible later extension if
+   a real need appears.
 8. **D8 Push rule independent of current branch**: deny pushes whose target is
    protected even from a feature branch. Evidence: PRD FR-2 "targeting a
    protected branch".
 9. **D9 Shipped profiles state the fields explicitly**: so `show` documents
    them; guard defaults cover omissions.
 
-BLOCKED: none. Provisional items (to confirm at implementation): PreToolUse
-`additionalContext` honoured for warn; deny-vs-allow precedence when two
-PreToolUse hooks match `Bash`; exact `file_path`/`notebook_path` key names
-(pinned by a real-payload fixture); claude-mem history not consulted.
+BLOCKED: none.
+
+Resolved by independent review (2026-10-25, against the live hooks docs):
+`additionalContext` honoured for warn (emit with no `permissionDecision`);
+deny-vs-allow precedence is deny > defer > ask > allow with parallel
+execution, so the guard's deny wins. Remaining provisional: exact
+`file_path`/`notebook_path` key names (pin with a real-payload fixture);
+the `updatedInput` rewrite interaction (add a fixture); flow-list retention
+by `embo-profile get` (re-run during impl); claude-mem history not consulted.
+
+**Relationship to the shipped stopgap (keep both).** A `permissions.deny`
+rule in tracked `.claude/settings.json`
+(`Bash(git push origin main *)` / `master`), enforced by the existing
+`approve-compound.sh`, already ships as a baseline guard. It needs no `yq`,
+no profile, and no hook reload, and it survives a broken or disabled version
+of THIS guard — exactly the D2 failure mode. This hook is the profile-driven
+superset (it also catches `HEAD:main`, `--all`, implicit push from main, and
+Edit/Write on tracked files). Do NOT remove the deny rule when this hook
+lands; keep it as defense-in-depth. Both fire on `git push origin main` and
+both deny — harmless redundancy; the only visible difference is which reason
+the user sees. Revisit only if the two ever produce conflicting messages.
+Edit-path resolution note: run `git ls-files` with `-C` on the file's OWN
+directory, not the session `cwd` (the target may be in another worktree or
+submodule); add fixtures for a path in another repo and a path outside any
+repo.
 
 ## References
 

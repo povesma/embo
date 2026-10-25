@@ -82,10 +82,18 @@
   - [ ] 2.2 Implement `gcl_split` in `plugin/lib/git-command-lib.sh` (pure
     function, no output side effects or exits, same convention as
     `branch-task-lib.sh`) [verify: auto-test]
-  - [ ] 2.3 Write tests for `gcl_is_git_mutation`: commit, push, merge,
-    rebase, cherry-pick, revert, reset, am are mutations; status, log, diff,
-    branch listing are not [verify: auto-test]
-  - [ ] 2.4 Implement `gcl_is_git_mutation` [verify: auto-test]
+  - [ ] 2.3 Write tests for `gcl_is_git_mutation`: commit, merge, rebase,
+    cherry-pick, am, and `git reset --hard`/`--soft`/`--mixed` to a ref are
+    mutations; status, log, diff, branch listing, bare `switch`/`checkout`/
+    `fetch`/`pull`/`stash`/`add`, and bare `git reset` (default unstage) are
+    NOT; decide per flag, not per verb [verify: auto-test]
+  - [ ] 2.4 Implement `gcl_is_git_mutation` (per-subcommand AND per-flag)
+    [verify: auto-test]
+  - [ ] 2.4b Write tests for branch-change tracking across a compound:
+    `git switch -c <b> && git commit`, `git checkout -b <b> && …`,
+    `git worktree add …` leave the protected branch BEFORE the mutation, so
+    the mutation is judged against the new branch and is NOT denied; implement
+    a `gcl_simulated_branch <subcommands> <current>` helper [verify: auto-test]
   - [ ] 2.5 Write tests for `gcl_push_targets`: implicit current branch,
     `HEAD`, `origin HEAD:main`, explicit `src:dst`, `--all`, `--mirror`,
     `--delete`, and `git push origin feature` while on `main` yields only
@@ -123,10 +131,13 @@
     from flow and block YAML list shapes, defaults `main`/`master` and
     `block`/`warn`, unknown mode falls back to the safe default with a
     stderr notice [verify: auto-test]
-  - [ ] 3.5 Implement the output contract: allow is silent exit 0; deny is
-    exit 0 with `hookSpecificOutput.permissionDecision: "deny"` and the
-    reason (branch, why, fix); warn is `additionalContext` plus stderr;
-    exit 2 with stderr as the fallback if JSON emission fails
+  - [ ] 3.5 Implement the output contract: allow is silent exit 0 (no
+    explicit "allow"); deny is exit 0 with `hookSpecificOutput` carrying
+    `hookEventName: "PreToolUse"`, `permissionDecision: "deny"` and the
+    `permissionDecisionReason` (branch, why, fix); warn is `hookEventName` +
+    `additionalContext` with NO `permissionDecision`, plus a secondary stderr
+    line; exit 2 + stderr is the fallback ONLY for a deliberate deny, never an
+    internal error. Assert `hookEventName` is present in deny and warn output
     [verify: auto-test]
   - [ ] 3.6 Pin the payload key names with one captured real-payload
     fixture in the test file and confirm `file_path` / `notebook_path`
@@ -138,9 +149,13 @@
   - [ ] 4.1 Write guard tests for Bash on a protected branch in `block`:
     `git commit`, merge, rebase, cherry-pick and redirects or `sed -i` onto
     tracked paths deny; compound forms such as `git add . && git commit`
-    deny; read-only commands allow [verify: auto-test]
+    deny; BUT `git switch -c feat/x && git commit` and
+    `git checkout -b feat/x && git commit` ALLOW (branch-create precedes the
+    mutation — a false denial here blocks the deny message's own fix);
+    read-only commands allow [verify: auto-test]
   - [ ] 4.2 Write guard tests for push: implicit push on `main`, `HEAD`,
-    `origin HEAD:main` from a feature branch, `--all`, `--mirror` deny;
+    `origin HEAD:main` from a feature branch, `--all`, `--mirror`,
+    `--delete main`, `--force`-to-main and `+src:main` deny;
     `git push origin feature` while on `main` allows; `warn` and `off`
     modes behave per the mode [verify: auto-test]
   - [ ] 4.3 Implement the Bash branch of the guard using
@@ -166,16 +181,26 @@
 - [ ] 6.0 **User Story:** As a developer, I want a branch/task mismatch
   reported before the first edit of an implementation run so that work does
   not land on a finished task's branch [0/0]
+  - [ ] 6.0a Have `/embo:impl` record the active task number in a small
+    project-git-ignored `tmp/` state file (keyed by `session_id`), written via
+    an `embo-profile`-style bin; this is the guard's PRIMARY task source,
+    since at the first edit the tree is usually clean and code-file edits
+    carry no task number (the path/uncommitted derivation silently no-ops in
+    the seed's own incident) [verify: auto-test]
   - [ ] 6.1 Write tests for the mismatch check: matching branch silent;
     mismatch in `warn` emits one line with a create/switch suggestion;
-    mismatch in `block` denies once; the per-session marker (keyed by
-    `session_id`, under the project git-ignored `tmp/`) suppresses repeats;
-    no derivable task or a tie stays silent; `off` mode silent
+    mismatch in `block` denies ONCE then records the marker and does NOT
+    re-deny the retry (the single denial delivered the guidance; re-denying
+    every call would wedge the run); the per-session marker (keyed by
+    `session_id`, under the project git-ignored `tmp/`) suppresses repeats in
+    BOTH modes; active-task state file present vs absent (fallback to path
+    derivation); no derivable task or a tie stays silent; `off` mode silent
     [verify: auto-test]
-  - [ ] 6.2 Implement the mismatch check in the guard, reusing
-    `branch_task_matches` and `branch_task_derive_from_paths` from
-    `plugin/lib/branch-task-lib.sh` (no second match definition)
-    [verify: auto-test]
+  - [ ] 6.2 Implement the mismatch check in the guard: read the active-task
+    state file first, else fall back to `branch_task_derive_from_paths`;
+    reuse `branch_task_matches` from `plugin/lib/branch-task-lib.sh` (no
+    second match definition). Mark FR-5 coverage best-effort when no state
+    file and no derivable task [verify: auto-test]
   - [ ] 6.3 Replace the prose-only branch bullet in
     `plugin/commands/impl.md` with a one-line pointer that the guard
     enforces it per the profile mode, with no task numbers
@@ -196,11 +221,19 @@
   - [ ] 7.4 Add the guard to the README hook list and state the best-effort
     limit and the remote-branch-protection complement, with no task
     references [verify: code-only]
-  - [ ] 7.5 Confirm the provisional behaviours against current hooks docs
+  - [X] 7.5 Confirm the provisional behaviours against current hooks docs
     (`additionalContext` for warn, deny precedence with two matching
-    PreToolUse hooks) and record the outcome in the design notes
-    [verify: manual-run-claude]
-  - [ ] 7.6 After `/reload-plugins`, in a live session on `main`: a real
+    PreToolUse hooks) and record the outcome in the design notes — DONE
+    (independent review 2026-10-25 against https://code.claude.com/docs/en/hooks;
+    recorded in the tech-design "Past Decisions" and final BLOCKED note).
+    Note: this gates the 3.5 emission contract, so it belongs FIRST in the
+    work order, not last [verify: manual-run-claude]
+  - [ ] 7.6 Add an integration fixture that runs BOTH registered PreToolUse
+    hooks on `git push origin main` (approve-compound + the guard) and
+    confirms a clean deny, and on a compound approve-compound would rewrite
+    (`updatedInput`) that the guard still denies against the ORIGINAL command
+    [verify: auto-test]
+  - [ ] 7.7 After `/reload-plugins`, in a live session on `main`: a real
     Edit of a tracked file is refused with the guard message and
     `approve-compound` still approves a compound Bash command
     [verify: manual-run-user]
