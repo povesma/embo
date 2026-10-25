@@ -362,13 +362,15 @@ This includes but is not limited to:
 explicitly approve before running the command.
 
 **Protected branches**: never push directly to `main`/`master`; branch and
-open a PR. Enforcement is a `permissions.deny` rule in
-`.claude/settings.local.json` (`Bash(git push origin main *)` and the
+open a PR. Enforcement is a `permissions.deny` rule in the repo-tracked
+`.claude/settings.json` (`Bash(git push origin main *)` and the
 `master` equivalent), which the `approve-compound.sh` hook turns into a
 hard deny at the point of the push. The deny rule must use the space-star
 shape (`cmd *`), not a glued glob (`cmd*`) — the latter silently fails to
-match. It covers only the literal `git push origin <branch>` form, so it
-is a stopgap, not a complete branch guard.
+match. It covers only the literal `git push origin <branch>` form — a bare
+`git push`, a `HEAD:main` refspec, or a flag before the remote
+(`git push --force origin main`) are NOT caught — so it is a stopgap, not
+a complete branch guard.
 
 ## Task Marking Convention
 
