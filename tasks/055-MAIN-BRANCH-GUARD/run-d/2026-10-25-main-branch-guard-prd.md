@@ -30,9 +30,10 @@ rule; it must branch first, or the action fails with an explicit reason.
 *authoring* new work on a protected branch through the paths the
 workflow instructs. It does not block every route by which a commit
 could reach such a branch — `git merge --no-ff`, `pull` and `rebase`
-are deliberately permitted, a Bash call that writes a file bypasses the
-edit guard, and an obfuscated command can hide a commit. Each limit is
-stated in §7 with its reason. Read the mechanism's claims as bounded,
+are deliberately permitted, plumbing (`commit-tree` + `update-ref`) can
+advance a protected branch outright, a Bash call that writes a file
+bypasses the edit guard, and an obfuscated command can hide a commit.
+Each limit is stated in §7 with its reason. Read the mechanism's claims as bounded,
 because the honest bound is what makes the rest trustworthy.
 
 ## 3. Users
@@ -746,6 +747,22 @@ seal:
    writes a two-parent commit on the current branch (measured, not
    inferred), and `git pull` with merge semantics and `git rebase` can
    write commits too.
+
+   **Plumbing commands are a separate, also-permitted path.** Measured
+   by d-critic: `git write-tree` + `git commit-tree` + `git update-ref
+   refs/heads/main <sha>` advances `main` without any porcelain commit
+   subcommand. `git symbolic-ref HEAD`, `git fast-import` and `git
+   replace` can likewise move a protected branch. None is blocked.
+
+   The two categories differ in *why* they are permitted, and the
+   distinction matters for anyone tempted to close one of them.
+   `merge`/`pull`/`rebase` are permitted because they are **legitimate
+   work** this guard must not obstruct. Plumbing is permitted because it
+   is **circumvention, not forgetting** (§7.3): nobody reaches for
+   `commit-tree` by accident, and an agent willing to assemble a commit
+   from plumbing can more easily set `protected_branch_mode` to `off`.
+   Blocking plumbing would add a long, unbounded list of subcommands to
+   the matcher for no gain against the failure this feature addresses.
 
    This is a judgement, not an oversight. Having `main` checked out to
    update it from its remote is normal, legitimate work, and blocking

@@ -278,8 +278,17 @@ branch, and must not be read as if it did.** `git merge --no-ff` and a
 three-way merge create a merge commit on the current branch (measured by
 `d-critic`: a `--no-ff` merge on `main` created a two-parent commit and
 advanced HEAD), and so can `git pull` with merge semantics on diverged
-branches and `git rebase` onto the current branch. They are deliberately
-not blocked: PRD section 6 excludes merge, rebase and reset; updating a
+branches and `git rebase` onto the current branch. The plumbing family
+also advances or repoints a branch with no blocked subcommand in sight:
+`git write-tree` + `git commit-tree` + `git update-ref refs/heads/main
+<sha>` moved `main` to a new commit (measured by `d-critic`), and
+`git symbolic-ref HEAD refs/heads/main`, `git fast-import` and `git
+replace` are of the same kind. These are circumvention, not forgetting,
+are not how an agent commits, and are deliberately not blocked (blocking
+`update-ref` would catch legitimate uses and widen the surface beyond
+FR-2). (`git notes add` writes a notes ref only; `git stash` creates
+commit objects without advancing the branch; neither is a gap.) The
+merge, pull and rebase cases are deliberately not blocked: PRD section 6 excludes merge, rebase and reset; updating a
 local mirror of `main` (fast-forward merge or pull, which create no
 commit) is a legitimate use; and the remote's own branch protection is
 the backstop for what such a commit would do next. `git stash` and
