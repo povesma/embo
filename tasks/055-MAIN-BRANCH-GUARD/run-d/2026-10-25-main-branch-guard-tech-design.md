@@ -583,7 +583,9 @@ allowed with a context warning on a protected branch.
 The hook runs `set -u` and `trap 'exit 0' ERR` as `approve-compound.sh`
 does; nothing may leak a non-zero status. `embo-profile` is invoked by
 explicit path `$HERE/../bin/embo-profile`, not a bare name: a hook does
-not depend on the Bash tool's PATH **[provisional]**, and an explicit
+not depend on the Bash tool's PATH **[the docs promise PATH injection only
+for the Bash tool's shell and no existing hook calls a bare `bin` command,
+per `d-researcher`; unproven for hooks]**, and an explicit
 path works in manual installs as well. Overridable for tests with
 `EMBO_PROFILE_BIN` (as `EMBO_CAPTURE_CMD` is in the sibling).
 
