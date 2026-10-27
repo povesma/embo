@@ -34,8 +34,10 @@ want to drive each phase interactively yourself.
               [--model-tasks <m>] [--escalation collect|halt]
 ```
 
-- `<feature-slug>` (required) — the feature's slug; the task directory and
-  document names derive from it.
+- `<feature-slug>` (required) — the feature's slug or a short description.
+  A slug (lowercase letters, digits, hyphens) is used verbatim. A phrase or
+  sentence is normalized into a slug and becomes the `feature_description`;
+  both are shown in the pre-flight report before any agent runs.
 - `--model-<phase> <m>` — override the model for one phase (alias or full
   ID). Wins over the profile value.
 - `--escalation collect|halt` — override the escalation mode.
@@ -77,6 +79,17 @@ provenance as "built-in default". An argument override replaces the
 resolved value and is marked "argument". Resolve the task directory and
 the run date here too — the workflow script cannot compute a date, so it
 is resolved now and passed in.
+
+**Normalize the argument into a slug and a feature description.** A slug
+is a short lowercase-with-hyphens identifier (e.g. `main-branch-guard`).
+If the argument looks like a slug already (all lowercase letters, digits,
+and hyphens, no spaces), use it verbatim. If it is a sentence or phrase
+(contains spaces or uppercase), derive the slug from it: lowercase,
+replace spaces and punctuation with hyphens, collapse multiple hyphens,
+strip leading/trailing hyphens, and truncate to 40 characters. The
+original argument becomes the `feature_description` to pass to the
+workflow. Show both the derived slug and the description in the pre-flight
+report so the user can redirect before any agent runs.
 
 **Resolve what the feature IS.** A phase agent starts with no context
 beyond its brief, so the brief must say what is being built. Look in the

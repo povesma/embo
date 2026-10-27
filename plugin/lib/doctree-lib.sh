@@ -145,15 +145,15 @@ doctree_revert_section() {
 
 # --- Resume and run-state (D10, D11) ------------------------------------
 
-# doctree_resume_phase <taskdir> <run-date> <slug>
+# doctree_resume_phase <taskdir> <run-date>
 # Resumability reads the documents first (D10): prints the phase key
 # (prd | tech-design | tasks) of the FIRST phase whose document is missing
 # on disk, so a resumed run restarts there. Prints nothing (rc 0) when all
 # three documents exist — the run is complete. The phase order is fixed.
 doctree_resume_phase() {
-  local taskdir="$1" date="$2" slug="$3" phase p
+  local taskdir="$1" date="$2" phase p
   for phase in prd tech_design tasks; do
-    p="$(doctree_phase_doc_path "$taskdir" "$date" "$slug" "$phase")"
+    p="$(doctree_phase_doc_path "$taskdir" "$date" "$phase")"
     if [ ! -f "$p" ]; then
       case "$phase" in
         tech_design) printf 'tech-design' ;;
@@ -337,13 +337,15 @@ doctree_should_halt() {
   esac
 }
 
-# doctree_phase_doc_path <taskdir> <run-date> <slug> <phase>
+# doctree_phase_doc_path <taskdir> <run-date> <phase>
 # The single definition of a phase's write target, so the command and the
-# fallback agree. Returns <taskdir>/<run-date>-<slug>-<suffix>.md.
+# fallback agree. Returns <taskdir>/<run-date>-<basename(taskdir)>-<suffix>.md.
+# The slug is the taskdir's basename (e.g. tasks/068-foo/ → 068-foo), so the
+# path matches what a phase agent writes when it reads the directory name.
 # Phase is one of prd | tech_design | tasks (tech_design maps to the
 # -tech-design.md suffix). Unknown phase: prints nothing, returns 1.
 doctree_phase_doc_path() {
-  local taskdir="$1" date="$2" slug="$3" phase="$4" suffix
+  local taskdir="$1" date="$2" phase="$3" suffix slug
   case "$phase" in
     prd)         suffix="prd" ;;
     tech_design) suffix="tech-design" ;;
@@ -351,5 +353,6 @@ doctree_phase_doc_path() {
     *)           return 1 ;;
   esac
   taskdir="${taskdir%/}"
+  slug="${taskdir##*/}"
   printf '%s/%s-%s-%s.md' "$taskdir" "$date" "$slug" "$suffix"
 }

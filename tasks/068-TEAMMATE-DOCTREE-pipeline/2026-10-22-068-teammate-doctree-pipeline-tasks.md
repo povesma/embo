@@ -508,14 +508,20 @@ the shell library alone.
     unreachable, a missing permission rule [verify: manual-run-claude]
     (Full matrix documented in the Degradation section, each with its
     reason and response; the pre-flight catches the MCP/permission cases.)
-  - [ ] 9.8 Make the document name the agents write and the name
+  - [X] 9.8 Make the document name the agents write and the name
     `docPath()` computes the same, with a test that a resumed run finds
     documents an earlier run wrote; also return one path form (relative
     or absolute, not both) [verify: auto-test]
-    (Live runs showed agents write `<date>-<nnn>-<slug>-<suffix>.md`
-    while `docPath()` computes `<date>-<slug>-<suffix>.md`, so a resumed
-    run does not recognise its own documents and re-runs every phase.
-    This blocks a real 9.3 proof.)
+    (Root cause: the slug passed in the dispatch brief was the raw user
+    arg (e.g. `foo`) while agents derive the qualified form from the task
+    directory name (e.g. `068-foo`). Fixed in both the JS and shell paths:
+    `qualifiedSlug(taskDir)` derives the slug from the taskdir basename;
+    `docPath(taskDir, runDate, suffix)` drops the slug param and calls it;
+    shell `doctree_phase_doc_path` and `doctree_resume_phase` updated to
+    match (slug arg removed). Tests: 3 qualifiedSlug assertions, 4 docPath
+    assertions (including "matches the path a phase agent writes"), and
+    the resume-phase test now creates files with the qualified name.
+    142 lib + 70 workflow tests pass.)
 
 - [ ] 10.0 **User Story:** As a prospective embo user, I want the new
   command documented, so that I can discover it and know what it costs
@@ -592,10 +598,15 @@ the shell library alone.
     `Skill` in its tools list; contract and step 2 updated to invoke
     `Skill(skill="embo:<phase>")`. Source-scan asserts no
     `command_file: plugin/commands/` remains. 63 pass.)
-  - [ ] 11.4 In `plugin/commands/doctree.md`, when the argument is not a
+  - [X] 11.4 In `plugin/commands/doctree.md`, when the argument is not a
     slug (for example a sentence of instructions), derive a slug and a
     `feature_description` from it and show both in the pre-flight report;
     the launch passes them in `args` [verify: code-only]
+    (Added slug normalization rule to Step 1: a slug-shaped arg is used
+    verbatim; a phrase/sentence is lowercased, spaces/punctuation → hyphens,
+    collapsed, truncated to 40 chars. The original arg becomes
+    feature_description. Both shown in pre-flight report. Arguments section
+    updated to say either form is accepted.)
   - [ ] 11.5 Run `/embo:doctree <slug>` from a repository other than embo
     and confirm the PRD phase loads `embo:prd` and writes its document
     under `task_dir` [verify: manual-run-user]

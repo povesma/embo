@@ -158,13 +158,24 @@ function reviewPrompt(ph, doc, pass, reviewerFamily) {
   ].join('\n')
 }
 
-function docPath(taskDir, runDate, slug, suffix) {
+function docPath(taskDir, runDate, suffix) {
   const dir = taskDir.replace(/\/+$/, '')
+  const slug = qualifiedSlug(taskDir)
   return `${dir}/${runDate}-${slug}-${suffix}.md`
+}
+
+// qualifiedSlug(taskDir) -> the full <nnn>-<slug> form that agents use when
+// naming their output document. Derived from the task directory's basename
+// so the name the agent writes agrees with what docPath() computes.
+// e.g. "tasks/068-foo/" -> "068-foo", "tasks/068-foo" -> "068-foo"
+function qualifiedSlug(taskDir) {
+  const dir = taskDir.replace(/\/+$/, '')
+  return dir.split('/').pop() || dir
 }
 
 function dispatchPrompt(ph, a, upstreamDocs) {
   const sources = a.seed_doc ? [a.seed_doc, ...upstreamDocs] : upstreamDocs
+  const slug = qualifiedSlug(a.task_dir)
   return [
     'You are running as a spawned doc-tree phase. Dispatch brief:',
     '',
@@ -172,7 +183,7 @@ function dispatchPrompt(ph, a, upstreamDocs) {
     `phase:         ${ph.key}`,
     'mode:          full',
     `task_dir:      ${a.task_dir}`,
-    `feature_slug:  ${a.feature_slug}`,
+    `feature_slug:  ${slug}`,
     `phase_skill:   embo:${ph.key}`,
     'skip_steps:    ["the mandatory clarifying-question step"]',
     `seed_doc:      ${a.seed_doc || '(none)'}`,

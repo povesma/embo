@@ -106,33 +106,32 @@ test_resolve_model_unknown_phase() {
 test_phase_doc_path_all() {
   local td="tasks/068-TEAMMATE-DOCTREE-pipeline"
   local date="2026-10-21"
-  local slug="068-teammate-doctree-pipeline"
   assert_eq "doc_path: prd" \
-    "$td/2026-10-21-068-teammate-doctree-pipeline-prd.md" \
-    "$(doctree_phase_doc_path "$td" "$date" "$slug" prd)"
+    "$td/2026-10-21-068-TEAMMATE-DOCTREE-pipeline-prd.md" \
+    "$(doctree_phase_doc_path "$td" "$date" prd)"
   assert_eq "doc_path: tech_design → -tech-design.md" \
-    "$td/2026-10-21-068-teammate-doctree-pipeline-tech-design.md" \
-    "$(doctree_phase_doc_path "$td" "$date" "$slug" tech_design)"
+    "$td/2026-10-21-068-TEAMMATE-DOCTREE-pipeline-tech-design.md" \
+    "$(doctree_phase_doc_path "$td" "$date" tech_design)"
   assert_eq "doc_path: tasks" \
-    "$td/2026-10-21-068-teammate-doctree-pipeline-tasks.md" \
-    "$(doctree_phase_doc_path "$td" "$date" "$slug" tasks)"
+    "$td/2026-10-21-068-TEAMMATE-DOCTREE-pipeline-tasks.md" \
+    "$(doctree_phase_doc_path "$td" "$date" tasks)"
 }
 
 # ---- doctree_phase_doc_path: trailing slash on taskdir is normalized ----
 
 test_phase_doc_path_trailing_slash() {
   assert_eq "doc_path: trailing slash on taskdir normalized" \
-    "tasks/x/2026-01-02-foo-prd.md" \
-    "$(doctree_phase_doc_path "tasks/x/" "2026-01-02" "foo" prd)"
+    "tasks/068-foo/2026-01-02-068-foo-prd.md" \
+    "$(doctree_phase_doc_path "tasks/068-foo/" "2026-01-02" prd)"
 }
 
 # ---- doctree_phase_doc_path: unknown phase → empty, rc 1 ----
 
 test_phase_doc_path_unknown_phase() {
   local out
-  out="$(doctree_phase_doc_path "tasks/x" "2026-01-02" "foo" bogus)"
+  out="$(doctree_phase_doc_path "tasks/068-foo" "2026-01-02" bogus)"
   assert_eq "doc_path: unknown phase → empty" "" "$out"
-  doctree_phase_doc_path "tasks/x" "2026-01-02" "foo" bogus >/dev/null 2>&1
+  doctree_phase_doc_path "tasks/068-foo" "2026-01-02" bogus >/dev/null 2>&1
   assert_eq "doc_path: unknown phase → rc 1" "1" "$?"
 }
 
@@ -404,24 +403,24 @@ test_permanent_findings_stop_at_cap() {
 # ---- 9.2: resume detects the first missing phase document ----
 
 test_resume_phase() {
-  local td="$TMP63/resume"
-  local date="2026-01-02" slug="foo"
+  local td="$TMP63/001-foo"
+  local date="2026-01-02"
   mkdir -p "$td"
   # No documents yet → resume from prd.
   assert_eq "resume: nothing written → prd" "prd" \
-    "$(doctree_resume_phase "$td" "$date" "$slug")"
+    "$(doctree_resume_phase "$td" "$date")"
   # prd written → resume from tech-design.
-  : > "$td/2026-01-02-foo-prd.md"
+  : > "$td/2026-01-02-001-foo-prd.md"
   assert_eq "resume: prd present → tech-design" "tech-design" \
-    "$(doctree_resume_phase "$td" "$date" "$slug")"
+    "$(doctree_resume_phase "$td" "$date")"
   # prd + tech-design written → resume from tasks.
-  : > "$td/2026-01-02-foo-tech-design.md"
+  : > "$td/2026-01-02-001-foo-tech-design.md"
   assert_eq "resume: prd+tech-design present → tasks" "tasks" \
-    "$(doctree_resume_phase "$td" "$date" "$slug")"
+    "$(doctree_resume_phase "$td" "$date")"
   # all three written → nothing to resume (empty).
-  : > "$td/2026-01-02-foo-tasks.md"
+  : > "$td/2026-01-02-001-foo-tasks.md"
   assert_eq "resume: all present → empty" "" \
-    "$(doctree_resume_phase "$td" "$date" "$slug")"
+    "$(doctree_resume_phase "$td" "$date")"
 }
 
 # ---- 9.1: run-state reader recovers round and open findings ----

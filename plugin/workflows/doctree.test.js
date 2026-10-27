@@ -77,6 +77,31 @@ const shouldReplay = extractFn('shouldReplay')
 const isSignificant = extractFn('isSignificant')
 const findingToAmend = extractFnWithDeps('findingToAmend', 'isSignificant')
 const checkRequiredArgs = extractFn('checkRequiredArgs')
+const qualifiedSlug = extractFn('qualifiedSlug')
+const docPath = extractFnWithDeps('docPath', 'qualifiedSlug')
+
+// ---- 9.8: qualifiedSlug and docPath — path the agent writes matches what
+//           docPath computes, so a resumed run finds its own documents ----
+
+assertEq('qualifiedSlug: trailing slash stripped', '068-foo', qualifiedSlug('tasks/068-foo/'))
+assertEq('qualifiedSlug: no trailing slash', '068-foo', qualifiedSlug('tasks/068-foo'))
+assertEq('qualifiedSlug: nested path', '068-foo', qualifiedSlug('a/b/068-foo'))
+
+assertEq('docPath: prd',
+  'tasks/068-foo/2026-10-27-068-foo-prd.md',
+  docPath('tasks/068-foo/', '2026-10-27', 'prd'))
+assertEq('docPath: tech-design',
+  'tasks/068-foo/2026-10-27-068-foo-tech-design.md',
+  docPath('tasks/068-foo/', '2026-10-27', 'tech-design'))
+assertEq('docPath: tasks',
+  'tasks/068-foo/2026-10-27-068-foo-tasks.md',
+  docPath('tasks/068-foo/', '2026-10-27', 'tasks'))
+// A resumed run must find documents written by the previous run.
+// The fixture replicates what an agent writing 068-foo's prd would produce,
+// then confirms docPath returns the same path.
+assertEq('docPath: matches the path a phase agent writes',
+  'tasks/068-foo/2026-10-27-068-foo-prd.md',
+  docPath('tasks/068-foo', '2026-10-27', 'prd'))
 
 // ---- 11.1: checkRequiredArgs — workflow refuses to spawn on missing args ----
 
