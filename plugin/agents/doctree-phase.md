@@ -18,6 +18,7 @@ tools:
   - Grep
   - Glob
   - Bash
+  - Skill
   - mcp__plugin_claude-mem_mcp-search__search
   - mcp__plugin_claude-mem_mcp-search__get_observations
   - mcp__context7__resolve-library-id
@@ -43,7 +44,7 @@ phase:         prd | tech-design | tasks   # which phase you run
 mode:          full | section-scoped        # full doc, or named sections
 task_dir:      tasks/<nnn>-<SLUG>/          # where the document is written
 feature_slug:  <slug>                        # the feature's slug
-command_file:  plugin/commands/<phase>.md    # the phase procedure, by path
+phase_skill:   embo:<phase>                  # the phase procedure, by skill name
 skip_steps:    ["Step 4", "Step 4a"]         # interactive gates to skip
 sections:      ["FR-3", "Goals"]             # section-scoped mode only
 amendments:    [<AMEND records>]             # section-scoped mode only
@@ -58,12 +59,12 @@ upstream_docs: [<paths already written>]     # the earlier phases' outputs
    closing choice** — you have no tool to present one. Hold the summary
    in your own context only; it does not go in your return value.
 
-2. **Follow the phase command, unattended.** Load the phase procedure
-   named in `command_file` (by its path) via the Skill tool for the
-   matching `embo:<phase>` skill, and follow it — with one change: the
-   steps named in `skip_steps` are the interactive gates. Run the command
-   with the environment variable `EMBO_DOCTREE_UNATTENDED` set, which is
-   what makes each phase command replace those gates with evidence-based
+2. **Follow the phase command, unattended.** Load the phase procedure by
+   invoking the Skill tool with the skill name in `phase_skill` (e.g.
+   `Skill(skill="embo:prd")`), and follow it — with one change: the steps
+   named in `skip_steps` are the interactive gates. Run the command with
+   the environment variable `EMBO_DOCTREE_UNATTENDED` set, which is what
+   makes each phase command replace those gates with evidence-based
    decisions. For every question a skipped step would have asked, decide
    the best-supported answer from `upstream_docs`, the repository, memory,
    and current docs (Context7), and record the choice and its evidence in

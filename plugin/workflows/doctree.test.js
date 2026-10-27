@@ -76,6 +76,30 @@ const roundExhausted = extractFn('roundExhausted')
 const shouldReplay = extractFn('shouldReplay')
 const isSignificant = extractFn('isSignificant')
 const findingToAmend = extractFnWithDeps('findingToAmend', 'isSignificant')
+const checkRequiredArgs = extractFn('checkRequiredArgs')
+
+// ---- 11.1: checkRequiredArgs — workflow refuses to spawn on missing args ----
+
+assert('checkRequiredArgs: all present → null',
+  checkRequiredArgs({ task_dir: 'tasks/001-foo/', feature_slug: 'foo', run_date: '2026-10-27' }) === null)
+assert('checkRequiredArgs: missing task_dir → non-null',
+  checkRequiredArgs({ feature_slug: 'foo', run_date: '2026-10-27' }) !== null)
+assert('checkRequiredArgs: missing feature_slug → non-null',
+  checkRequiredArgs({ task_dir: 'tasks/001-foo/', run_date: '2026-10-27' }) !== null)
+assert('checkRequiredArgs: missing run_date → non-null',
+  checkRequiredArgs({ task_dir: 'tasks/001-foo/', feature_slug: 'foo' }) !== null)
+assert('checkRequiredArgs: task_dir="undefined" string → non-null',
+  checkRequiredArgs({ task_dir: 'undefined', feature_slug: 'foo', run_date: '2026-10-27' }) !== null)
+assert('checkRequiredArgs: feature_slug="undefined" string → non-null',
+  checkRequiredArgs({ task_dir: 'tasks/001-foo/', feature_slug: 'undefined', run_date: '2026-10-27' }) !== null)
+assert('checkRequiredArgs: all three missing → lists all three',
+  checkRequiredArgs({}).length === 3)
+
+// ---- 11.3: dispatch prompt uses phase_skill, not command_file ----
+// A file path only exists inside the embo repo; a skill name works from any repo.
+
+assert('11.3: dispatch prompt contains phase_skill, not command_file',
+  !SRC.includes('command_file:  plugin/commands/'))
 
 // ---- 5.5: inlined validator against the shared parity fixtures ----
 

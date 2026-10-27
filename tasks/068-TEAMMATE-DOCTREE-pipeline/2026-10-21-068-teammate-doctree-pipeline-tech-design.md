@@ -935,21 +935,40 @@ in a `yq` path segment would need quoting.
 
 ### Data contracts
 
-**Orchestrator → phase (dispatch prompt).** Required fields; a phase
-that receives a partial brief reports it rather than guessing (the same
-discipline `examine-advisor.md:93-96` states for itself):
+**Orchestrator → phase (dispatch prompt).** Required fields. The
+orchestrator itself refuses to spawn a phase when `task_dir`,
+`feature_slug` or `run_date` is missing or empty: it stops the run and
+names the missing fields. The phase agent's own partial-brief check
+(the discipline `examine-advisor.md:93-96` states for itself) is the
+second line, not the only one:
 
 ```yaml
 phase:        prd | tech-design | tasks
 mode:         full | section-scoped
 task_dir:     tasks/<nnn>-<SLUG>/
 feature_slug: <slug>
-command_file: plugin/commands/<phase>.md     # follow this, by path
+phase_skill:  embo:<phase>                   # loaded with the Skill tool, by name
 skip_steps:   ["Step 4", "Step 4a"]          # the interactive gates, named
 sections:     ["FR-3", "Goals"]              # section-scoped mode only
 amendments:   [<AMEND records>]              # section-scoped mode only
 upstream_docs: [<paths already written>]
 ```
+
+The phase procedure is named as a **skill**, never as a file path, per
+PRD probe P-3 (`Skill(skill="embo:start")` loads a command body into a
+spawned agent). The phase agent therefore needs `Skill` in its tool
+list. A repo-relative path such as `plugin/commands/prd.md` exists only
+inside the embo repo itself. **Defect found in a real run from another
+repo (web-site, 2026-10-27), fixed in tasks 11.2–11.3.** This contract
+previously carried `command_file: plugin/commands/<phase>.md`, the agent
+had no `Skill` tool, and the lead launched the workflow without resolving
+its arguments. The PRD phase received `task_dir`, `feature_slug` and the
+run date as the literal text `undefined`, could not find
+`plugin/commands/prd.md`, and stopped. Tests inside the embo repo could
+not catch either defect, because the relative path exists there. Fixed:
+`command_file` replaced with `phase_skill: embo:<phase>` everywhere;
+`Skill` added to the agent's tool list; `checkRequiredArgs` added to
+the workflow script to reject missing/`"undefined"` args before spawning.
 
 **Phase → orchestrator (return digest).** Fixed shape, per D9:
 

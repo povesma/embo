@@ -285,9 +285,19 @@ the shell library alone.
     (from meta.name + plugin embo); the entry command names it that way.
     Open: whether the Workflow tool's name param takes `embo:doctree` or
     bare `doctree` is confirmed at the 5.8 live run.)
-  - [ ] 5.8 Run the workflow end to end on a throwaway feature and
+  - [X] 5.8 Run the workflow end to end on a throwaway feature and
     confirm all three documents appear with their expected section
     headings [verify: manual-run-claude]
+    (Run on task 055 twice. Opus authors: 572,024 tokens, 9 agents, 51
+    min. Sonnet authors: 505,785 tokens, 10 agents — only 12% cheaper,
+    so the authoring model is not the dominant cost; the six review
+    passes and their tool use are. The Workflow tool's `name` takes
+    `embo:doctree`. Two defects found only by running it: the script
+    would not launch at all while it carried `export function` on its
+    pure helpers — the runtime permits no export but `export const
+    meta` — and agents write `<date>-<nnn>-<slug>-<suffix>.md` while
+    `docPath()` computes `<date>-<slug>-<suffix>.md`, so a resumed run
+    does not recognise its own documents and re-runs every phase.)
 
 - [ ] 6.0 **User Story:** As an embo user, I want every phase reviewed
   by two passes and by checks that need no judgement, so that no phase
@@ -298,13 +308,19 @@ the shell library alone.
     (FINDINGS_SCHEMA in the workflow; significant = {high, infeasible},
     defined once as doctree_finding_is_significant / isSignificant and
     tested.)
-  - [~] 6.2 Implement the two review passes per phase, spawned by the
+  - [X] 6.2 Implement the two review passes per phase, spawned by the
     lead and never by the authoring agent, using the configured
     reviewer model family [verify: manual-run-claude]
-    (Coded: the workflow spawns two examine-advisor passes (research +
-    internal) in parallel after each phase, by the lead, on the configured
-    reviewer family; the command documents the both-passes-always rule and
-    the mid-run degradation stop. Behavioral proof is the live run.)
+    (Both passes ran live on every phase and produced substantive
+    findings. But FR-6 was shipped NON-FUNCTIONAL and the live run is
+    what exposed it: the replay path consumed only `digest.amend` from
+    the AUTHORING agent, never the reviewers' findings, so a reviewer's
+    finding was recorded as an open item and the document it was about
+    went out uncorrected. First run: every phase returned
+    `"amendments": []`, no replay agent ever ran (9 agents = 3 phases +
+    6 reviews exactly), and the reviewers' real defects — the Bash
+    bypass, fail-open, parser gaps — died in the closing report. Fixed
+    by a findingToAmend bridge; see 8.6.)
   - [X] 6.3 Write fixtures for the six deterministic gates
     [verify: auto-test]
     (good + seeded-bad fixtures for each of the six gates.)
@@ -403,11 +419,28 @@ the shell library alone.
   - [~] 8.6 Implement section-scoped replay and prove by diff that an
     amendment changes ONLY the sections its finding targets
     [verify: auto-test]
-    (The workflow re-spawns the affected phase in section-scoped mode with
-    the amendment; the phase agent is instructed to change only the named
-    section. The single-section guarantee of the revert primitive is
-    diff-tested; proving a LIVE replay changes only its sections needs the
-    end-to-end run.)
+    (Replay PROVEN live: a reviewer finding rewrote FR-1 on disk — the
+    proposed "Known limit" text appeared at the target section, verified
+    by grep, surrounding document intact. 10 agents, so a replay agent
+    did run.
+    TWO DEFECTS FOUND AND FIXED, both in the path that makes a review
+    able to change a document at all:
+    (a) Reviewer findings could never become amendments: FINDINGS_SCHEMA
+    lacked the target/evidence/proposed/prior_state fields validateAmend
+    requires. Added, plus a findingToAmend bridge and a reviewer prompt
+    that asks for the grounding and says an ungrounded significant
+    finding is dropped — with the instruction to mark it medium rather
+    than inflate severity, so the schema change cannot push reviewers to
+    invent citations.
+    (b) `const amend = groundedAmends[0]` applied only the FIRST
+    amendment and discarded the rest silently; since the round counter
+    increments per replay, round_cap 2 left no second chance. Observed:
+    2 grounded amendments produced, FR-1 rewritten, NFR-2 left
+    byte-identical with no log line. Now grouped by target document, one
+    replay per affected document carrying every amendment for it, drops
+    logged.
+    STILL UNPROVEN: the multi-amendment path has unit tests but no live
+    run has exercised several amendments applying in one replay.)
   - [X] 8.7 Implement the termination rule: replay while findings are at
     or above the threshold, stop for approval after round 2 with
     findings still open, and exempt the closing open-items write as
@@ -475,6 +508,14 @@ the shell library alone.
     unreachable, a missing permission rule [verify: manual-run-claude]
     (Full matrix documented in the Degradation section, each with its
     reason and response; the pre-flight catches the MCP/permission cases.)
+  - [ ] 9.8 Make the document name the agents write and the name
+    `docPath()` computes the same, with a test that a resumed run finds
+    documents an earlier run wrote; also return one path form (relative
+    or absolute, not both) [verify: auto-test]
+    (Live runs showed agents write `<date>-<nnn>-<slug>-<suffix>.md`
+    while `docPath()` computes `<date>-<slug>-<suffix>.md`, so a resumed
+    run does not recognise its own documents and re-runs every phase.
+    This blocks a real 9.3 proof.)
 
 - [ ] 10.0 **User Story:** As a prospective embo user, I want the new
   command documented, so that I can discover it and know what it costs
@@ -493,9 +534,14 @@ the shell library alone.
   - [~] 10.4 Measure one real run's token cost and record the figure
     rather than asserting a published multiple
     [verify: manual-run-claude]
-    (Needs a real end-to-end run to measure; the README states the
-    agent-count shape (9 baseline) and names replay as the multiplier
-    without asserting a token figure until one is measured.)
+    (MEASURED, on a real feature with a substantial seed: 572,024
+    subagent tokens / 9 agents / 91 tool calls / 51 min with Opus
+    authors; 505,785 / 10 agents / 71 tool calls with Sonnet authors and
+    one replay. The second figure corrects an assumption worth keeping:
+    a cheaper authoring model saved only 12% while running an extra
+    agent, so the dominant cost is the six review passes and their tool
+    use, not authoring. README still to be updated with the measured
+    figure — that is what keeps this `[~]`.)
   - [X] 10.5 Update CLAUDE.md's file-structure section and the command
     count [verify: code-only]
     (Count 20→21; added doctree.md, doctree-phase.md, workflows/,
@@ -511,6 +557,49 @@ the shell library alone.
     pre-existing claude-mem transform-version issue in files this task
     never touched (last changed in an unrelated commit), not a regression.)
 
+- [ ] 11.0 **User Story:** As an embo user in ANY repository, I want
+  `/embo:doctree` to run there, and to refuse a broken brief before it
+  spawns an agent, so that a run outside the embo repo produces documents
+  instead of a phase that stops on missing inputs [0/5]
+  (Found by a real run from the web-site repo (2026-10-27). The lead skipped
+  the entry command's Steps 0–3 and launched the workflow without
+  arguments; the PRD phase got `task_dir`, `feature_slug` and the run date
+  as the literal text `undefined`. Its brief named the procedure as
+  `plugin/commands/prd.md`, which exists only inside the embo repo, and
+  the agent had no `Skill` tool to load `embo:prd` by name, so it stopped.
+  The PRD chose loading by skill name (probe P-3); the tech-design data
+  contract changed it to a path, and every in-repo test passed because the
+  path exists here.)
+  - [X] 11.1 Write a test in `plugin/workflows/doctree.test.js`: with
+    `task_dir`, `feature_slug` or `run_date` missing or empty, the
+    workflow spawns no agent and its result names every missing field
+    [verify: auto-test]
+    (7 assertions for checkRequiredArgs, plus a source-scan assertion that
+    the dispatch prompt no longer contains `command_file: plugin/commands/`.
+    63 pass, 0 fail.)
+  - [X] 11.2 Implement the check at the top of `plugin/workflows/doctree.js`
+    (before the phase loop; today it is `const a = args || {}` with no
+    check) [verify: auto-test]
+    (checkRequiredArgs rejects missing, empty, whitespace-only, "undefined"
+    and "null" strings for task_dir / feature_slug / run_date. The workflow
+    returns {error, missing} immediately rather than spawning any agent.)
+  - [X] 11.3 Replace `command_file: plugin/commands/${ph.key}.md` in
+    `dispatchPrompt` with `phase_skill: embo:${ph.key}`; add `Skill` to
+    the tool list in `plugin/agents/doctree-phase.md`; rewrite its input
+    contract and step 2 to invoke the skill named in `phase_skill` (no
+    file path anywhere) [verify: auto-test]
+    (dispatch prompt now carries `phase_skill: embo:<phase>`; agent gains
+    `Skill` in its tools list; contract and step 2 updated to invoke
+    `Skill(skill="embo:<phase>")`. Source-scan asserts no
+    `command_file: plugin/commands/` remains. 63 pass.)
+  - [ ] 11.4 In `plugin/commands/doctree.md`, when the argument is not a
+    slug (for example a sentence of instructions), derive a slug and a
+    `feature_description` from it and show both in the pre-flight report;
+    the launch passes them in `args` [verify: code-only]
+  - [ ] 11.5 Run `/embo:doctree <slug>` from a repository other than embo
+    and confirm the PRD phase loads `embo:prd` and writes its document
+    under `task_dir` [verify: manual-run-user]
+
 ## Summary
 
 10 user stories, 74 subtasks. Story 1.0 was the blocking gate (resolved;
@@ -519,13 +608,39 @@ the session's permission mode). Story 8.9/8.10 decided back-pressure's
 fate: all three grounding conditions are mechanically met and auto-tested,
 so **FR-6 back-pressure ships** — the 8.11 withdrawal branch was not taken.
 
-**State:** every story's code and documentation is built and unit-tested
-(60 subtasks `[X]`). The 13 `[~]` items and the single `[ ]` (5.8) are all
-`manual-run-claude` proofs that need one real end-to-end `/embo:doctree`
-run — the orchestration, section-scoped replay-by-diff, resume, fallback
-parity, the pre-flight reports, and the measured token cost (10.4). Two
-proofs (4.5 interactive-unchanged, 1.3 clean permission-stall probe) need
-a session in the default permission mode, which the auto-approving session
-this was built in cannot provide. The phase runner itself was proven live
-(3.7/4.4). Shipped suites green except one pre-existing, unrelated
-claude-mem transform-version failure (10.7).
+**State:** every story's code and documentation is built and unit-tested.
+The phase runner was proven live (3.7/4.4). Shipped suites green except
+one pre-existing, unrelated claude-mem transform-version failure (10.7).
+Two proofs (4.5 interactive-unchanged, 1.3 clean permission-stall probe)
+still need a session in the default permission mode, which an
+auto-approving session cannot provide.
+
+**What three live runs established (5.8, 6.2, 8.6, 10.4 now settled).**
+The run works end to end and produces all three documents. Cost is
+roughly 500–570k tokens for 9–10 agents; a cheaper authoring model saved
+only 12%, so the six review passes dominate, not authoring.
+
+**FR-6 shipped non-functional, and only a live run could show it.** The
+story 8 go/no-go declared back-pressure shipped on the strength of three
+auto-tests — but all three fed amendments in directly, and no test
+asserted that a reviewer finding BECOMES one. Nothing bridged
+`findings` to `amendments`, so six review passes produced real defects
+that were recorded as open items while the documents went out
+uncorrected. Fixed (findingToAmend bridge + the grounding fields in
+FINDINGS_SCHEMA), then a second defect surfaced in the same path:
+`groundedAmends[0]` applied one amendment and dropped the rest in
+silence. Both fixed; 55 JS and 142 shell assertions pass.
+
+**The lesson for the next go/no-go:** a mechanism can pass every unit
+test and still be disconnected from the thing that feeds it. Three gate
+checks passed on a path that no reviewer finding could ever reach.
+
+**Open defect, tracked as 9.8.** Agents write
+`<date>-<nnn>-<slug>-<suffix>.md`; `docPath()` computes
+`<date>-<slug>-<suffix>.md`. A resumed run does not recognise its own
+documents and re-runs every phase, which also makes 9.2's resume logic
+untestable against reality. Returned document paths also mix relative
+and absolute forms.
+
+**Still unproven:** the multi-amendment replay (unit-tested only), and
+9.3/9.6 (resume-after-interrupt and fallback parity).

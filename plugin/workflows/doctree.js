@@ -173,7 +173,7 @@ function dispatchPrompt(ph, a, upstreamDocs) {
     'mode:          full',
     `task_dir:      ${a.task_dir}`,
     `feature_slug:  ${a.feature_slug}`,
-    `command_file:  plugin/commands/${ph.key}.md`,
+    `phase_skill:   embo:${ph.key}`,
     'skip_steps:    ["the mandatory clarifying-question step"]',
     `seed_doc:      ${a.seed_doc || '(none)'}`,
     `upstream_docs: ${JSON.stringify(upstreamDocs)}`,
@@ -218,7 +218,26 @@ function shouldReplay(significantCount, round, cap) {
   return significantCount >= 1 && round < cap
 }
 
+// checkRequiredArgs(a) -> null when all required fields are present, or an
+// array of missing field names. The workflow refuses to spawn any agent when
+// required fields are absent: an undefined task_dir or feature_slug produces
+// a broken dispatch brief that stalls the phase agent before it can do work.
+function checkRequiredArgs(a) {
+  const missing = ['task_dir', 'feature_slug', 'run_date'].filter(k => {
+    const v = a[k]
+    if (!v) return true
+    const s = String(v).trim()
+    return s.length === 0 || s === 'undefined' || s === 'null'
+  })
+  return missing.length === 0 ? null : missing
+}
+
 const a = args || {}
+
+const missing = checkRequiredArgs(a)
+if (missing) {
+  return { error: `required args missing: ${missing.join(', ')}`, missing }
+}
 
 const maxAgents = typeof a.max_agents === 'number' ? a.max_agents : 20
 const roundCap = typeof a.round_cap === 'number' ? a.round_cap : 2
