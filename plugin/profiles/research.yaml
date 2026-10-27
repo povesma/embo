@@ -14,6 +14,9 @@ rules:
     docs_first: strict
     correction_capture: true
     scope_drift: warn
+    protected_branches: [main, master]
+    protected_branch_mode: block
+    branch_task_mode: warn
   tone:
     skepticism: high
     agreement: evidence-only  # never agree without data backing it

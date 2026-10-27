@@ -14,6 +14,9 @@ rules:
     docs_first: relaxed
     correction_capture: false
     scope_drift: off
+    protected_branches: [main, master]
+    protected_branch_mode: block
+    branch_task_mode: warn
 
 git:
   commit_style: conventional

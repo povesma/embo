@@ -116,9 +116,12 @@ domain, or data layer.
      rebase, cherry-pick, `git reset`, `git am`, `git revert`),
      `gcl_push_targets <sub> <current-branch>` (implicit current branch,
      explicit refspec `src:dst`, `HEAD`, `--all`/`--mirror`, `--delete`),
-     `gcl_shell_write_paths <sub>` (`> / >>` targets, `tee`, `sed -i`).
-     Implemented in Bash/awk with no output or exits, same convention as
-     `branch-task-lib.sh`.
+     `gcl_shell_write_paths <sub>` (`> / >>` targets, `tee`, `sed -i`),
+     `gcl_walk <command> <current>` (branch in effect per subcommand) and
+     `gcl_is_unparseable_candidate <command>`. Words are tokenised with
+     quote awareness, so a `>` or `&&` inside a quoted commit message is not
+     an operator. Implemented in Bash/awk (Bash 3.2 compatible) with no
+     logging or exits, same convention as `branch-task-lib.sh`.
    - Pattern: `plugin/lib/branch-task-lib.sh`.
 3. **`plugin/hooks/main-branch-guard.test.sh`** and
    **`plugin/lib/git-command-lib.test.sh`**: fixture tests (Testing Strategy).
@@ -216,14 +219,19 @@ Classification detail:
 - **Branch-create in a compound must NOT be a false denial.** The branch is
   read once, before the command runs, so a compound whose *first* act leaves
   the protected branch — `git switch -c <b> && git commit`,
-  `git checkout -b <b> && …`, `git worktree add …` — would otherwise be denied
-  for being "on main", which is the exact corrective action the deny message
-  recommends. The classifier tracks a simulated current branch across the
-  split subcommands: a leading branch-changer (`switch -c`/`--create`,
-  `checkout -b`/`-B`, `git branch <new>` then a switch, `git worktree add`)
-  updates the simulated branch, and a later mutation is judged against it.
-  Simplest safe rule: if a branch-creating/-switching subcommand precedes the
-  mutation in the same compound, the mutation is not on the protected branch.
+  `git checkout -b <b> && …` — would otherwise be denied for being "on
+  main", which is the exact corrective action the deny message recommends.
+  `gcl_walk` reports the branch in effect at EACH split subcommand, and each
+  mutation is judged against the branch at its own position (so
+  `git commit && git switch -c b` is still a commit on the protected
+  branch). Branch changers: `switch <b>` / `-c` / `-C` / `--orphan`,
+  `switch --detach`, `checkout -b` / `-B` / `--orphan`, `checkout --detach`.
+  A plain `checkout <x>` is ambiguous (branch or path) and leaves the branch
+  unchanged — the conservative reading. `git worktree add` does not move the
+  shell, so it changes nothing by itself; a later `cd <that path>` in the
+  same compound moves onto the worktree's branch (`-b <b>`, else the
+  commit-ish argument, else the path's basename). The walk assumes `&&`
+  chaining; a `;` after a failed switch is a known best-effort gap.
 - **Mutation classification is per subcommand AND per flag, not per verb.**
   `git reset` (default, non-destructive unstage) and `git revert` are NOT
   blanket mutations; `git reset --hard` on a protected branch is a plausible
@@ -434,8 +442,9 @@ Resolved by independent review (2026-10-25, against the live hooks docs):
 deny-vs-allow precedence is deny > defer > ask > allow with parallel
 execution, so the guard's deny wins. Remaining provisional: exact
 `file_path`/`notebook_path` key names (pin with a real-payload fixture);
-the `updatedInput` rewrite interaction (add a fixture); flow-list retention
-by `embo-profile get` (re-run during impl); claude-mem history not consulted.
+the `updatedInput` rewrite interaction (add a fixture); claude-mem history
+not consulted. Closed: `embo-profile get` keeps a flow list as written —
+`rules.workflow.protected_branches` printed `[main, master]` (2026-10-27).
 
 **Relationship to the shipped stopgap (keep both).** A `permissions.deny`
 rule in tracked `.claude/settings.json`

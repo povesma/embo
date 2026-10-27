@@ -44,6 +44,12 @@
 - Shipped command/agent bodies and README must not carry task numbers or
   `tasks/` paths; hook scripts and tests are exempt.
 - Use the bare `embo-profile` wrapper, never an inlined plugin-root path.
+- The bare `embo-profile` on PATH is the INSTALLED plugin's copy and reads
+  the installed profiles, so working-tree profile edits do not show through
+  it until `/reload-plugins` (check the plugin cache if they still do not).
+  To read the working tree during development, run
+  `EMBO_PROFILE_DIRS=plugin/profiles plugin/bin/embo-profile get <field>`.
+  The live check 7.7 needs the reload first.
 - Provisional items to confirm during implementation (tech design): the
   PreToolUse `additionalContext` for warn, deny-vs-allow precedence when two
   PreToolUse hooks match `Bash`, and the `file_path`/`notebook_path` key
@@ -56,58 +62,71 @@
   config and docs edits.
 
 ## Tasks
-- [ ] 1.0 **User Story:** As a maintainer, I want the profile to carry the
+- [X] 1.0 **User Story:** As a maintainer, I want the profile to carry the
   guard policy with safe defaults so that a branching policy change is a
-  profile edit, not a code change [0/0]
-  - [ ] 1.1 Add `protected_branches: [main, master]`,
+  profile edit, not a code change [4/4]
+  - [X] 1.1 Add `protected_branches: [main, master]`,
     `protected_branch_mode: block` and `branch_task_mode: warn` under
     `rules.workflow` in `plugin/profiles/default.yaml`, with explanatory
     comments in the file's existing style [verify: code-only]
-  - [ ] 1.2 Add the same three fields explicitly to the `quality`, `fast`,
+  - [X] 1.2 Add the same three fields explicitly to the `quality`, `fast`,
     `minimal` and `research` profiles [verify: code-only]
-  - [ ] 1.3 Run `embo-profile get rules.workflow.protected_branches` and
+  - [X] 1.3 Run `embo-profile get rules.workflow.protected_branches` and
     `embo-profile get rules.workflow.protected_branch_mode`; confirm the
     list prints as `[main, master]` and the mode as `block`
     [verify: manual-run-claude]
-  - [ ] 1.4 Document the three fields and the best-effort limit in the
+      → `[main, master]` and `block` confirmed via working-tree binary [live] (2026-10-27)
+  - [X] 1.4 Document the three fields and the best-effort limit in the
     profile field explanations (locate the profile command's explanation
     section first) [verify: code-only]
 
-- [ ] 2.0 **User Story:** As the guard, I want to recognise git history
+- [X] 2.0 **User Story:** As the guard, I want to recognise git history
   mutations, push targets and shell writes in a command string so that Bash
-  denials are decided by a unit-tested parser [0/0]
-  - [ ] 2.1 Write `plugin/lib/git-command-lib.test.sh` for `gcl_split`:
+  denials are decided by a unit-tested parser [11/11]
+  - [X] 2.1 Write `plugin/lib/git-command-lib.test.sh` for `gcl_split`:
     splits on `&&`, `||`, `;`, `|`, `&`, newline, mirroring the separator
     set in `plugin/hooks/approve-compound.sh:12-28` [verify: auto-test]
-  - [ ] 2.2 Implement `gcl_split` in `plugin/lib/git-command-lib.sh` (pure
+  - [X] 2.2 Implement `gcl_split` in `plugin/lib/git-command-lib.sh` (pure
     function, no output side effects or exits, same convention as
     `branch-task-lib.sh`) [verify: auto-test]
-  - [ ] 2.3 Write tests for `gcl_is_git_mutation`: commit, merge, rebase,
+      → split cases pass; `2>&1` and `&>` kept intact [live] (2026-10-27)
+  - [X] 2.3 Write tests for `gcl_is_git_mutation`: commit, merge, rebase,
     cherry-pick, am, and `git reset --hard`/`--soft`/`--mixed` to a ref are
     mutations; status, log, diff, branch listing, bare `switch`/`checkout`/
     `fetch`/`pull`/`stash`/`add`, and bare `git reset` (default unstage) are
     NOT; decide per flag, not per verb [verify: auto-test]
-  - [ ] 2.4 Implement `gcl_is_git_mutation` (per-subcommand AND per-flag)
+  - [X] 2.4 Implement `gcl_is_git_mutation` (per-subcommand AND per-flag)
     [verify: auto-test]
-  - [ ] 2.4b Write tests for branch-change tracking across a compound:
-    `git switch -c <b> && git commit`, `git checkout -b <b> && …`,
-    `git worktree add …` leave the protected branch BEFORE the mutation, so
-    the mutation is judged against the new branch and is NOT denied; implement
-    a `gcl_simulated_branch <subcommands> <current>` helper [verify: auto-test]
-  - [ ] 2.5 Write tests for `gcl_push_targets`: implicit current branch,
+      → mutation matrix passes, incl. `git -C`, env prefix, `--abort`
+        treated as recovery [live] (2026-10-27)
+  - [X] 2.4b Write tests for branch-change tracking across a compound and
+    implement `gcl_walk <command> <current>`, which reports the branch in
+    effect at EACH subcommand (so `git commit && git switch -c b` is still
+    judged on the protected branch). `switch <b>`/`-c <b>`, `checkout -b`/
+    `-B`/`--orphan` change it; plain `checkout <x>` (branch or path) does
+    not; `git worktree add` changes nothing until a later `cd` into that
+    worktree path [verify: auto-test]
+      → walk cases pass; worktree add without `cd` stays on main (the
+        shell does not move) [live] (2026-10-27)
+  - [X] 2.5 Write tests for `gcl_push_targets`: implicit current branch,
     `HEAD`, `origin HEAD:main`, explicit `src:dst`, `--all`, `--mirror`,
     `--delete`, and `git push origin feature` while on `main` yields only
     `feature` [verify: auto-test]
-  - [ ] 2.6 Implement `gcl_push_targets` [verify: auto-test]
-  - [ ] 2.7 Write tests for `gcl_shell_write_paths`: `>` and `>>` targets,
+  - [X] 2.6 Implement `gcl_push_targets` [verify: auto-test]
+      → push-target cases pass, incl. `+src:main` [live] (2026-10-27)
+  - [X] 2.7 Write tests for `gcl_shell_write_paths`: `>` and `>>` targets,
     `tee`, `sed -i`; read-only commands yield none [verify: auto-test]
-  - [ ] 2.8 Implement `gcl_shell_write_paths` [verify: auto-test]
-  - [ ] 2.9 Write tests for unparseable constructs (`$(`, backticks, `<<`,
+  - [X] 2.8 Implement `gcl_shell_write_paths` [verify: auto-test]
+      → write-path cases pass, incl. BSD `sed -i ''`, fd dups and quoted
+        `>` ignored [live] (2026-10-27)
+  - [X] 2.9 Write tests for unparseable constructs (`$(`, backticks, `<<`,
     `eval`, `bash -c`, `sh -c`): flagged as a candidate only when a literal
     `git commit|push|merge` or write token is present, otherwise not
     [verify: auto-test]
-  - [ ] 2.10 Implement the unparseable-construct handling
+  - [X] 2.10 Implement the unparseable-construct handling
     [verify: auto-test]
+      → 89 passed, 0 failed under Bash 5 and macOS Bash 3.2 [live]
+        (2026-10-27)
 
 - [ ] 3.0 **User Story:** As a developer, I want edits to tracked files
   refused while a protected branch is checked out so that the agent must
