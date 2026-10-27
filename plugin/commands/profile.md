@@ -47,7 +47,7 @@ If no argument is provided, default to `list`.
    Key settings:
    - Code style: <line_length> chars, comments: <comments>
    - Testing: <approach>, subagents: <subagents list or "none">
-   - Workflow: docs-first: <docs_first>, corrections: <on/off>
+   - Workflow: docs-first: <docs_first>, corrections: <on/off>, protected-branch: <protected_branch_mode> (<protected_branches list>), branch-task: <branch_task_mode>
    - Tools: RLM: <on/off>
    - Git: commit style: <commit_style or "conventional">
    - Required MCPs: <list or "none">
