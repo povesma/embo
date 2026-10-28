@@ -610,6 +610,39 @@ the shell library alone.
   - [ ] 11.5 Run `/embo:doctree <slug>` from a repository other than embo
     and confirm the PRD phase loads `embo:prd` and writes its document
     under `task_dir` [verify: manual-run-user]
+    (Blocked until the session's plugin install is NOT stale: a
+    directory-source install runs from a version-keyed cache copy, so this
+    test can silently exercise old files. Verify `installPath` and
+    `gitCommitSha` in `~/.claude/plugins/installed_plugins.json` against
+    `git log` first — see CLAUDE.md, "Picking up local edits". Shipped in
+    0.3.1; this acceptance check is what remains unproven.)
+
+## Session findings, 2026-10-28 (release 0.3.1)
+
+Recorded here because they bear on this task's remaining work and had no
+other doc home.
+
+- **Verification lesson — an empty `git branch --contains` is not proof
+  of absence.** While sizing the release, the submodule fix on
+  `fix/016-submodule-discovery` was asserted unmerged because
+  `git branch --contains` listed only its own branch. The change IS in
+  `main`, applied as a different commit (`f4d1fb7`), with identical lines.
+  Containment answers "is this SHA an ancestor", never "is this content
+  present". Check content before asserting a change is missing.
+- **`feat/062-worktree-isolation` is a stale snapshot, not pending work.**
+  It diffs against `main` at 1618 deletions / 40 insertions: it predates
+  0.3.0 and lacks `branch-task-check.sh`, `branch-task-lib.sh` and the 066
+  docs. Its feature already shipped in 0.3.0, and `main` has since moved
+  two commits past it. It is a deletion candidate — merging it would
+  revert shipped work. Its only forward delta was 12 lines in its own task
+  file. A long-lived branch must be diffed for merge DIRECTION before being
+  treated as a release candidate.
+- **Inherited test failure, not a regression.**
+  `plugin/claude-mem/code-embo-build.test.sh` fails one assertion
+  ("installed transform rewrote guidance to 7 options (v13.40.0)"),
+  pinned to the installed claude-mem version. No commit on this branch
+  touches those files. Everything else is green: 771/772 shell assertions
+  plus 70 workflow assertions.
 
 ## Summary
 

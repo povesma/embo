@@ -175,11 +175,28 @@ docs, verified 2026-08-13):
 
 `/plugin marketplace update` targets git/URL sources; a directory
 source is meant to read from disk, so `/reload-plugins` is the operative
-step. **Caveat:** we have observed a stale `~/.claude/plugins/cache/
-embo/embo/<version>/` copy shadowing the working tree despite the
-directory source (see claude-mem obs #34749). If a change does not take
-effect after `/reload-plugins`, check that cache directory — it may need
-a full `/plugin marketplace update embo` or a restart to resync.
+step. **Caveat — the install path is version-keyed, so an unchanged
+version number is never refreshed.** A directory-source install still
+*runs* from `~/.claude/plugins/cache/embo/embo/<version>/`, not from the
+working tree: `installed_plugins.json` pins `installPath` and a
+`gitCommitSha`. Neither `/reload-plugins` nor `/plugin marketplace update
+embo` re-copies the files while the manifest version is unchanged — the
+reload re-reads the *catalog* (and says so, which reads misleadingly like
+a file refresh), and the update compares version *strings*, reporting
+"already at the latest version". **Bumping the version in both manifests
+is the mechanism that refreshes the cache**, because the path contains the
+version.
+
+To check which code is actually running, read the install record — not a
+reload message:
+
+```bash
+jq -r '.plugins["embo@embo"][0] | .installPath, .gitCommitSha' ~/.claude/plugins/installed_plugins.json
+```
+
+Compare that SHA against `git log`. Observed 2026-10-28: an install sat
+eight commits behind for a whole session, and every command run in it used
+the stale files with no warning.
 
 **Dogfood setup.** To develop against this working copy instead of
 GitHub, install from the local directory (README Step 1 tip:
