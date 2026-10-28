@@ -1,0 +1,167 @@
+{
+  "_comment": "Parity fixtures for the AMEND-record mechanical validation. The SAME cases are run against doctree_validate_amend (plugin/lib/doctree-lib.sh) and the inlined JS validator (plugin/workflows/doctree.js), so the two implementations cannot drift. Each case: id, the record, expected verdict (valid|rejected), and reason. The mechanical check covers field presence and enum/shape only; it does NOT resolve evidence (file:line existence, URL reachability) or match section against a live heading — those are live checks, out of scope for these pure fixtures.",
+  "valid_targets": ["prd", "tech-design", "tasks"],
+  "valid_severities": ["high", "medium", "low", "infeasible"],
+  "valid_statuses": ["open", "resolved"],
+  "required_fields": ["target", "section", "finding", "evidence", "proposed", "origin", "severity", "status", "prior_state"],
+  "cases": [
+    {
+      "id": "well-formed-fileline",
+      "verdict": "valid",
+      "reason": "all required fields present, evidence is a file:line, enums valid",
+      "record": {
+        "target": "prd",
+        "section": "FR-3",
+        "finding": "FR-3 claims the hook cannot fail; it fails open.",
+        "evidence": "plugin/hooks/subagent-rules.sh:13",
+        "proposed": "FR-3 must assert the canary because the hook fails open.",
+        "origin": "tech-design",
+        "severity": "high",
+        "status": "open",
+        "prior_state": "FR-3: rule inheritance is guaranteed by the hook."
+      }
+    },
+    {
+      "id": "well-formed-url",
+      "verdict": "valid",
+      "reason": "evidence is a doc URL; still well-formed",
+      "record": {
+        "target": "tech-design",
+        "section": "A4",
+        "finding": "A4 cites a version gate that moved.",
+        "evidence": "https://code.claude.com/docs/en/sub-agents",
+        "proposed": "Update the cited gate to 2.1.306.",
+        "origin": "tasks",
+        "severity": "medium",
+        "status": "open",
+        "prior_state": "A4 gate at 2.1.305."
+      }
+    },
+    {
+      "id": "well-formed-infeasible",
+      "verdict": "valid",
+      "reason": "severity infeasible is a distinct valid value",
+      "record": {
+        "target": "prd",
+        "section": "FR-6",
+        "finding": "FR-6 cannot be built without a resolvable evidence check.",
+        "evidence": "plugin/lib/doctree-lib.sh:1",
+        "proposed": "Withdraw FR-6 or add the grounding gate.",
+        "origin": "tech-design",
+        "severity": "infeasible",
+        "status": "open",
+        "prior_state": "FR-6: back-pressure ships unconditionally."
+      }
+    },
+    {
+      "id": "reject-uncited-empty-evidence",
+      "verdict": "rejected",
+      "reason": "evidence is empty — the grounding rule (D7 condition 1)",
+      "record": {
+        "target": "prd",
+        "section": "FR-3",
+        "finding": "FR-3 is wrong.",
+        "evidence": "",
+        "proposed": "Fix FR-3.",
+        "origin": "tech-design",
+        "severity": "high",
+        "status": "open",
+        "prior_state": "FR-3 text."
+      }
+    },
+    {
+      "id": "reject-missing-evidence-field",
+      "verdict": "rejected",
+      "reason": "evidence field absent entirely",
+      "record": {
+        "target": "prd",
+        "section": "FR-3",
+        "finding": "FR-3 is wrong.",
+        "proposed": "Fix FR-3.",
+        "origin": "tech-design",
+        "severity": "high",
+        "status": "open",
+        "prior_state": "FR-3 text."
+      }
+    },
+    {
+      "id": "reject-missing-section",
+      "verdict": "rejected",
+      "reason": "section absent — emitter must name the target section",
+      "record": {
+        "target": "prd",
+        "section": "",
+        "finding": "Something upstream is wrong.",
+        "evidence": "plugin/lib/doctree-lib.sh:1",
+        "proposed": "Fix it.",
+        "origin": "tech-design",
+        "severity": "high",
+        "status": "open",
+        "prior_state": "text."
+      }
+    },
+    {
+      "id": "reject-bad-target",
+      "verdict": "rejected",
+      "reason": "target not in {prd, tech-design, tasks}",
+      "record": {
+        "target": "readme",
+        "section": "Intro",
+        "finding": "wrong",
+        "evidence": "README.md:1",
+        "proposed": "fix",
+        "origin": "tasks",
+        "severity": "low",
+        "status": "open",
+        "prior_state": "text."
+      }
+    },
+    {
+      "id": "reject-bad-severity",
+      "verdict": "rejected",
+      "reason": "severity not in the allowed set",
+      "record": {
+        "target": "prd",
+        "section": "FR-1",
+        "finding": "wrong",
+        "evidence": "plugin/lib/doctree-lib.sh:1",
+        "proposed": "fix",
+        "origin": "tech-design",
+        "severity": "critical",
+        "status": "open",
+        "prior_state": "text."
+      }
+    },
+    {
+      "id": "reject-bad-status",
+      "verdict": "rejected",
+      "reason": "status not in {open, resolved}",
+      "record": {
+        "target": "prd",
+        "section": "FR-1",
+        "finding": "wrong",
+        "evidence": "plugin/lib/doctree-lib.sh:1",
+        "proposed": "fix",
+        "origin": "tech-design",
+        "severity": "high",
+        "status": "pending",
+        "prior_state": "text."
+      }
+    },
+    {
+      "id": "reject-missing-prior-state",
+      "verdict": "rejected",
+      "reason": "prior_state absent — no revert path (D7 condition 2)",
+      "record": {
+        "target": "prd",
+        "section": "FR-1",
+        "finding": "wrong",
+        "evidence": "plugin/lib/doctree-lib.sh:1",
+        "proposed": "fix",
+        "origin": "tech-design",
+        "severity": "high",
+        "status": "open"
+      }
+    }
+  ]
+}

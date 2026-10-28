@@ -128,6 +128,26 @@ test_bare_no_env() {
   assert_eq "bare run resolves and shows (env unset)" "fast" "$(run get name)"
 }
 
+# ---- doctree.* fields the profile display reads ----
+
+test_get_doctree_fields() {
+  printf 'name: dt\ndescription: doctree test\ndoctree:\n  models:\n    prd: opus\n    tech_design: sonnet\n    tasks: haiku\n  escalation: halt\n  round_cap: 3\n  budget:\n    max_agents: 15\n' \
+    > "$PROFILES/dt.yaml"
+  run set dt >/dev/null
+  assert_eq "get: doctree.models.prd" "opus" "$(run get doctree.models.prd)"
+  assert_eq "get: doctree.models.tech_design" "sonnet" \
+    "$(run get doctree.models.tech_design)"
+  assert_eq "get: doctree.models.tasks" "haiku" "$(run get doctree.models.tasks)"
+  assert_eq "get: doctree.escalation" "halt" "$(run get doctree.escalation)"
+  assert_eq "get: doctree.round_cap" "3" "$(run get doctree.round_cap)"
+  assert_eq "get: doctree.budget.max_agents" "15" \
+    "$(run get doctree.budget.max_agents)"
+  # An older profile with no doctree block → every field empty.
+  run set quality >/dev/null
+  assert_eq "get: absent doctree block → empty" "" \
+    "$(run get doctree.models.prd)"
+}
+
 # ---- run all tests ----
 
 test_show_absent_no_default
@@ -139,6 +159,7 @@ test_reset
 test_reset_idempotent
 test_unknown_subcommand
 test_bare_no_env
+test_get_doctree_fields
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

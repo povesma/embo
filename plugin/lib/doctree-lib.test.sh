@@ -1,0 +1,606 @@
+#!/usr/bin/env bash
+# Fixture tests for doctree-lib.sh.
+# Run: bash plugin/lib/doctree-lib.test.sh
+# Exits non-zero if any assertion fails.
+#
+# doctree_resolve_model reads a profile field via `embo-profile get`; the
+# tests stub that command through DOCTREE_PROFILE_GET so no real profile
+# is touched. doctree_phase_doc_path is pure string construction and needs
+# no stub.
+
+set -uo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+. "$HERE/doctree-lib.sh"
+
+# Repo root (two levels up from plugin/lib) for citation-resolution tests,
+# and a temp dir for gate fixtures.
+REPO_ROOT="$(cd "$HERE/../.." && pwd)"
+TMP63="$(mktemp -d)"
+trap 'rm -rf "$TMP63"' EXIT
+
+PASS=0
+FAIL=0
+assert_eq() {
+  local desc="$1" exp="$2" act="$3"
+  if [ "$exp" = "$act" ]; then
+    PASS=$((PASS + 1))
+  else
+    FAIL=$((FAIL + 1))
+    printf 'FAIL: %s\n  expected: [%s]\n  actual:   [%s]\n' \
+      "$desc" "$exp" "$act"
+  fi
+}
+
+# Stub for `embo-profile get <key>`. The library calls the resolver hook
+# DOCTREE_PROFILE_GET with the dotted key; the test sets it per case to
+# return a value or an empty string (absent field / absent profile).
+stub_profile_returns() {
+  # $1 = value to return for any key ("" means absent). The value is
+  # baked into the function body at definition time (eval), so it does
+  # not depend on a variable that is out of scope at call time.
+  eval "DOCTREE_PROFILE_GET() { printf '%s' '$1'; }"
+}
+stub_profile_map() {
+  # Return per-key values from a case statement; keys not listed → "".
+  DOCTREE_PROFILE_GET() {
+    case "$1" in
+      doctree.models.prd)         printf 'opus' ;;
+      doctree.models.tech_design) printf 'haiku' ;;
+      doctree.models.tasks)       printf '' ;;
+      *)                          printf '' ;;
+    esac
+  }
+}
+
+# ---- doctree_resolve_model: profile value when set ----
+
+test_resolve_model_profile_value() {
+  stub_profile_returns "fable"
+  assert_eq "resolve_model: prd → profile value" "fable" \
+    "$(doctree_resolve_model prd)"
+  assert_eq "resolve_model: tech_design → profile value" "fable" \
+    "$(doctree_resolve_model tech_design)"
+  assert_eq "resolve_model: tasks → profile value" "fable" \
+    "$(doctree_resolve_model tasks)"
+}
+
+# ---- doctree_resolve_model: built-in default when field absent ----
+
+test_resolve_model_builtin_default() {
+  stub_profile_returns ""
+  assert_eq "resolve_model: prd absent → opus" "opus" \
+    "$(doctree_resolve_model prd)"
+  assert_eq "resolve_model: tech_design absent → opus" "opus" \
+    "$(doctree_resolve_model tech_design)"
+  assert_eq "resolve_model: tasks absent → sonnet" "sonnet" \
+    "$(doctree_resolve_model tasks)"
+}
+
+# ---- doctree_resolve_model: mixed — some set, some fall back ----
+
+test_resolve_model_mixed() {
+  stub_profile_map
+  assert_eq "resolve_model: prd set → opus" "opus" \
+    "$(doctree_resolve_model prd)"
+  assert_eq "resolve_model: tech_design set → haiku" "haiku" \
+    "$(doctree_resolve_model tech_design)"
+  assert_eq "resolve_model: tasks empty → sonnet default" "sonnet" \
+    "$(doctree_resolve_model tasks)"
+}
+
+# ---- doctree_resolve_model: unknown phase → empty, rc 1 ----
+
+test_resolve_model_unknown_phase() {
+  stub_profile_returns ""
+  local out
+  out="$(doctree_resolve_model bogus)"
+  assert_eq "resolve_model: unknown phase → empty" "" "$out"
+  doctree_resolve_model bogus >/dev/null 2>&1
+  assert_eq "resolve_model: unknown phase → rc 1" "1" "$?"
+}
+
+# ---- doctree_phase_doc_path: all three phases ----
+
+test_phase_doc_path_all() {
+  local td="tasks/068-TEAMMATE-DOCTREE-pipeline"
+  local date="2026-10-21"
+  assert_eq "doc_path: prd" \
+    "$td/2026-10-21-068-TEAMMATE-DOCTREE-pipeline-prd.md" \
+    "$(doctree_phase_doc_path "$td" "$date" prd)"
+  assert_eq "doc_path: tech_design → -tech-design.md" \
+    "$td/2026-10-21-068-TEAMMATE-DOCTREE-pipeline-tech-design.md" \
+    "$(doctree_phase_doc_path "$td" "$date" tech_design)"
+  assert_eq "doc_path: tasks" \
+    "$td/2026-10-21-068-TEAMMATE-DOCTREE-pipeline-tasks.md" \
+    "$(doctree_phase_doc_path "$td" "$date" tasks)"
+}
+
+# ---- doctree_phase_doc_path: trailing slash on taskdir is normalized ----
+
+test_phase_doc_path_trailing_slash() {
+  assert_eq "doc_path: trailing slash on taskdir normalized" \
+    "tasks/068-foo/2026-01-02-068-foo-prd.md" \
+    "$(doctree_phase_doc_path "tasks/068-foo/" "2026-01-02" prd)"
+}
+
+# ---- doctree_phase_doc_path: unknown phase → empty, rc 1 ----
+
+test_phase_doc_path_unknown_phase() {
+  local out
+  out="$(doctree_phase_doc_path "tasks/068-foo" "2026-01-02" bogus)"
+  assert_eq "doc_path: unknown phase → empty" "" "$out"
+  doctree_phase_doc_path "tasks/068-foo" "2026-01-02" bogus >/dev/null 2>&1
+  assert_eq "doc_path: unknown phase → rc 1" "1" "$?"
+}
+
+# ---- 2.7: embo-profile get reads doctree.* from every shipped profile ----
+# Runs the real wrapper against each shipped profile via EMBO_PROFILE_ACTIVE,
+# so no ~/.claude is touched. Skipped with a notice if yq is unavailable.
+
+PROFILES_DIR="$HERE/../profiles"
+WRAPPER="$HERE/../bin/embo-profile"
+
+pget() {
+  # pget <profile.yaml> <dotted-field>
+  EMBO_PROFILE_ACTIVE="$PROFILES_DIR/$1" "$WRAPPER" get "$2"
+}
+
+test_profiles_doctree_fields() {
+  if ! command -v yq >/dev/null 2>&1; then
+    printf 'SKIP: 2.7 profile-field checks (yq not found)\n'
+    return 0
+  fi
+  # Expected per the tech-design defaults table.
+  # profile|prd|tech_design|tasks|escalation|round_cap|max_agents
+  local rows="
+default.yaml|opus|opus|sonnet|collect|2|20
+quality.yaml|opus|opus|sonnet|collect|2|20
+fast.yaml|sonnet|sonnet|haiku|collect|1|12
+minimal.yaml|sonnet|sonnet|haiku|collect|1|12
+research.yaml|opus|opus|sonnet|halt|2|24
+"
+  local line p prd td tk esc rc ma
+  while IFS='|' read -r p prd td tk esc rc ma; do
+    [ -z "$p" ] && continue
+    assert_eq "$p doctree.models.prd" "$prd" "$(pget "$p" doctree.models.prd)"
+    assert_eq "$p doctree.models.tech_design" "$td" "$(pget "$p" doctree.models.tech_design)"
+    assert_eq "$p doctree.models.tasks" "$tk" "$(pget "$p" doctree.models.tasks)"
+    assert_eq "$p doctree.escalation" "$esc" "$(pget "$p" doctree.escalation)"
+    assert_eq "$p doctree.round_cap" "$rc" "$(pget "$p" doctree.round_cap)"
+    assert_eq "$p doctree.budget.max_agents" "$ma" "$(pget "$p" doctree.budget.max_agents)"
+    assert_eq "$p doctree.reviewer_model_family" "sonnet" \
+      "$(pget "$p" doctree.reviewer_model_family)"
+  done <<< "$rows"
+  # Absent field → empty string.
+  assert_eq "default.yaml absent field → empty" "" \
+    "$(pget default.yaml doctree.models.nope)"
+}
+
+# ---- 7.3/7.4: doctree_effective_model (override wins over profile) ----
+
+test_effective_model_override_wins() {
+  stub_profile_returns "opus"   # profile would say opus for every phase
+  assert_eq "effective_model: override wins over profile" "fable" \
+    "$(doctree_effective_model fable prd)"
+  assert_eq "effective_model: no override → profile value" "opus" \
+    "$(doctree_effective_model "" prd)"
+}
+
+test_effective_model_falls_back_to_default() {
+  stub_profile_returns ""        # profile absent → built-in defaults
+  assert_eq "effective_model: no override, absent field → prd default" "opus" \
+    "$(doctree_effective_model "" prd)"
+  assert_eq "effective_model: no override, absent field → tasks default" "sonnet" \
+    "$(doctree_effective_model "" tasks)"
+  assert_eq "effective_model: override still wins when field absent" "haiku" \
+    "$(doctree_effective_model haiku tasks)"
+}
+
+# ---- 2.8: escalation modes (collect / halt) ----
+# doctree_should_halt <mode> <blocked-count> → rc 0 halt, 1 continue,
+# 2 unknown mode.
+
+test_escalation_collect_never_halts() {
+  doctree_should_halt collect 0; assert_eq "collect, 0 blocked → continue" "1" "$?"
+  doctree_should_halt collect 1; assert_eq "collect, 1 blocked → continue" "1" "$?"
+  doctree_should_halt collect 9; assert_eq "collect, many blocked → continue" "1" "$?"
+}
+
+test_escalation_halt_stops_on_first() {
+  doctree_should_halt halt 0; assert_eq "halt, 0 blocked → continue" "1" "$?"
+  doctree_should_halt halt 1; assert_eq "halt, 1 blocked → halt" "0" "$?"
+  doctree_should_halt halt 3; assert_eq "halt, 3 blocked → halt" "0" "$?"
+}
+
+test_escalation_unknown_mode() {
+  doctree_should_halt bogus 1 2>/dev/null; assert_eq "unknown mode → rc 2" "2" "$?"
+}
+
+# ---- 2.10: parity fixtures are well-formed ----
+# The fixture file is shared by doctree_validate_amend (shell) and the
+# inlined JS validator (workflow script), so they cannot drift. The
+# validators themselves arrive in later stories; this guards the fixtures
+# now: valid JSON, every case has id/verdict/record, verdicts are in set.
+
+FIXTURES="$HERE/doctree-amend-fixtures.json"
+
+test_parity_fixtures_wellformed() {
+  if ! command -v jq >/dev/null 2>&1; then
+    printf 'SKIP: 2.10 fixture checks (jq not found)\n'
+    return 0
+  fi
+  assert_eq "fixtures: file is valid JSON" "ok" \
+    "$(jq -e . "$FIXTURES" >/dev/null 2>&1 && echo ok || echo bad)"
+  assert_eq "fixtures: has at least one valid and one rejected case" "ok" \
+    "$(jq -e '([.cases[]|select(.verdict=="valid")]|length>0) and ([.cases[]|select(.verdict=="rejected")]|length>0)' "$FIXTURES" >/dev/null 2>&1 && echo ok || echo bad)"
+  assert_eq "fixtures: every case has id, verdict, record" "0" \
+    "$(jq '[.cases[]|select((has("id") and has("verdict") and has("record"))|not)]|length' "$FIXTURES")"
+  assert_eq "fixtures: every verdict is valid|rejected" "0" \
+    "$(jq '[.cases[]|select(.verdict|IN("valid","rejected")|not)]|length' "$FIXTURES")"
+  assert_eq "fixtures: required_fields list is present" "ok" \
+    "$(jq -e '.required_fields|length>0' "$FIXTURES" >/dev/null 2>&1 && echo ok || echo bad)"
+}
+
+# ---- 8.1: doctree_validate_amend against the parity fixtures ----
+# Every fixture case is run through the shell validator; its verdict must
+# match the fixture's expected verdict. The same fixtures drive the JS
+# validator (Story 5.5), so the two cannot diverge.
+
+test_validate_amend_fixtures() {
+  if ! command -v jq >/dev/null 2>&1; then
+    printf 'SKIP: 8.1 validate_amend fixtures (jq not found)\n'
+    return 0
+  fi
+  local n i id expected rec rc got
+  n="$(jq '.cases | length' "$FIXTURES")"
+  i=0
+  while [ "$i" -lt "$n" ]; do
+    id="$(jq -r ".cases[$i].id" "$FIXTURES")"
+    expected="$(jq -r ".cases[$i].verdict" "$FIXTURES")"
+    rec="$(jq -c ".cases[$i].record" "$FIXTURES")"
+    if doctree_validate_amend "$rec"; then got="valid"; else got="rejected"; fi
+    assert_eq "validate_amend[$id]" "$expected" "$got"
+    i=$((i + 1))
+  done
+}
+
+# ---- 8.1: doctree_validate_amend edge cases ----
+
+test_validate_amend_edges() {
+  if ! command -v jq >/dev/null 2>&1; then
+    printf 'SKIP: 8.1 validate_amend edges (jq not found)\n'
+    return 0
+  fi
+  doctree_validate_amend "" 2>/dev/null
+  assert_eq "validate_amend: empty arg → rc 2" "2" "$?"
+  doctree_validate_amend "not json{" 2>/dev/null
+  assert_eq "validate_amend: unparseable → rc 2" "2" "$?"
+}
+
+# ---- 3.5: the phase agent carries the FR-3 canary, matching the hook ----
+# The canary phrase the agent is told to echo must be a phrase the
+# SubagentStart hook actually injects, or the canary proves nothing.
+
+AGENT="$HERE/../agents/doctree-phase.md"
+HOOK="$HERE/../hooks/subagent-rules.sh"
+
+test_agent_canary_matches_hook() {
+  assert_eq "agent: references the canary phrase" "yes" \
+    "$(grep -q 'BINDING SUBAGENT RULES' "$AGENT" && echo yes || echo no)"
+  assert_eq "hook: injects the canary phrase" "yes" \
+    "$(grep -q 'BINDING SUBAGENT RULES' "$HOOK" && echo yes || echo no)"
+  assert_eq "agent: has a canary field in the digest" "yes" \
+    "$(grep -q 'canary:' "$AGENT" && echo yes || echo no)"
+}
+
+# ---- 3.6: the phase agent body has no task numbers or tasks/ paths ----
+
+test_agent_no_task_refs() {
+  # A real task-path reference is tasks/ followed by a digit. The input
+  # contract's literal placeholder tasks/<nnn>-<SLUG>/ is allowed.
+  assert_eq "agent: no tasks/<digit> paths" "0" \
+    "$(grep -Ec 'tasks/[0-9]' "$AGENT" || true)"
+  assert_eq "agent: no bare task-number references" "0" \
+    "$(grep -Ec 'task(s)? +[0-9]{3}|Story [0-9]' "$AGENT" || true)"
+}
+
+# ---- 7.9: the entry command body has no task numbers or tasks/ paths ----
+
+DOCTREE_CMD="$HERE/../commands/doctree.md"
+
+test_command_no_task_refs() {
+  assert_eq "command: no tasks/<digit> paths" "0" \
+    "$(grep -Ec 'tasks/[0-9]' "$DOCTREE_CMD" || true)"
+  assert_eq "command: no bare task-number references" "0" \
+    "$(grep -Ec 'task(s)? +[0-9]{3}|Story [0-9]' "$DOCTREE_CMD" || true)"
+}
+
+# ---- 8.7: termination rule (replay while significant, under the cap) ----
+
+test_should_replay() {
+  doctree_should_replay 1 0 2; assert_eq "replay: significant, round 0 < cap → replay" "0" "$?"
+  doctree_should_replay 1 1 2; assert_eq "replay: significant, round 1 < cap → replay" "0" "$?"
+  doctree_should_replay 1 2 2; assert_eq "replay: significant, round 2 = cap → stop" "1" "$?"
+  doctree_should_replay 0 0 2; assert_eq "replay: no significant → stop" "1" "$?"
+  doctree_should_replay 3 3 2; assert_eq "replay: over cap → stop" "1" "$?"
+}
+
+# ---- 8.5: revert restores a section verbatim from prior_state ----
+
+test_revert_section() {
+  local doc="$TMP63/revdoc.md"
+  local prior="$TMP63/prior.txt"
+  mkdir -p "$TMP63"
+  printf '# Doc\n\n## FR-3\n\nAMENDED wrong text.\n\n## FR-4\n\nkeep me.\n' > "$doc"
+  printf '## FR-3\n\nthe ORIGINAL text.\n' > "$prior"
+  doctree_revert_section "$doc" "## FR-3" "$prior"
+  assert_eq "revert: prior text restored" "1" \
+    "$(grep -c 'the ORIGINAL text.' "$doc")"
+  assert_eq "revert: amended text gone" "0" \
+    "$(grep -c 'AMENDED wrong text.' "$doc")"
+  assert_eq "revert: untargeted section kept" "1" \
+    "$(grep -c 'keep me.' "$doc")"
+  # Heading not present → doc untouched, rc 1.
+  cp "$doc" "$doc.bak"
+  doctree_revert_section "$doc" "## FR-99" "$prior"
+  assert_eq "revert: missing heading → rc 1" "1" "$?"
+}
+
+# ---- 8.4 / 8.9(a): an uncited AMEND is rejected, target untouched ----
+
+test_amend_rejected_target_untouched() {
+  if ! command -v jq >/dev/null 2>&1; then
+    printf 'SKIP: 8.4 amend-rejected (jq not found)\n'; return 0
+  fi
+  local target="$TMP63/amend-target.md"
+  mkdir -p "$TMP63"
+  printf '# T\n\n## FR-3\n\noriginal.\n' > "$target"
+  local before
+  before="$(grep -c '' "$target")"
+  local uncited='{"target":"prd","section":"FR-3","finding":"x","evidence":"","proposed":"y","origin":"tasks","severity":"high","status":"open","prior_state":"z"}'
+  # A rejected record must not be applied.
+  assert_eq "8.4: uncited AMEND rejected" "1" \
+    "$( doctree_validate_amend "$uncited"; echo $? )"
+  # The caller applies only validated amendments, so the target is unchanged.
+  local after
+  after="$(grep -c '' "$target")"
+  assert_eq "8.4: target byte-identical (line count unchanged)" "$before" "$after"
+  assert_eq "8.4: original content intact" "1" "$(grep -c 'original.' "$target")"
+}
+
+# ---- 8.9(b): amend-then-revert restores the section verbatim ----
+
+test_amend_then_revert_roundtrip() {
+  local doc="$TMP63/rt.md"
+  local prior="$TMP63/rt-prior.txt"
+  mkdir -p "$TMP63"
+  printf '# Doc\n\n## Goals\n\nTHE ORIGINAL GOALS.\n\n## Scope\n\nscope.\n' > "$doc"
+  # Capture prior_state, then simulate an amendment to the section.
+  printf '## Goals\n\nTHE ORIGINAL GOALS.\n' > "$prior"
+  # Amend: replace the section content.
+  printf '# Doc\n\n## Goals\n\nAMENDED GOALS.\n\n## Scope\n\nscope.\n' > "$doc"
+  assert_eq "roundtrip: amended" "1" "$(grep -c 'AMENDED GOALS.' "$doc")"
+  # Revert from prior_state.
+  doctree_revert_section "$doc" "## Goals" "$prior"
+  assert_eq "roundtrip: original restored verbatim" "1" \
+    "$(grep -c 'THE ORIGINAL GOALS.' "$doc")"
+  assert_eq "roundtrip: amendment gone" "0" "$(grep -c 'AMENDED GOALS.' "$doc")"
+  assert_eq "roundtrip: untouched section intact" "1" "$(grep -c 'scope.' "$doc")"
+}
+
+# ---- 8.9(c): a run with permanent significant findings stops at the cap --
+
+test_permanent_findings_stop_at_cap() {
+  # With a significant finding that never clears, should_replay is true for
+  # rounds below the cap and false at the cap — the run stops at round 2.
+  doctree_should_replay 1 0 2; assert_eq "8.9c: round 0 → replay" "0" "$?"
+  doctree_should_replay 1 1 2; assert_eq "8.9c: round 1 → replay" "0" "$?"
+  doctree_should_replay 1 2 2; assert_eq "8.9c: round 2 (cap) → STOP" "1" "$?"
+}
+
+# ---- 9.2: resume detects the first missing phase document ----
+
+test_resume_phase() {
+  local td="$TMP63/001-foo"
+  local date="2026-01-02"
+  mkdir -p "$td"
+  # No documents yet → resume from prd.
+  assert_eq "resume: nothing written → prd" "prd" \
+    "$(doctree_resume_phase "$td" "$date")"
+  # prd written → resume from tech-design.
+  : > "$td/2026-01-02-001-foo-prd.md"
+  assert_eq "resume: prd present → tech-design" "tech-design" \
+    "$(doctree_resume_phase "$td" "$date")"
+  # prd + tech-design written → resume from tasks.
+  : > "$td/2026-01-02-001-foo-tech-design.md"
+  assert_eq "resume: prd+tech-design present → tasks" "tasks" \
+    "$(doctree_resume_phase "$td" "$date")"
+  # all three written → nothing to resume (empty).
+  : > "$td/2026-01-02-001-foo-tasks.md"
+  assert_eq "resume: all present → empty" "" \
+    "$(doctree_resume_phase "$td" "$date")"
+}
+
+# ---- 9.1: run-state reader recovers round and open findings ----
+
+test_runstate_reader() {
+  if ! command -v yq >/dev/null 2>&1; then
+    printf 'SKIP: 9.1 run-state reader (yq not found)\n'; return 0
+  fi
+  local f="$TMP63/doctree-run-state.yaml"
+  # Absent file → defaults.
+  rm -f "$f"
+  assert_eq "runstate: absent file → round 0" "0" "$(doctree_runstate_round "$f")"
+  assert_eq "runstate: absent file → 0 open findings" "0" \
+    "$(doctree_runstate_open_findings "$f")"
+  # A real artifact with round 2 and two findings (one open, one resolved).
+  printf 'round: 2\nfindings:\n  - {severity: high, status: open, target: prd}\n  - {severity: low, status: resolved, target: tasks}\n' \
+    > "$f"
+  assert_eq "runstate: reads round" "2" "$(doctree_runstate_round "$f")"
+  assert_eq "runstate: counts open findings" "1" \
+    "$(doctree_runstate_open_findings "$f")"
+}
+
+# ---- 6.1: significant-severity threshold ----
+
+test_finding_significant() {
+  doctree_finding_is_significant high;       assert_eq "significant: high" "0" "$?"
+  doctree_finding_is_significant infeasible; assert_eq "significant: infeasible" "0" "$?"
+  doctree_finding_is_significant medium;     assert_eq "significant: medium → no" "1" "$?"
+  doctree_finding_is_significant low;        assert_eq "significant: low → no" "1" "$?"
+}
+
+# ---- 6.3/6.4 Gate 1: every FR maps to a criterion ----
+
+test_gate_fr_has_criterion() {
+  local frs="FR-1
+FR-2
+FR-3"
+  local withcrit="FR-1
+FR-2
+FR-3"
+  assert_eq "gate1: all FRs have a criterion → pass" "0" \
+    "$( doctree_gate_fr_has_criterion "$frs" "$withcrit" >/dev/null; echo $? )"
+  local missing="FR-1
+FR-3"
+  assert_eq "gate1: FR-2 missing a criterion → fail" "1" \
+    "$( doctree_gate_fr_has_criterion "$frs" "$missing" >/dev/null; echo $? )"
+  assert_eq "gate1: names the missing FR" "FR-2" \
+    "$(doctree_gate_fr_has_criterion "$frs" "$missing")"
+}
+
+# ---- 6.3/6.4 Gate 2: every FR in the verification table ----
+
+test_gate_fr_in_table() {
+  local frs="FR-1
+FR-2"
+  assert_eq "gate2: all FRs in table → pass" "0" \
+    "$( doctree_gate_fr_in_verification_table "$frs" "FR-1
+FR-2" >/dev/null; echo $? )"
+  assert_eq "gate2: FR-2 absent from table → fail" "1" \
+    "$( doctree_gate_fr_in_verification_table "$frs" "FR-1" >/dev/null; echo $? )"
+}
+
+# ---- 6.3/6.4 Gate 3: file:line citations resolve ----
+
+test_gate_citations_resolve() {
+  local doc="$TMP63/doc.md"
+  mkdir -p "$TMP63"
+  # A citation to this very test file, a valid line, and a bad one.
+  printf 'see plugin/lib/doctree-lib.sh:1 and plugin/lib/doctree-lib.sh:999999\n' \
+    > "$doc"
+  # Line 1 resolves; 999999 does not.
+  assert_eq "gate3: unresolved citation → fail" "1" \
+    "$( doctree_gate_citations_resolve "$doc" "$REPO_ROOT" >/dev/null; echo $? )"
+  assert_eq "gate3: names the unresolved citation" "plugin/lib/doctree-lib.sh:999999" \
+    "$(doctree_gate_citations_resolve "$doc" "$REPO_ROOT")"
+  printf 'only plugin/lib/doctree-lib.sh:1 here\n' > "$doc"
+  assert_eq "gate3: all citations resolve → pass" "0" \
+    "$( doctree_gate_citations_resolve "$doc" "$REPO_ROOT" >/dev/null; echo $? )"
+}
+
+# ---- 6.3/6.4 Gate 4: AMEND grounded + section matches target ----
+
+test_gate_amend_grounded() {
+  if ! command -v jq >/dev/null 2>&1; then
+    printf 'SKIP: gate4 (jq not found)\n'; return 0
+  fi
+  local target="$TMP63/target.md"
+  mkdir -p "$TMP63"
+  printf '# Target\n\n## FR-3\n\nthe claim.\n' > "$target"
+  local good='{"target":"prd","section":"FR-3","finding":"x","evidence":"plugin/lib/doctree-lib.sh:1","proposed":"y","origin":"tech-design","severity":"high","status":"open","prior_state":"z"}'
+  assert_eq "gate4: well-formed + section present → pass" "0" \
+    "$( doctree_gate_amend_grounded "$good" "$target" >/dev/null; echo $? )"
+  local badsection='{"target":"prd","section":"FR-99","finding":"x","evidence":"plugin/lib/doctree-lib.sh:1","proposed":"y","origin":"tech-design","severity":"high","status":"open","prior_state":"z"}'
+  assert_eq "gate4: section not in target → fail" "1" \
+    "$( doctree_gate_amend_grounded "$badsection" "$target" >/dev/null; echo $? )"
+  local uncited='{"target":"prd","section":"FR-3","finding":"x","evidence":"","proposed":"y","origin":"tech-design","severity":"high","status":"open","prior_state":"z"}'
+  assert_eq "gate4: uncited → fail" "1" \
+    "$( doctree_gate_amend_grounded "$uncited" "$target" >/dev/null; echo $? )"
+}
+
+# ---- 6.3/6.4 Gate 5: no open infeasible finding against a PRD requirement ----
+
+test_gate_no_open_infeasible() {
+  if ! command -v jq >/dev/null 2>&1; then
+    printf 'SKIP: gate5 (jq not found)\n'; return 0
+  fi
+  local clean='[{"severity":"high","status":"open","target":"prd","section":"FR-1"},{"severity":"infeasible","status":"resolved","target":"prd","section":"FR-2"}]'
+  assert_eq "gate5: no open infeasible-vs-prd → pass" "0" \
+    "$( doctree_gate_no_open_infeasible "$clean" >/dev/null; echo $? )"
+  local bad='[{"severity":"infeasible","status":"open","target":"prd","section":"FR-6"}]'
+  assert_eq "gate5: open infeasible-vs-prd → fail" "1" \
+    "$( doctree_gate_no_open_infeasible "$bad" >/dev/null; echo $? )"
+  assert_eq "gate5: names the offending requirement" "FR-6" \
+    "$(doctree_gate_no_open_infeasible "$bad")"
+}
+
+# ---- 6.3/6.4 Gate 6: decisions_taken > 0 when skip_steps was set ----
+
+test_gate_decisions_taken() {
+  assert_eq "gate6: skip-steps + decisions → pass" "0" \
+    "$( doctree_gate_decisions_taken 3 yes >/dev/null; echo $? )"
+  assert_eq "gate6: skip-steps + zero decisions → fail" "1" \
+    "$( doctree_gate_decisions_taken 0 yes >/dev/null; echo $? )"
+  assert_eq "gate6: no skip-steps → pass regardless" "0" \
+    "$( doctree_gate_decisions_taken 0 no >/dev/null; echo $? )"
+}
+
+# ---- 6.5: a reviewer is never the authoring agent (by definition) ----
+
+test_reviewer_not_author() {
+  # The authoring agent and the reviewer are distinct shipped definitions.
+  assert_eq "6.5: phase agent exists" "yes" \
+    "$( [ -f "$HERE/../agents/doctree-phase.md" ] && echo yes || echo no )"
+  assert_eq "6.5: reviewer agent exists" "yes" \
+    "$( [ -f "$HERE/../agents/examine-advisor.md" ] && echo yes || echo no )"
+  local author reviewer
+  author="$(grep -m1 '^name:' "$HERE/../agents/doctree-phase.md" | awk '{print $2}')"
+  reviewer="$(grep -m1 '^name:' "$HERE/../agents/examine-advisor.md" | awk '{print $2}')"
+  assert_eq "6.5: author is doctree-phase" "doctree-phase" "$author"
+  assert_eq "6.5: reviewer is examine-advisor" "examine-advisor" "$reviewer"
+  assert_eq "6.5: reviewer name differs from author" "yes" \
+    "$( [ "$author" != "$reviewer" ] && echo yes || echo no )"
+}
+
+# ---- run all tests ----
+
+test_resolve_model_profile_value
+test_resolve_model_builtin_default
+test_resolve_model_mixed
+test_resolve_model_unknown_phase
+test_effective_model_override_wins
+test_effective_model_falls_back_to_default
+test_phase_doc_path_all
+test_phase_doc_path_trailing_slash
+test_phase_doc_path_unknown_phase
+test_escalation_collect_never_halts
+test_escalation_halt_stops_on_first
+test_escalation_unknown_mode
+test_validate_amend_fixtures
+test_validate_amend_edges
+test_should_replay
+test_revert_section
+test_amend_rejected_target_untouched
+test_amend_then_revert_roundtrip
+test_permanent_findings_stop_at_cap
+test_resume_phase
+test_runstate_reader
+test_finding_significant
+test_gate_fr_has_criterion
+test_gate_fr_in_table
+test_gate_citations_resolve
+test_gate_amend_grounded
+test_gate_no_open_infeasible
+test_gate_decisions_taken
+test_reviewer_not_author
+test_agent_canary_matches_hook
+test_agent_no_task_refs
+test_command_no_task_refs
+test_profiles_doctree_fields
+test_parity_fixtures_wellformed
+
+printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
+[ "$FAIL" -eq 0 ]

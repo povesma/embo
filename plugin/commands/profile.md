@@ -51,7 +51,14 @@ If no argument is provided, default to `list`.
    - Tools: RLM: <on/off>
    - Git: commit style: <commit_style or "conventional">
    - Required MCPs: <list or "none">
+   - Doc-tree: models prd/tech-design/tasks: <prd>/<tech_design>/<tasks>,
+     escalation: <escalation>, round cap: <round_cap>, max agents:
+     <budget.max_agents>
    ```
+
+   Read the doc-tree values with `embo-profile get doctree.models.prd`
+   and the sibling `doctree.*` fields. Omit the Doc-tree line only if
+   every `doctree.*` field is empty (an older profile without the block).
 
 ### Mode: `list`
 
