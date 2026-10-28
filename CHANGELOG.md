@@ -4,15 +4,24 @@ All notable changes to the embo plugin are documented here.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-28
+
 ### Added
 
-- `/embo:doctree` builds a feature's whole doc tree (PRD → tech-design →
-  tasks) with spawned agents: each phase is authored in its own context
-  and checked by two independent review passes plus checks that need no
-  judgement, and a grounded finding can correct an upstream document.
-- The run reports its plan and model choices, refuses to start when it
-  would stall on a permission prompt or a disconnected review server, and
-  resumes an interrupted run from the first unfinished phase.
+- `/embo:doctree <slug-or-description>` builds a feature's PRD, technical
+  design and task list in one unattended run, each phase written by a
+  fresh agent and reviewed by two that did not write it. It does not
+  interview you: it works from a seed document in the task directory and
+  records what it could not decide. Expect roughly 570k tokens and under
+  an hour; use `/embo:prd` and friends when you want to answer questions
+  yourself.
+
+### Changed
+
+- `/embo:worktree` now offers to apply `worktree.baseRef: "head"`, which
+  bases a new worktree on your current branch instead of the remote
+  default — without it, uncommitted and unpushed work is missing inside
+  the new worktree. 0.3.0 only named the setting.
 
 ## [0.3.0] - 2026-10-20
 
