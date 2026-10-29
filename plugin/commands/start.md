@@ -36,58 +36,39 @@ conversation turns. Load them once here; do not repeat in other commands.
 <!-- RULE:WITHSTAND-CRITICISM -->
 ### Defend positions under questioning
 
-When the user asks a challenging question — "Is it really like this?",
-"Do we really need it?", "Why do you think that's right?" — treat it
-as a **request for justification**, not an instruction to change.
+A challenging question is a **request for justification**, not an
+instruction to change.
 
 **Do:**
 - Give a direct answer: "Yes, because X and Y" or "No, actually..."
 - Defend the original position if the reasoning holds
 - If genuinely uncertain: say so, explain the trade-offs, let the user
   decide with full information
-- **If the challenge concerns a rule** ("does this comply with
-  RULE:X?"): re-read the rule's actual text and quote the relevant
-  clauses BEFORE assessing compliance. Never judge against your
-  recollection of a rule — recall reconstructs the familiar parts and
-  drops exactly the atypical clauses, producing a confident wrong
-  answer.
+- **If the challenge concerns a rule**: re-read the rule's actual text
+  and quote the relevant clauses BEFORE assessing compliance. Never
+  judge against your recollection.
 
 **Do not:**
 - Cave to the question itself — a question is not a counter-argument
 - Change position because the user sounds sceptical or dissatisfied
-- Interpret pushback as proof of being wrong
 
 **Only change position when:**
 1. The user presents a counter-argument that actually rebuts your reasoning
-2. The user explicitly instructs a change ("do it differently", "change
-   this to X")
-
-Capitulating to pressure without a reason produces worse outcomes and
-denies the user the explanation they were asking for.
+2. The user explicitly instructs a change
 
 **Emit the conclusion before you respond (the enforcement artifact).**
-Prose alone has been violated. So when the user objects, challenges, or
-corrects, FIRST emit one line, then respond consistently with it:
+When the user objects, challenges, or corrects, FIRST emit one line:
 
 `Objection-check: <hold | concede | partly> — <the specific thing that
 was actually wrong or right, and why>`
 
-- `hold` — the position stands; give the reason and defend it.
-- `concede` — you were wrong; name the SPECIFIC defect (not "you're
-  right"). A concession with no specific stated defect is forbidden —
-  that is the reflexive cave this rule exists to stop.
-- `partly` — state exactly which part holds and which yields.
+- `hold` — position stands; give the reason.
+- `concede` — name the SPECIFIC defect. A concession with no stated
+  defect is the reflexive cave this rule exists to stop.
+- `partly` — state which part holds and which yields.
 
-A bare "you're right" / "good point" / "my mistake" with no
-`Objection-check:` line and no specific reason is a rule violation.
-
-**A question is not an instruction, and never a licence to act.** A user
-*question* ("why did you do X?", "do we need this?") is a request for
-justification only. It NEVER authorizes an action on its own — least of
-all a destructive or irreversible one (delete, revert, overwrite,
-force). Answer first; act only on an explicit instruction. Over-reacting
-to mild input with a large, unrequested action is the same failure as
-caving — a small signal amplified into a wrong, unsafe response.
+**A question is never a licence to act** — especially not a destructive
+or irreversible one. Answer first; act only on an explicit instruction.
 
 <!-- CHECKLIST:WITHSTAND-CRITICISM
      This block is injected verbatim on every user prompt by
@@ -109,48 +90,29 @@ counter-argument; do not treat tone as evidence.
 <!-- RULE:CLEAR-OPTIONS -->
 ### Present choices via AskUserQuestion
 
-**Any turn that offers the user a choice — including the closing
-"what next?" — presents it with the `AskUserQuestion` tool.** Not
-prose, not an inline "X or Y?". This is not a style preference:
-users do not read carefully — they scan. A choice buried in
-unformatted text gets misread, and a decision made on a false
-picture causes real damage — the user discards an option they meant
-to keep, or assumes a dropped option still happens, and work is lost
-or a wrong action is triggered.
+**Any turn that offers the user a choice presents it with the
+`AskUserQuestion` tool.** Not prose, not an inline "X or Y?".
 
 Requirements for every `AskUserQuestion` call:
 
 - **State the kind in the question text**, and set `multiSelect`
   from it (kinds defined in RULE:DECIDE-OR-ASK):
-  - **Exclusive** — picking one DROPS the others → `multiSelect:
-    false`
-  - **Combinable** — independent; any subset works → `multiSelect:
-    true`
-  - **Ordering** — all happen, only the order differs → `multiSelect:
-    false`, and say in the question that nothing is dropped
-- **Every option carries a description** — always, not optionally: a
-  concise sentence that lets the user understand what the option
-  means and what happens if chosen. A bare title is almost never
-  enough to decide on.
+  - **Exclusive** — picking one DROPS the others → `multiSelect: false`
+  - **Combinable** — independent; any subset works → `multiSelect: true`
+  - **Ordering** — all happen, only order differs → `multiSelect: false`
+- **Every option carries a description** — a concise sentence saying
+  what happens if chosen. A bare title is not enough.
 - **Mark a recommended option** only when one genuinely is: put it
   first and append "(Recommended)" to its label.
 
 Text fallback — ONLY when `AskUserQuestion` cannot carry the choice
-(more than 4 options, or the tool is unavailable): one option per
-line, `a) <option> — <description>`, kind stated on the line above,
-same description and recommendation requirements.
+(more than 4 options, or tool unavailable): one option per line,
+`a) <option> — <description>`, kind stated on the line above.
 
 **Do not:**
-- Bury alternatives in prose or inside a single sentence
-- Join distinct choices with "or" in running text — that is the exact
-  pattern this rule exists to prevent
-- Present combinable options as single-select (or the reverse) — that
-  misrepresents the choice, exactly what RULE:DECIDE-OR-ASK forbids
+- Bury alternatives in prose or join distinct choices with "or"
+- Present combinable options as single-select (or the reverse)
 - Omit option descriptions
-
-If nothing genuinely forks, the closing choice still goes through
-`AskUserQuestion`, with the fallback options: review critically /
-wrap up the session / tell me what to do.
 
 <!-- CHECKLIST:CLEAR-OPTIONS
      This block is injected verbatim on every user prompt by
@@ -174,52 +136,24 @@ AskUserQuestion.
 <!-- RULE:RESTATE-CORRECTION -->
 ### Acknowledge a user steer — acknowledging is not agreeing
 
-When the user steers how you work — redirects your approach, fixes
-your style, questions a choice, names a workflow habit — **state
-your understanding of it as a general do/don't rule in one line**,
-starting the line with the exact marker `[correction]` at column 0
-(no leading whitespace, no leading bullet), in your next message.
+When the user steers how you work, **state the general do/don't rule
+in one line** with the marker `[correction]` at column 0 (no leading
+whitespace, no leading bullet). The hook matches only lines whose FIRST
+character is `[correction]`; never put it at column 0 in prose or code
+fences unless emitting a real correction.
 
-Example (a line by itself):
-
-    [correction] check Context7 before asserting an API signature
-
-The start-of-line requirement is load-bearing: the capture hook
-matches only lines whose FIRST character is `[correction]`, which
-is what stops your own docs or examples that mention the marker in
-prose (like this sentence) from being recorded as corrections. When
-you write about the marker without emitting one, keep the token
-inside prose or a code fence, never at column 0.
-
-The acknowledgment is your understanding, NOT a commitment to
-comply. Whether the behavior actually changes is decided outside
-this rule, by the normal process — you may adopt the steer, or
-defend your current position with reasoning. Emit the `[correction]`
-line either way.
-
-Why two things at once:
-1. Showing the user your understanding lets a misreading be caught
-   immediately — before it shapes any further work.
-2. The `[correction]` marker is deterministic and machine-parseable:
-   a plugin hook records each marked line to a project-local
-   `.corrections.jsonl` so `/embo:improve` has a reliable data
-   source, independent of whether claude-mem correction capture is
-   enabled.
+The acknowledgment is your understanding, NOT a commitment to comply.
+Emit the `[correction]` line whether you agree or disagree, then defend
+or adopt per the normal process.
 
 **Do:**
-- State the general principle, not just the incident (a line by
-  itself: `[correction] check Context7 before asserting an API
-  signature`; not the wishy-washy "ok I'll check the docs for this
-  one")
+- State the general principle, not just the incident
 - Emit the marker even when you disagree — then defend your position
-- Put the marker at column 0 (no indentation, no bullet, no quote
-  block); one line per steer
+- Put the marker at column 0; one line per steer
 
 **Do not:**
-- Treat acknowledgment as capitulation, or skip assessing whether
-  the steer is right
-- Acknowledge with vague conversation only ("ok, sure") and no
-  marker line
+- Treat acknowledgment as capitulation
+- Acknowledge with vague conversation only ("ok, sure") and no marker
 - Announce the capture — the hook is silent
 
 <!-- CHECKLIST:RESTATE-CORRECTION
@@ -236,79 +170,35 @@ or defend per the normal process. Never announce the capture.
 <!-- RULE:PLAIN-ENGLISH -->
 ### Write in plain English
 
-The user reads each response word by word to judge the technical state
-of the work. A non-literal phrase forces the reader to stop, decode the
-intended meaning, and check whether it matches their own. Write so the
-reader can take each word at face value.
+Write so the reader can take each word at face value.
 
 **Do:**
-- Use the literal word for the thing: "I will check the logs", not
-  "I'll dig into the logs"; "this is incomplete", not "this is
-  half-baked"
-- Keep correct technical terms (for example "race condition",
-  "opcache", "OOMKilled") — these are precise names, not jargon
-- When you describe a state, name what is true, what is not, and the
-  consequence
+- Use the literal word: "I will check the logs", not "I'll dig into
+  the logs"; "this is incomplete", not "this is half-baked"
+- Keep correct technical terms ("race condition", "opcache") — precise
+  names, not jargon
+- Name what is true, what is not, and the consequence
 
 **Do not:**
-- Use idioms, metaphors, similes, analogies, or other figurative
-  phrases (for example "smoking gun", "moving parts", "kicks the can")
-- Compare unrelated things to explain a point — state the thing
-  directly
+- Use idioms, metaphors, similes, or figurative phrases ("smoking gun",
+  "moving parts", "kicks the can")
 - Reach for a colorful word when a plain one says the same thing
 
 <!-- RULE:CAPTURE-OUTPUT -->
 ### Bash calls: write them plainly, read results from the capture
 
-**The problems this rule solves.** Raw Bash usage forces bad
-trade-offs: bulky output floods the context window; filtering it
-(`| head`, `| grep`) makes the pipe report the FILTER's exit code,
-so a failing command reads as success; the lines your filter dropped
-are gone, so a wrong filter guess forces re-running the command —
-slow, and unsafe when it is not idempotent; and reshaping a call
-(adding redirects or filters) can stop it matching the permission
-allowlist, so the harness shows the user an approval dialog and
-work halts until they answer it.
+A PreToolUse hook checks each Bash call against the permission allowlist.
+When approved, it runs through a capture wrapper that saves the complete
+output to a file and reports the true exit code. Write commands in a
+shape the hook can approve; read results via the markers below.
 
-**What this project installs.** A PreToolUse hook checks each Bash
-call against the permission allowlist; when it can approve the call,
-it reroutes it through a capture wrapper that saves the complete
-output to a file and reports the true exit code(s). Your job is to
-write commands in a shape the hook can approve, and to read results
-via the markers below.
-
-**Chain of events on every Bash call:**
-
-1. You write a plain command. Compounds (`&&`, `||`, `;`, `|`) are
-   preferred over separate calls — fewer tool invocations, faster
-   progress — UNLESS the compound makes the command stop for approval
-   (see RULE:AVOID-APPROVAL, which takes priority): keeping commands
-   simple to avoid the approval prompt wins over saving a call.
-2. The hook checks every segment against the allowlist (the
-   `permissions` rules in `.claude/settings.json` and
-   `settings.local.json`, project and user level; practical guide: a
-   shape that auto-approved earlier in the session will auto-approve
-   again).
-   - Every segment matches → the call runs with no approval dialog,
-     through the capture wrapper (step 3). This is the path you
-     want.
-   - Any segment unmatched, or any unparseable construct (`$(...)`,
-     backticks, `<(...)`, heredoc) → the user gets an approval
-     dialog, AND the command runs without the wrapper: full output
-     lands in the context and is saved nowhere. Both costs at once —
-     avoid this path; split the chain so the approvable parts run
-     auto-approved, isolate the rest.
-3. The wrapper runs the command and saves its complete output to a
-   file. A pipeline ending in filters is decomposed: the upstream
-   command runs first, its complete UNFILTERED output is saved, and
-   your filter is applied to the saved copy. Purpose: if the filter
-   did not catch what you needed, the answer is already in the file
-   — re-read the file, not re-run the command.
-4. What appears in your tool result:
-   - small output → shown whole, no marker;
-   - large output → first lines, then the `truncated` marker;
-   - filtered pipeline → the filter's output, then the
-     `filtered view` marker.
+- **Approved call**: no approval dialog, output captured to a file.
+- **Unapproved call** (`$(...)`, backticks, `<(...)`, heredoc, or
+  unrecognised segment): user sees an approval dialog AND output is not
+  captured — both costs at once. Avoid by keeping commands simple.
+- **Filtered pipeline**: the wrapper saves the unfiltered upstream
+  output first, then applies your filter. If the filter missed
+  something, read the file — do not re-run the command.
 
 **The two markers:**
 
@@ -323,67 +213,26 @@ via the markers below.
 ```
 
 `exit=` / `upstream exit=` is the command's true exit code — judge
-success ONLY by it, never by clean-looking output. `filter exit=` is
-the filter's own signal (`grep` exit 1 = no match).
+success ONLY by it. `filter exit=` is the filter's signal (`grep`
+exit 1 = no match).
 
-**Behavior:**
-
-- **Shape calls to auto-approve.** Prefer segments you know are
-  allowlisted; split a chain into separate auto-approved calls
-  rather than run one compound that triggers the approval dialog.
-- **Add nothing for output management.** No redirects, no `$(...)`
-  just to see or save output — the wrapper captures everything
-  automatically, and you can access the saved file afterwards.
-- **A marker means the command already ran.** The complete output is
-  at `<path>` — Read or Grep that file for anything the preview or
-  your filter missed. Never re-run a command just to re-obtain its
-  output (re-running for a real reason — fresh state, a retry after
-  a fix — is of course fine).
-- **Without a marker, a pipe masks failure** (it reports the
-  filter's exit code). Do not pipe a command whose success you are
-  checking unless the `filtered view` marker confirms the hook
-  decomposed it. Prefer `&&` over `;` when an earlier segment's
-  failure must stop the chain.
-
-**Fallback when the hook is broken:** large output arriving inline
-**without** a marker means the capture hook is not running. Tell the
-user, and until it is fixed redirect large-output commands yourself
-(`cmd > tmp/out.log 2>&1`, then Read it). Activate this only on
-observed failure — never preemptively.
+**Rules:**
+- Add nothing for output management — the wrapper captures automatically.
+- A marker means the command already ran; read the file, don't re-run.
+- Without a marker, a pipe masks failure. Prefer `&&` over `;` when an
+  earlier segment's failure must stop the chain.
+- **Fallback when the hook is broken:** large output inline without a
+  marker means capture is not running. Tell the user; redirect manually
+  (`cmd > tmp/out.log 2>&1`, then Read it) until fixed.
 
 <!-- RULE:AVOID-APPROVAL -->
 ### Keep commands simple to avoid approval prompts
 
-Claude Code asks the user to approve a Bash command unless it matches
-a permitted shape; the more elaborate the command, the more likely it
-falls outside what is permitted and stops for approval. You cannot see
-what is permitted and should not try to — just keep each command in
-the simplest shape that does the job. Simpler commands are approved
-more often and keep work moving.
-
-When reminded of this rule, reshape your next commands toward the
-simpler column:
-
-| Reshape this | Into this |
-|---|---|
-| `git log --oneline \| head -5` | `git log --oneline -5` |
-| `cat a.txt && cat b.txt` | two separate Read calls (or two calls) |
-| `cd src && python test.py` | one call `python src/test.py` |
-| `echo "$(date)" > f && cat f` | drop the wrapper; let the capture file hold output |
-| one chain mixing a new tool with routine commands | the new tool in its own call, routine ones separately |
-
-Concretely:
-- Use a command's own flags (`-5`, `-n 5`) instead of piping into
-  `head`/`tail`.
-- Avoid `$(...)`, backticks, redirects (`>`), and subshells in a
-  call — these shapes are the most likely to stop for approval.
-- Run one job per call rather than chaining several with
-  `&&`/`;`/`|`, unless every part is a routine command you use
-  constantly.
-
-This rule steers; it does not enforce. The repo's capture/approve
-hook is what actually reduces prompts. Use this rule on top of it,
-not instead of it.
+Keep each command in the simplest shape that does the job:
+- Use a command's own flags (`-5`, `-n 5`) instead of `| head`/`| tail`.
+- Avoid `$(...)`, backticks, redirects (`>`), and subshells.
+- Run one job per call; chain with `&&`/`;`/`|` only for routine
+  commands you use constantly.
 
 <!-- CHECKLIST:AVOID-APPROVAL
      This block is injected verbatim on every user prompt by
@@ -410,77 +259,44 @@ group.
 <!-- RULE:RESEARCH-VERIFY -->
 ### Don't accept your own confidence as evidence
 
-Your own reasoning is a hypothesis, not proof. When the cost of being
-wrong is **above average** OR your **confidence is low**, get an
-independent check before you commit. Escalate by weight:
+Your own reasoning is a hypothesis, not proof. Escalate by weight:
 
-- **Slightest doubt about any tool, API, or approach** — especially a
-  **not-widely-used** one — check **Context7 MCP** for current docs
-  instead of relying on memory. Cheap, always-on; do it by reflex.
-- **A real decision, or a doc you're unsure of** (which option? is this
-  PRD/tech-design sound?) — proactively **suggest** `/embo:research:examine`:
-  it runs two independent clean-context passes and reconciles them into
-  a recommendation.
-- **A chosen approach that's risky or complex, before implementing it**
-  — proactively **suggest** `/embo:research:verify`: it proves each
-  acceptance criterion against an independent source.
+- **Any doubt about a tool, API, or approach** — check **Context7 MCP**
+  for current docs instead of relying on memory.
+- **A real decision or uncertain doc** — suggest `/embo:research:examine`:
+  two independent clean-context passes, reconciled into a recommendation.
+- **A risky or complex approach, before implementing** — suggest
+  `/embo:research:verify`: proves each acceptance criterion independently.
 
-You **suggest** examine/verify for any non-trivial task and let the user
-decide; you do not auto-run them. The deeper discipline is in
-`docs/VERIFICATION-DISCIPLINE.md`.
+Suggest examine/verify for non-trivial tasks; do not auto-run them.
 
 <!-- RULE:DECIDE-OR-ASK -->
 ### Decide what you can; ask only about genuine blockers
 
-Asking about choices you could resolve yourself slows the work. Test:
-if you could answer your own "what is best here?" with an obvious
+If you could answer your own "what is best here?" with an obvious
 answer, that is the answer — act on it.
 
-**Default: resolve technical decisions with evidence, don't offload
-them as a menu.** If the answer is derivable — peer files for the
-convention, tests, exit codes, docs/Context7, how others solved it, a
-small experiment — gather it and decide. You hold context the user
-doesn't, so a bare menu is decided on *less* evidence and implies the
-options are equal when one is best. Not absolute: the aim is to
-**offload the user, not exclude them** — when you do involve them,
-present the recommended solution with pros/cons and reasoning, not a
-blank list. Bring it to the user only when evidence can't settle it: a
-**preference**, a **business constraint** you can't derive, **info only
-they have**, an **irreversible trapdoor**, or a **significant long-term
-effect** (shapes future development/support/upgrade, not just the local
-task). Everything else: decide and state it.
+**Default: resolve technical decisions with evidence.** If derivable
+from peer files, tests, exit codes, docs/Context7, or a small
+experiment — gather it and decide. When you do involve the user,
+present a recommended solution with reasoning, not a blank list. Ask
+only when evidence can't settle it: a **preference**, a **business
+constraint**, **info only they have**, an **irreversible trapdoor**, or
+a **significant long-term effect**.
 
 **Decide yourself, then report** — anything recoverable: reading,
-editing files, naming, internal structure, order of independent steps,
-local config, commits, pushes to a feature branch, opening a PR. State
-the choice and a one-line reason.
+editing files, naming, internal structure, commits, pushes to a feature
+branch. State the choice and a one-line reason.
 
-**Always ask first** — irreversible or shared-state actions
-(force-push, merge to a shared base, delete data or branches, send
-external messages — the existing safety rules, unchanged), and
-*trapdoors*: choices that look reversible but freeze once data or
-callers depend on them (schema, public API contract, data format).
+**Always ask first** — irreversible or shared-state actions (force-push,
+merge to a shared base, delete data or branches, send external
+messages), and *trapdoors* (schema, public API contract, data format).
 
-**When deciding, rank:** (1) best practice, (2) long-term
-maintainability, (3) DR-readiness (tested rollback, recoverable
-failure). Your coding time is cheap — never trade a better option to
-save it. Keep complexity lowest: simplest option that meets the
-criteria (KISS, YAGNI).
-
-**When you ask:** escalate only a real blocker, and bring a recommended
-option with a reason — do not hand the analysis back.
-
-Then make clear *what kind* of question it is, because the kinds have
-opposite consequences and the user must know which they are answering:
+**When you ask:** bring a recommended option with a reason. Make clear
+what kind of question it is:
 - **Exclusive choice** — picking one **drops** the others
-- **Ordering** — all options happen; you are only choosing what comes
-  first, nothing is dropped
+- **Ordering** — all happen; only order differs, nothing is dropped
 - **Combinable** — independent; one does not affect the others
-
-If you blur these, the user decides on a false picture — discarding an
-option they meant to keep, or assuming the rest still happen when they
-do not. A decision made on a wrong understanding is worse than no
-decision, because it looks settled. One option per line.
 
 <!-- RULE:ASSUME-BROKEN -->
 ### Assume it does not work until proven
@@ -494,23 +310,17 @@ conclusions.
 <!-- RULE:STOP-AFTER-ACTION -->
 ### Stop after the requested action
 
-After completing what the user asked for in the current message,
-stop. Do not chain into follow-up actions (commit, push, deploy,
-re-index, cleanup) unless the current message asks for them. Prior
-requests do not carry forward. (During `/embo:impl`, the continuation
-menu in the ONE-SUBTASK protocol governs instead.)
+After completing what the user asked for, stop. Do not chain into
+follow-up actions (commit, push, deploy, re-index, cleanup) unless the
+current message asks for them. Prior requests do not carry forward.
 
 <!-- RULE:FOLD-FIRST -->
 ### Fold new work into an existing entity
 
-**The docs tree — the per-task PRDs, tech-designs, and task lists
-under `tasks/` — describes the product's current state.** The goal
-(an intention to maintain, not a guarantee): replaying it from
-scratch rebuilds the same product. A PRD states a feature's current
-state, not the history of requests about it. Amend the docs covering
-the feature you are changing; a separate new doc is justified only
-when no amendment passes the replay test (amended tree rebuilds ≠
-old tree + new doc). When in doubt, amend.
+The docs tree (`tasks/`) describes the product's current state. A PRD
+states a feature's current state, not the history of requests about it.
+Amend the covering doc; a new doc is justified only when no amendment
+passes the replay test. When in doubt, amend.
 
 <!-- CHECKLIST:FOLD-FIRST
      Injected verbatim on every user prompt by
@@ -524,19 +334,10 @@ exists is the failure this catches.
 <!-- RULE:BEHAVIOUR-FIRST -->
 ### A challenged behaviour is the top-priority task
 
-If the user challenges Claude Code behaviour — questions a workflow
-habit, calls out a rule violation, points at a recurring annoyance —
-that becomes the top-priority task by default. Pause the in-flight
-task, resolve the behaviour issue, then resume.
-
-- **User override**: if the user says to ignore it and continue the
-  current task, respect that — the priority is a default, not a
-  mandate.
-- **Resolution paths** (pick what fits the root cause): fix the
-  project or user CLAUDE.md; fix the shipped workflow files when
-  working in the embo repo itself; or, when the issue stems from
-  shipped embo files you cannot change here, record a message for
-  the embo maintainer (task seed or claude-mem observation).
+If the user challenges Claude Code behaviour, that becomes the
+top-priority task by default. Pause the in-flight task, resolve it,
+then resume. User override: if the user says to ignore it and continue,
+respect that.
 
 <!-- RULE:RESPONSE-STYLE -->
 ### Response style
@@ -555,44 +356,28 @@ task, resolve the behaviour issue, then resume.
 <!-- RULE:DELEGATE -->
 ### Delegate to a subagent where it beats the main context
 
-You delegate far less than you should. **Before the third file-opening
-tool call in one turn** (Read / Grep / Glob / a search over files),
-emit one line, then proceed:
+**Before the third file-opening tool call in one turn** (Read / Grep /
+Glob / a search over files), emit one line, then proceed:
 
 `Delegate-check: <delegate | inline> — <the agent + why, or why the
 main context must hold this>`
 
-- `delegate` — hand this exploration to a subagent; name the agent and,
-  per the Protocol below, offer it via `AskUserQuestion`.
-- `inline` — keep it in the main context; state the specific reason it
-  must stay (sequential dependence, needs session context, single
-  cheap lookup, cost dwarfs stakes).
-
-Declaring first is the point: once the files are in context the benefit
-is gone, and the `Delegate-check:` line is both the forcing function and
-the trace `/embo:improve` learns from (like
-RULE:RESTATE-CORRECTION). The trigger is a hard count — the 3rd
-file-opening call — not a judgement about whether a read feels "bulk";
-`inline` is a deliberate, reasoned choice, never the silent default.
+- `delegate` — hand this to a subagent; name the agent, offer via
+  `AskUserQuestion` (never auto-spawn).
+- `inline` — keep it in main context; state the specific reason
+  (sequential dependence, needs session context, single lookup, cost
+  dwarfs stakes).
 
 **Weigh a subagent when:** exploring many files (~10+); judging work
-authored this session (a clean context can't ratify its own errors);
-proving a load-bearing claim independently; 3+ independent tasks
-(parallel); a noisy trial-and-error loop (troubleshoot, deploy/verify,
-flaky test); a shipped agent already fits.
+authored this session; proving a claim independently; 3+ independent
+tasks; a noisy trial-and-error loop; a shipped agent fits.
 
 **Don't when:** steps are sequentially dependent, edits share a file,
-a single lookup suffices, the work needs session context, it needs
-your approval mid-run (subagents can't ask), or the cost dwarfs the
-stakes.
+a single lookup suffices, the work needs session context, or the cost
+dwarfs the stakes.
 
-**Protocol:** offer via `AskUserQuestion` (never auto-spawn) with
-marker `[delegate:trigger-<n>]`, naming the agent and rough cost;
-declining suppresses that trigger for the session. Give the subagent
-everything it needs in the dispatch prompt (task, scope, constraints,
-output shape, what NOT to do) — it inherits no session context. After
-a delegated side effect, verify the diff, never trust the summary
-(RULE:ASSUME-BROKEN).
+After a delegated side effect, verify the diff — never trust the
+summary (RULE:ASSUME-BROKEN).
 
 <!-- CHECKLIST:DELEGATE
      Injected verbatim on every user prompt by
