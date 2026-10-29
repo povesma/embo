@@ -116,12 +116,18 @@ possible while remaining behaviorally equivalent,
 already injects as checklists.
 
 **Acceptance Criteria**:
-- [ ] The rules region (lines 31–618) is reduced by ≥ 25% in tokens
+- [ ] The rules region (lines 36–618) is reduced by ≥ 25% in tokens
   without removing any rule's governing constraint or checklist block.
 - [ ] The `behavioral-reminder.sh` hook extraction test still passes
-  after the edit (all CHECKLIST blocks intact).
-- [ ] `embo-tokens start.md` shows the new total is ≤ 6,700 tokens
-  (~8,900 × 0.75).
+  after the edit (all CHECKLIST blocks intact, including the new
+  SCOUT-FIRST block added in Story 1).
+- [ ] `embo-tokens start.md` shows the whole-file total (including all
+  Story 1 and Story 2 additions) is ≤ 6,700 tokens. Note: the 25%
+  rules-region cut (7,000 → ≤5,250) yields ~7,100 whole-file tokens
+  before Story 1 additions; to reach ≤6,700, the rules region must
+  absorb Story 1's additions within its 25% budget, or additional cuts
+  must be made. Tech-design must confirm the arithmetic before
+  implementation.
 
 ### Story 3 — Reduce token cost of other high-load commands
 
@@ -191,12 +197,21 @@ must always be checked.
 
 **FR-1 Scout-first menu**: The `AskUserQuestion` call at the end of
 `start.md` MUST NOT be emitted until the session-scout agent result is
-present in context. The command instructions must make this ordering
-explicit and unambiguous.
+present in context.
+
+Root cause (diagnosed 2026-10-29): the `Agent` tool call returns a spawn
+confirmation immediately; the scout's digest arrives later as a
+`<teammate-message teammate_id="session-scout">` notification in a
+subsequent user-role message. The model's current Summary trigger ("After
+Batch A and Batch B return") fires on the spawn confirmation, not the
+digest — prose ambiguity, not a compliance failure.
+
+Fix: the Summary section's precondition is rewritten to: "Do not proceed
+to the Summary or AskUserQuestion until a `<teammate-message
+teammate_id="session-scout">` block is present in the current turn's
+input." A CHECKLIST block enforces this specific, verifiable condition
+(presence of a named block in context, not a vague ordering instruction).
 - Priority: **High** (UX correctness)
-- Rationale: The double-menu defect is caused by the model following
-  the "synthesize summary" step before the scout notification arrives.
-  An explicit ordering constraint removes the ambiguity.
 
 **FR-2 Single menu guarantee**: The command must emit exactly one
 `AskUserQuestion` per run. If the scout result arrives after the first
@@ -218,23 +233,22 @@ and must stay verbatim).
 and tightened. Target: ≥ 15% per file.
 - Priority: **Medium**
 
-**FR-5 Subsequent-run fast path**: When the model-output document from
-this session already contains `| System status |` in context (the table
-row mandated by the Summary table at `start.md` line 703), the command
-runs only `git log --oneline -10` and `git diff --stat HEAD`, then emits
-a short delta note instead of the full startup document.
+**FR-5 Subsequent-run fast path**: When this session has already
+completed a `/embo:start` run, the command runs only `git log --oneline
+-10` and `git diff --stat HEAD`, then emits a short delta note instead of
+the full startup document.
 
-The sentinel is `| System status |` alone — a single string that appears
-exactly once per completed run in the summary table, never in the command
-instructions themselves (which use pipe-bordered Markdown only in this
-table row). The `## Session Summary` sentinel is dropped: the command
-does not mandate that heading and it would be unreliable (`grep -rn
-'Session Summary' plugin/` → zero results, verified 2026-10-29).
+The sentinel MUST be a string that only the completed run's *output*
+produces, never a string present in `start.md` itself. (The previously
+proposed sentinel `| System status |` appears at `start.md` line 703
+inside the command file, so it is always present in context on every
+run — this renders the fast path always-active and was rejected.)
 
-Note for tech-design: confirm that `| System status |` does not appear
-in any other context output (CLAUDE.md, hook output, README) before
-finalising the sentinel. (Verified within plugin/: only `start.md`
-lines 694 and 703 contain the string, verified 2026-10-29.)
+The correct sentinel is a literal output-only marker line that the
+Summary step writes into its response, for example:
+`<!-- embo-start: complete -->`. This string must not appear anywhere in
+`start.md`, `CLAUDE.md`, hook outputs, or README. Tech-design must verify
+uniqueness before finalising the exact string.
 - Priority: **Medium** (useful but not a correctness fix)
 - Constraint: The first run's session summary must remain intact in
   context. The delta note is additive, not a replacement.
@@ -242,12 +256,19 @@ lines 694 and 703 contain the string, verified 2026-10-29.)
 ### Non-Functional Requirements
 
 **NFR-1 Behavioral fidelity**: No tightening removes a rule's governing
-constraint or its checklist block. Verified by reading the before/after
-diff and confirming the `behavioral-reminder.sh` extraction test passes.
+constraint, its checklist block, or any `<!-- RULE:` marker (22 present
+in `start.md`; hook text references some by name). Verified by: (a)
+reading the before/after diff, (b) the `behavioral-reminder.sh`
+extraction test passing, (c) a grep count of `<!-- RULE:` before and
+after matching.
 
 **NFR-2 Token budget discipline**: After this task, the total token cost
 of the files listed in FR-3 and FR-4 is measurably lower. `embo-tokens`
-output is recorded before and after each story.
+output is recorded before and after each story. Additionally, the byte
+size of the `behavioral-reminder.sh` injection output (the CHECKLIST
+blocks extracted at runtime) is recorded before and after Story 1 — the
+new SCOUT-FIRST block adds to every-prompt injection cost and must be
+accounted for.
 
 **NFR-3 No approval-dialog regression**: After edits to `start.md`, a
 headless `claude -p "/embo:start"` run completes with no Bash approval
@@ -290,8 +311,9 @@ dialogs (same bar as Task 052 Story 4.2).
 ## Success Metrics
 
 1. Zero double-menu occurrences in three consecutive live `/embo:start`
-   runs after FR-1/FR-2 are shipped.
-2. `start.md` total tokens ≤ 6,700 after Story 2 (from 8,900 baseline).
+   runs after FR-1/FR-2 are shipped. Test repeated after Story 2 edits.
+2. `start.md` whole-file total ≤ 6,700 tokens after all Story 1 and
+   Story 2 edits (baseline 8,866; single target, measured post-additions).
 3. Each of `prd.md`, `impl.md`, `tech-design.md`, `tasks.md` reduced
    ≥ 15% in tokens.
 4. Subsequent-run fast path completes in ≤ 2 assistant turns (git

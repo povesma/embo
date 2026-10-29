@@ -13,6 +13,9 @@ was decided from the PRD, tech-design, and repository evidence.
 | D-3 | Should agent tightening (session-scout, examine-advisor, approach-validator) be one story or three? | One story covering all three agents: same strategy, same verification method, same risk. Grouping avoids story-count inflation for low-risk prose edits. | Tech-design §FR-4; baseline tokens: session-scout 848, examine-advisor 1,283, approach-validator 2,711 — only approach-validator is large enough to treat alone but all share the same tightening recipe. |
 | D-4 | Does the subsequent-run fast path (FR-5) require a separate baseline measurement? | No separate measurement task: FR-5 adds prose to `start.md`; it is covered under the start.md before/after measurement in Story 2. | Tech-design §FR-5: FR-5 changes are inline in `start.md` only. |
 | D-5 | Which verify method for the CHECKLIST extraction test? | `manual-run-claude` (awk dry-run) — not `auto-test` because there is no automated test harness for the awk extraction in the repo. | Tech-design §Testing Strategy: "verify via `awk` dry-run on the edited `start.md`"; no test runner in `behavioral-reminder.sh` test block. |
+| D-6 | FR-1 root cause and fix approach (updated post-review)? | The `Agent` tool returns a spawn confirmation immediately; the scout digest arrives later as a `<teammate-message>` notification. The Summary trigger fires on the spawn confirmation, not the digest. Fix: rewrite the trigger to require `<teammate-message teammate_id="session-scout">` presence; the CHECKLIST enforces this specific verifiable condition. | Diagnosed 2026-10-29 from `start.md` lines 658–707 structure. Examiner review confirmed prose-only CHECKLIST is insufficient. |
+| D-7 | FR-5 sentinel — why not `\| System status \|`? | That string appears at `start.md` line 703 inside the command file, so it is always present in context on every invocation, causing the fast path to fire on the first run. Correct sentinel: `<!-- embo-start: complete -->`, written only by the completed summary step's output. | Examiner review finding H1, 2026-10-29. |
+| D-8 | Should `session-scout.md` be tightened? | No — explicitly excluded. FR-1 depends on its digest quality; only 848 tokens; marginal savings don't justify the risk. | Examiner review finding M6, 2026-10-29. |
 
 ---
 
@@ -101,9 +104,15 @@ No test files are expected to be created alongside these edits.
     line starting with `[` (the awk anchor), then the governing sentence,
     then `<!-- /CHECKLIST -->`. Full text from tech-design §Proposed
     Design: "Before emitting the session summary or AskUserQuestion:
-    confirm the session-scout Task result is present in the current
-    turn's tool results. If it has not returned, do not emit the summary
-    or AskUserQuestion — wait for the scout."
+    check that a `<teammate-message teammate_id="session-scout">` block
+    is present in the current turn's input. If it is not present, do not
+    emit the summary or AskUserQuestion — the scout has not returned yet."
+    [verify: code-only]
+  - [ ] 1.2b Rewrite the Summary section trigger (around `start.md` line
+    686): change "After Batch A and Batch B return" to "After Batch A
+    returns AND a `<teammate-message teammate_id="session-scout">` block
+    is present in this turn's input". This is the structural fix for the
+    root cause; the CHECKLIST block (1.2) is the per-prompt enforcement.
     [verify: code-only]
   - [ ] 1.3 Add single-menu prose guard in the Summary section
     (around `start.md` line 705): "If `AskUserQuestion` was already
@@ -115,6 +124,10 @@ No test files are expected to be created alongside these edits.
     `awk '/<!-- \/CHECKLIST -->/{f=0} f{print} /^\[.*checklist/{f=1;print}' plugin/commands/start.md`
     and confirm `[SCOUT-FIRST checklist]` and its governing sentence
     appear in output. [verify: manual-run-claude]
+  - [ ] 1.4b Record `behavioral-reminder.sh` injection output size before
+    and after adding the SCOUT-FIRST block. Run the awk extractor on the
+    unmodified `start.md` first, count lines/bytes; repeat after the edit.
+    Note the per-prompt cost increase in NFR-2 accounting. [verify: code-only]
   - [ ] 1.5 Run `/embo:start` in a live session. Confirm exactly one
     `AskUserQuestion` appears and its recommended task is drawn from
     the scout's digest (not empty or pre-scout guess).
@@ -137,15 +150,33 @@ No test files are expected to be created alongside these edits.
     and confirm all pre-existing CHECKLIST blocks are still fully present
     in output (WITHSTAND-CRITICISM, AVOID-APPROVAL, CLEAR-OPTIONS, etc.).
     [verify: manual-run-claude]
+  - [ ] 2.3b Grep-count `<!-- RULE:` markers in `start.md` before and
+    after the rules-region tightening. Count before must equal count
+    after. [verify: code-only]
   - [ ] 2.4 Add the subsequent-run fast path (FR-5) at the very start of
     the `start.md` workflow section (before Step 0 / Batch A): if the
-    string `| System status |` is already present in the session context,
-    run only `git log --oneline -10` and `git diff --stat HEAD`, emit a
-    short delta note, then show the `AskUserQuestion`. Skip Batch A and
-    Batch B entirely. Sentinel rationale: verified to appear only at
-    `start.md` lines 694 and 703 (tech-design §D-3). [verify: code-only]
-  - [ ] 2.5 Record `embo-tokens plugin/commands/start.md` after all edits.
-    Confirm total ≤ 6,650 tokens (8,866 × 0.75). [verify: code-only]
+    marker `<!-- embo-start: complete -->` is already present in the
+    session context (written at the end of a prior full run's summary
+    output), run only `git log --oneline -10` and `git diff --stat HEAD`,
+    emit a short delta note, then show the `AskUserQuestion`. Skip Batch A
+    and Batch B entirely.
+    Before implementing: run `grep -rn 'embo-start: complete' plugin/`
+    and `grep -rn 'embo-start: complete' ~/.claude/` to confirm the
+    sentinel string appears nowhere in existing files. If found, choose a
+    different unique string before proceeding.
+    Also add the marker line `<!-- embo-start: complete -->` to the end of
+    the Summary section output template (after the AskUserQuestion close).
+    [verify: code-only]
+  - [ ] 2.5 Record `embo-tokens plugin/commands/start.md` after all
+    Story 1 and Story 2 edits. Confirm whole-file total ≤ 6,700 tokens
+    (baseline 8,866; single target inclusive of all additions). If the
+    total exceeds 6,700, identify additional cuts in the rules region
+    before marking this task done. [verify: code-only]
+  - [ ] 2.5b Re-run FR-1 live test (same as 1.5) after all Story 2 edits:
+    run `/embo:start`, confirm exactly one `AskUserQuestion` appears and
+    its recommended task matches the scout's digest. Story 2 edits the
+    rules region; regression here means a CHECKLIST block or the Summary
+    trigger was damaged. [verify: manual-run-claude]
   - [ ] 2.6 Run `/embo:start` a second time in the same session (after a
     first complete run) and confirm the fast path fires: only two git
     commands run, a delta note is emitted, full Batch A/B is skipped.
@@ -191,13 +222,12 @@ No test files are expected to be created alongside these edits.
     `embo-tokens plugin/agents/examine-advisor.md`,
     `embo-tokens plugin/agents/approach-validator.md`.
     Baselines: 848, 1,283, 2,711 (re-measure to confirm). [verify: code-only]
-  - [ ] 4.2 Review `plugin/agents/session-scout.md` for tightening
-    opportunities. If ≥ 15% reduction (≤ 721 tokens) is achievable
-    without removing a behavioral constraint, apply it; otherwise record
-    why the file is skipped in a comment in this task list.
-    [verify: code-only]
-  - [ ] 4.3 Verify session-scout.md diff: every instruction governing
-    agent behavior is still present. [verify: code-only]
+  - [ ] 4.2 **Skip `plugin/agents/session-scout.md`** — explicitly out of
+    scope for tightening. FR-1 depends on the scout's digest quality; the
+    file is only 848 tokens (below the ≥ 15% target threshold in
+    meaningful absolute terms — 127 tokens); and any edit to it risks the
+    FR-1 fix without proportionate benefit. Record this decision here.
+    [verify: code-only — no edit needed; mark done after recording]
   - [ ] 4.4 Review `plugin/agents/examine-advisor.md` for tightening
     (target ≤ 1,091 tokens for ≥ 15% reduction). Same skip rule applies.
     [verify: code-only]

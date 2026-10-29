@@ -116,58 +116,61 @@ header AND the `[SCOUT-FIRST checklist]` content line starting with `[`.
 
 ### Implementation of FR-1 Scout-first menu and FR-2 Single menu guarantee
 
-**Problem**: `start.md` lines 686–707 (Summary + AskUserQuestion) have no
-structural gate preventing the model from emitting the menu before the
-session-scout Task result arrives. The existing Batch B prose ("spawn the
-session-scout Task") implies an ordering constraint but does not enforce it.
-The project's own design principle (CLAUDE.md: "a behavioral rule that exists
-only as prose the model is asked to follow will eventually be violated") means
-this approach has already proven insufficient — the defect is real and
-observed.
+**Root cause (diagnosed 2026-10-29)**: The `Agent` tool call for the
+session-scout returns a spawn confirmation immediately. The scout's actual
+digest arrives later as a `<teammate-message teammate_id="session-scout">`
+notification in a subsequent user-role message. The model's current Summary
+trigger at `start.md` line 686 ("After Batch A and Batch B return") fires on
+the spawn confirmation, not the digest — so the summary and `AskUserQuestion`
+are emitted before the digest exists in context. This is a structural ambiguity
+in the trigger condition, not a prose-compliance failure.
 
-**Enforcement mechanism**: A `CHECKLIST:SCOUT-FIRST` block added to `start.md`
-is extracted by `behavioral-reminder.sh` and re-injected verbatim into every
-prompt. This is identical to how the existing `CLOSING-CHOICE`,
-`RESTATE-CORRECTION`, and other checklists work. The model sees the ordering
-constraint not once at load time but on every prompt, making it salient at the
-moment of action.
+**Why a vague CHECKLIST is insufficient**: a CHECKLIST block re-injecting
+"wait for the scout" is still prose the model must interpret. It does not
+resolve the ambiguity in the trigger condition, because the model can still
+read "Batch B returned" as satisfied when the spawn confirmation lands.
 
-**The CHECKLIST block** (to be added to `start.md` in the Batch B or Summary
-section, as the last item before the Summary instructions):
+**Enforcement mechanism**: Rewrite the Summary section's precondition to a
+specific, verifiable condition: "Do not proceed to the Summary or
+AskUserQuestion until a `<teammate-message teammate_id="session-scout">` block
+is present in the current turn's input." This is binary and machine-checkable.
+The CHECKLIST block then enforces this specific condition, not a vague ordering
+instruction.
+
+**The CHECKLIST block** (to be added to `start.md` immediately before the
+Summary section):
 
 ```
 <!-- CHECKLIST:SCOUT-FIRST
      This block is injected verbatim on every user prompt by
      hooks/behavioral-reminder.sh. Keep it short; edit it here only. -->
 [SCOUT-FIRST checklist] Before emitting the session summary or
-AskUserQuestion: confirm the session-scout Task result is present in
-the current turn's tool results. If it has not returned, do not emit
-the summary or AskUserQuestion — wait for the scout.
+AskUserQuestion: check that a `<teammate-message teammate_id="session-scout">`
+block is present in the current turn's input. If it is not present, do not
+emit the summary or AskUserQuestion — the scout has not returned yet.
 <!-- /CHECKLIST -->
 ```
 
 The HTML-comment header is for human readability; the `[SCOUT-FIRST checklist]`
-line (starts with `[`) is the awk extraction anchor that matches
-`/^\[.*checklist/`. The close-tag `<!-- /CHECKLIST -->` is required by the
-extractor. This format is identical to all existing CHECKLIST blocks (verified
-from `start.md` lines 92–171).
+line (starts with `[`) is the awk extraction anchor matching `/^\[.*checklist/`.
+The close-tag `<!-- /CHECKLIST -->` is required by the extractor.
 
-**FR-2 Single-menu guarantee**: The CHECKLIST block covers the primary path.
-For the edge case where the model emitted a first menu before the scout
-returned (race condition), an additional instruction in the Summary section
-states: "If `AskUserQuestion` was already emitted this turn, do NOT emit
-another one — update the earlier response in prose if correction is needed."
-This is prose, but it addresses a non-recurring edge case (the CHECKLIST
-covers the recurring failure mode). The CHECKLIST is the primary enforcement.
+The Summary section's trigger (currently "After Batch A and Batch B return")
+must also be rewritten to: "After Batch A returns AND a `<teammate-message
+teammate_id="session-scout">` block is present in this turn's input, synthesize
+the session summary below."
 
-**What this replaces**: the prose-only statement in the current Batch B
-section ("the task-file bulk never enters this context") does not address
-ordering. The new CHECKLIST block is additive — prose instructions remain,
-the CHECKLIST adds machine re-injection.
+**FR-2 Single-menu guarantee**: The CHECKLIST covers the primary path. An
+additional prose guard in the Summary section: "If `AskUserQuestion` was
+already emitted this turn, do NOT emit another one — update the earlier
+response in prose if correction is needed."
 
-**Verification**: `manual-run-claude` — run `/embo:start` in a session where
-the scout has > 5 s delay; confirm exactly one `AskUserQuestion` appears and
-its recommended task matches the scout's digest.
+**Per-prompt injection cost**: The new SCOUT-FIRST block adds ~15 tokens to
+every `behavioral-reminder.sh` injection (every session, every prompt). This
+cost must be recorded alongside the FR-3/FR-4 savings in NFR-2 accounting.
+
+**Verification**: `manual-run-claude` — run `/embo:start`; confirm exactly one
+`AskUserQuestion` appears and its recommended task matches the scout's digest.
 
 ---
 
@@ -223,9 +226,9 @@ merely shortening its prose expression.
 An inline conditional is added at the very start of `start.md`'s workflow
 section (before Step 0 / Batch A), instructing the model:
 
-> If the string `| System status |` is already present in this session's
-> conversation context (from a prior `/embo:start` run this session), run
-> only these two commands:
+> If the output marker `<!-- embo-start: complete -->` is already present
+> in this session's conversation context (written by a prior `/embo:start`
+> summary step), run only these two commands:
 >
 > - `git log --oneline -10`
 > - `git diff --stat HEAD`
@@ -234,10 +237,19 @@ section (before Step 0 / Batch A), instructing the model:
 > tree clean/dirty") and the next-action `AskUserQuestion`. Skip Batch A
 > and Batch B entirely.
 
-The sentinel `| System status |` appears in no other context output
-(verified: only `start.md` lines 694 and 703; not in CLAUDE.md, hooks, or
-README). Risk of false positive is low; a false positive causes a cheaper-
-than-full startup, not a broken one.
+**Sentinel rationale**: The sentinel MUST be a string that only a completed
+run's *output* produces. The previously considered sentinel `| System status |`
+appears at `start.md` line 703 inside the command file itself, so it is
+always present in context on every invocation — this would cause the fast path
+to fire on the very first run, preventing Batch A/B from ever running.
+
+The correct sentinel is `<!-- embo-start: complete -->`. Before finalising:
+verify via `grep -rn 'embo-start: complete' plugin/ ~/.claude/` that this
+string appears nowhere in existing command files, hook outputs, CLAUDE.md, or
+README. If found, choose a different unique string.
+
+The Summary step in `start.md` must write this marker line at the end of
+its output on every full run.
 
 The first run's session summary remains in context (it is never deleted).
 The delta note is additive.
@@ -409,12 +421,19 @@ None specific to this task. No new data flows, tools, or credentials.
 
 ## Performance Considerations
 
-- FR-1 CHECKLIST adds ~10 tokens per `behavioral-reminder.sh` injection
-  (every prompt). Negligible; offset by the eliminated double-scout-spawn
-  cost.
-- FR-3/FR-4 directly reduce per-session token cost; the target is ≤ 6,650
-  tokens for `start.md` total (8,866 × 0.75 = 6,650; PRD target ≤ 6,700
-  remains satisfied).
+- FR-1 SCOUT-FIRST CHECKLIST adds ~15 tokens per `behavioral-reminder.sh`
+  injection (every prompt, every session). This is a recurring cost that
+  partially offsets the FR-3 savings; it must be recorded in NFR-2
+  accounting alongside file-level measurements.
+- FR-3/FR-4 target: the whole-file total for `start.md` after all Story 1
+  and Story 2 additions must be ≤ 6,700 tokens (baseline 8,866; single
+  target). Arithmetic check: a 25% rules-region cut (7,000 → 5,250) yields
+  ~7,100 whole-file tokens before Story 1 additions (~50 tokens for
+  SCOUT-FIRST block + FR-5 prose). To reach ≤ 6,700, the rules region
+  must be cut by more than 25%, or the 6,700 target must be adjusted.
+  **Tech-design must produce a closing arithmetic table at implementation
+  start: budgeted cuts vs. additions, confirming the target is achievable
+  before edits begin.**
 - FR-5 reduces subsequent-run cost by skipping ~8,000 tokens of Batch A/B
   work; the delta path costs ~110 tokens (two git commands + delta note).
 
