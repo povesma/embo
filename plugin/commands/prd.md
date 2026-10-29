@@ -7,20 +7,8 @@ description: >
 
 # Generate PRD with embo Hybrid Analysis
 
-Create a Product Requirements Document informed by both historical context (claude-mem) and current codebase capabilities (RLM).
-
-## When to Use
-
-- Planning a new feature
-- After `/embo:start` has provided session context
-- When you need a data-driven, context-aware PRD
-
-## What This Command Does
-
-1. **Searches past PRDs** (claude-mem) to learn structure and quality
-2. **Analyzes current codebase** (RLM) to understand capabilities
-3. **Synthesizes** a PRD that builds on existing work
-4. **Saves** PRD to claude-mem for future reference
+Create a Product Requirements Document informed by both historical
+context (claude-mem) and current codebase capabilities (RLM).
 
 ## Process
 
@@ -104,63 +92,46 @@ feature.
 
 #### Step 4a: Wider context first (its own preceding call)
 
-Elicit the feature's *wider context* — the motivation, the parent goal,
-what the result is used for — as its **own `AskUserQuestion` call that
-precedes** the clarifying-questions call, so the user answers it first
-and it anchors every later answer. (This replaces the old "business
-goal" alternative.)
+Elicit the feature's *wider context* — motivation, parent goal, what the
+result is used for — as its **own `AskUserQuestion` call that precedes**
+the clarifying-questions call, so it anchors every later answer.
 
-**Evaluation order — run these in sequence:**
+**Evaluation order — run in sequence:**
 
-1. **Redundancy check (first).** Treat the wider context as *already
-   known* only when the user's initial prompt or an earlier answer
-   states a motivation *distinct from the feature's own mechanism* —
-   signalled by a "so that" / "because" / "in order to" / "we need this
-   to…" clause, or an explicit reference to a parent goal or ticket. A
-   bare restatement of the feature's name or action does NOT count. If
-   already known: **skip** the question, restate the understood context
-   in one line for confirmation, and proceed to Step 4b.
-2. **JIRA-parent branch.** If not already known AND the task text
-   contains a JIRA-style ID (uppercase project key, hyphen, digits —
-   e.g. `AS-1234`): suggest the user consult the ticket's parent / epic
-   / linked higher-level tickets for the wider context before asking. If
-   a parent yields the context, treat it as known. Otherwise — the
-   ticket is a leaf (no parent), OR a parent exists but yields no usable
-   context (no access, or the parent itself states no "why") — fall
-   through to step 3. "Suggest the parent" never becomes "block on the
-   parent."
-3. **Ask.** Ask the wider-context question in its own preceding
-   `AskUserQuestion` call, wording drawn from the approved framing list.
+1. **Redundancy check.** Treat the context as *already known* only when
+   the prompt states a motivation *distinct from the feature's own
+   mechanism* — signalled by a "so that" / "because" / "in order to"
+   clause, or a reference to a parent goal or ticket. A bare restatement
+   of the feature's name does NOT count. If known: skip the question,
+   restate the context in one line, proceed to 4b.
+2. **JIRA-parent branch.** If not known AND the task text contains a
+   JIRA-style ID (e.g. `AS-1234`): suggest consulting the ticket's
+   parent / epic for the context. If a parent yields it, treat as known.
+   Otherwise fall through to step 3. "Suggest the parent" never becomes
+   "block on the parent."
+3. **Ask**, using the approved framing list below.
 
-**One follow-up rule.** If the answer only restates the feature (no
-distinct motivation, same signal test as step 1), ask exactly ONE
-probing follow-up (e.g. "and what does that enable once it's built?"),
-then accept whatever is given. **Never block:** "skip" / "none" is always
-accepted and recorded as "None given" in the PRD. The redundancy skip
-(step 1) takes precedence over this follow-up — if the context is
-already known, do not ask, then do not follow up.
+**One follow-up rule.** If the answer only restates the feature, ask
+exactly ONE probing follow-up, then accept whatever is given. **Never
+block:** "skip" / "none" is accepted and recorded as "None given". The
+redundancy skip takes precedence — if already known, do not ask.
 
-**Approved framing list (positive test).** The asked question MUST use
-one of these framings (verbatim or a close paraphrase that keeps the
-framing):
-
+**Approved framings (positive test)** — use one verbatim or close:
 - "What is the result of this feature used for?"
 - "What is the motivation for this task?"
 - "What wider context does this fit into?"
 - "Once this is built, what does it enable?"
 - "What larger goal does this support?"
 
-**Blocklist (negative test).** The asked question MUST NOT contain:
-
-- "higher goal" (blunt — the named bad phrasing)
-- "why do you even want" / "why do you want this" (accusatory)
+**Blocklist (negative test)** — the question MUST NOT contain:
+- "higher goal"
+- "why do you even want" / "why do you want this"
 - "your request is incomplete" / "this is under-specified" / any wording
   implying the user's description is deficient
 
-**Header-vs-question note.** The generated PRD section is titled "Wider
-Context / Higher Goal" (Step 5) — that phrase is the *document header
-only*. Never reuse it as the spoken question; the question uses an
-approved framing.
+**Header-vs-question note.** The PRD section is titled "Wider Context /
+Higher Goal" — that is the *document header only*. Never speak it as the
+question.
 
 #### Step 4b: The remaining clarifying questions
 
@@ -363,101 +334,11 @@ as a claude-mem observation automatically. No explicit save call needed.
 
 ### Step 7: Report Completion
 
-```markdown
-# ✅ PRD Created: {JIRA-ID}
-
-**Feature**: {Feature Name}
-**File**: `tasks/{jira_id}-{feature_name_slug}/{date}-{jira_id}-{feature_name_slug}-prd.md`
-
-## Insights Used
-
-### From Claude-Mem:
-- Analyzed {n} past PRDs
-- Learned structure from: {best_example_jira_id}
-- Referenced similar feature: {similar_feature}
-
-### From RLM:
-- Analyzed {m} relevant files
-- Discovered existing capabilities: {summary}
-- Identified integration points: {list}
-- Noted constraints: {constraints}
-
-## Quality Improvements
-
-Thanks to hybrid analysis, this PRD:
-✅ Follows proven structure from past PRDs
-✅ Aware of current codebase capabilities
-✅ References actual integration points
-✅ Scoped based on existing patterns
-✅ Includes realistic constraints
-
-## Next Steps
-
-**Create technical design**:
-```
-/embo:tech-design
-```
-
-**Or refine PRD first**:
-- Review user stories
-- Validate acceptance criteria
-- Confirm scope
-```
-
-## Important Notes
-
-1. **Quality from Examples**:
-   - Use past PRDs as quality benchmarks
-   - Don't just copy structure, learn what makes them good
-   - Adapt to current feature needs
-
-2. **Grounded in Reality**:
-   - RLM analysis shows what actually exists
-   - Don't assume capabilities, verify with code
-   - Constraints come from actual architecture
-
-3. **Iterative**:
-   - This is a draft, expect refinement
-   - User feedback may change requirements
-   - Technical design may reveal gaps
-
-4. **Save Everything**:
-   - Save to both claude-mem and file system
-   - File system: team collaboration
-   - Claude-mem: future AI context
-
-## Example Output
-
-```
-# ✅ PRD Created: AS-1290
-
-**Feature**: Cloud Storage Integration
-**File**: `tasks/AS-1290-cloud-storage/2025-02-06-AS-1290-cloud-storage-prd.md`
-
-## Insights Used
-
-### From Claude-Mem:
-- Analyzed 3 past PRDs
-- Learned structure from: AS-1245 (similar integration feature)
-- Referenced: OAuth2 auth pattern
-
-### From RLM:
-- Analyzed 15 relevant files
-- Discovered: Existing storage abstraction layer
-- Integration points: FileManager, SyncService classes
-- Constraints: Must support existing backup format
-
-## Quality Improvements
-
-✅ Follows proven structure
-✅ Aware of storage abstraction layer
-✅ References actual FileManager API
-✅ Scoped to work with existing auth
-✅ Realistic constraints from architecture
-
-## Next Steps
-/embo:tech-design
-```
+Report: the JIRA ID and feature name, the file path written, what was
+drawn from claude-mem (how many past PRDs, which structure was followed,
+which similar feature was referenced), what was drawn from RLM (files
+analyzed, capabilities discovered, integration points, constraints), and
+`/embo:tech-design` as the next step.
 
 ## Context7
 
@@ -465,15 +346,7 @@ When referencing any library, framework, or external API — use the Context7 MC
 
 ## Final Instructions
 
-1. Gather requirements from user (JIRA ID, feature name, problem)
-2. Search claude-mem for past PRDs to learn from
-3. Use RLM to analyze current codebase capabilities
-4. **🚨 MANDATORY: Ask clarifying questions using AskUserQuestion tool**
-5. Synthesize PRD incorporating user's answers + RLM + claude-mem insights
-6. Before approval, apply RULE:DELEGATE trigger 2: offer a
-   clean-context `examine-advisor` critique of the draft (marker
-   `[delegate:trigger-2]`)
-7. Save to both claude-mem and file system
-8. Report what insights were used and quality improvements
-9. Suggest `/embo:tech-design` as next step
-9. DO NOT start technical design yet, wait for user approval
+- Step 4 (clarifying questions via AskUserQuestion) is **mandatory**.
+- Before approval, apply RULE:DELEGATE trigger 2: offer a clean-context
+  `examine-advisor` critique of the draft (marker `[delegate:trigger-2]`).
+- **DO NOT start technical design** — wait for user approval.

@@ -13,55 +13,43 @@ Implement tasks with pattern discovery (RLM) + historical context
 <!-- RULE:CHALLENGE-INSTRUCTION -->
 ## Critical Evaluation of Instructions
 
-Do NOT silently execute user instructions. Before implementing
-any instruction, evaluate it against:
+Do NOT silently execute user instructions. Before implementing, evaluate
+against: (1) **PRD and tech-design** — does it align with documented
+requirements? (2) **Current tasks** — is this covered by an existing
+task? (3) **Feasibility** — is it technically sound; could the user be
+mistaken even in a clear instruction? (4) **Vague instructions** — ask
+for clarification, never interpret-and-implement.
 
-1. **PRD and tech-design**: Does the instruction align with
-   documented requirements and architecture?
-2. **Current tasks**: Is this covered by an existing task?
-3. **Common sense and feasibility**: Is this technically sound?
-   Could the user be mistaken, even in a clear instruction?
-4. **Vague instructions**: Never interpret-and-implement
-   immediately. Ask for clarification first.
+Raise any problem before implementing. The user is the boss, but the
+agent is responsible for flagging risks.
 
-If you spot a problem, raise it before implementing — even if
-the instruction seems clear. The user is the boss, but the agent
-is responsible for flagging risks.
-
-When the user challenges a decision with a question ("Is this right?",
-"Why this approach?"), defend the position if it's correct — explain
-the reasoning, don't cave. See full rule in `start.md` §Session
+When the user challenges a decision with a question, defend the position
+if it's correct — don't cave. Full rule in `start.md` §Session
 Behavioral Rules.
 
 <!-- RULE:DOCS-FIRST -->
 ## Scope Verification (Doc-First Development)
 
-Sessions are idempotent. If a session is restarted, code must
-match PRD, tech-design, and tasks. Therefore:
+Sessions are idempotent: restarted, the code must still match PRD,
+tech-design, and tasks.
 
-**Before implementing any instruction**, check:
-- Does this map to a task in the active task list?
-- If YES → proceed normally
-- If NO → this is scope drift. Handle it:
+**Before implementing any instruction**, check whether it maps to a task
+in the active task list. If yes, proceed. If no, it is scope drift:
 
-**Scope drift handling:**
-1. **Clarification-level change** (implementation detail, matter
-   of preference, minor adjustment): Just implement it. Updating
-   docs would create unnecessary overhead.
-2. **New feature or significant change** (new user story, new
-   component, architecture change): Auto-update the relevant docs
-   BEFORE implementing:
-   - Small: add subtask to existing story in tasks file
-   - Medium: add new story to tasks file + update tech-design
-   - Large: update PRD + tech-design + tasks, ask user to
-     confirm the doc changes before proceeding
+1. **Clarification-level change** (implementation detail, preference,
+   minor adjustment): just implement it.
+2. **New feature or significant change** (new user story, new component,
+   architecture change): update the docs BEFORE implementing —
+   - Small: add a subtask to an existing story
+   - Medium: add a new story + update tech-design
+   - Large: update PRD + tech-design + tasks, and ask the user to
+     confirm the doc changes first
 
-**Judgment call**: The clarification-level exception applies only to
-implementation details within an existing task subtask — such as
-choosing between two equivalent approaches, adjusting whitespace,
-or picking a variable name. If the change adds new behavior,
-modifies an API, or touches a file not listed in the task's
-"Relevant Files" section, it requires a doc update first.
+**Judgment call**: the clarification-level exception covers only
+implementation details inside an existing subtask (equivalent
+approaches, whitespace, a variable name). If the change adds behavior,
+modifies an API, or touches a file not in the task's "Relevant Files",
+it requires a doc update first.
 
 **Docs-first enforcement** (per profile `rules.workflow.docs_first`):
 - If `strict`: assess context before editing any code file —
@@ -86,27 +74,16 @@ are worse than no docs.
 **Skip this section entirely if profile
 `rules.workflow.correction_capture` is `false`.**
 
-When the user corrects how you work — redirecting your approach,
-fixing your code style, telling you to verify externally, or
-suggesting a workflow improvement — silently save a correction
-observation to claude-mem. Do NOT announce that you are saving it.
-Do NOT interrupt the flow.
+When the user corrects how you work, a correction observation is saved
+to claude-mem by the PostToolUse hook — no explicit save call, no
+announcement, no interruption. Just continue with the corrected approach.
 
-**What to capture** (behavioral corrections):
-- "Use Context7 / check the web / read the docs" → category: verification
-- "Don't add comments / wrong naming / simplify" → category: code-style
-- "Skip this step / add a check for X" → category: workflow
-- "That's over-engineered / use a simpler approach" → category: approach
-- "We should always do X before Y" → category: process
+**Capture** behavioral corrections: verification ("check the docs"),
+code-style ("don't add comments"), workflow ("add a check for X"),
+approach ("that's over-engineered"), process ("always do X before Y").
 
-**What NOT to capture** (scope/design changes):
-- "Let's do feature B instead" — scope change
-- "Make that field optional" — design decision
-- "Skip task 3" — task prioritization
-
-Corrections are captured automatically by the claude-mem PostToolUse
-hook — no explicit save call needed. Just continue with the corrected
-approach. No acknowledgment required.
+**Do NOT capture** scope or design changes: "let's do feature B
+instead", "make that field optional", "skip task 3".
 
 ## Task Completion Rules
 
@@ -117,13 +94,12 @@ Verification methods (`code-only`, `auto-test`, `manual-run-claude`,
 
 - **`[X]` (done)**: ONLY when live-tested AND the intended
   functionality demonstrably works — not just "tests pass formally."
-  A passing test that doesn't exercise the real behaviour is not
-  sufficient. Always seek a live test (actual command run, real
-  output, real side-effect). Simulation or mocking is acceptable
-  only when live testing is: costly, destructive, or impossible —
-  and even then, at least one live test must be done before `[X]`
-  is marked. When simulation is used, record it explicitly in the
-  evidence note. Alternatively: explicitly confirmed by user.
+  Always seek a live test (actual command run, real output, real
+  side-effect). Simulation or mocking is acceptable only when live
+  testing is costly, destructive, or impossible — and even then at
+  least one live test must be done before `[X]`, with the simulation
+  recorded in the evidence note. Alternatively: explicitly confirmed
+  by the user.
 - **`[~]` (coded, pending testing)**: implementation is written
   but evidence not yet obtainable (state the reason inline)
 - **`[ ]` (not started)**: no work done
@@ -150,21 +126,14 @@ Verification methods (`code-only`, `auto-test`, `manual-run-claude`,
     → <summary> [simulated: <reason>] (<date>)
 ```
 
-**Compact summary rule**: `<summary>` must be one clause stating the
-outcome or decision. Add a second clause only if something unexpected
-occurred. Omit: how the work was done, intermediate states that were
-superseded (TDD red phases, bug-found states fixed before [X] was
-marked), and tool invocation details. The evidence line is a permanent
-record, not a session log.
+**Compact summary rule**: `<summary>` is one clause stating the outcome
+or decision; a second clause only if something unexpected occurred.
+Omit how the work was done, superseded intermediate states (TDD red
+phases, bugs fixed before `[X]`), and tool invocation details. The
+evidence line is a permanent record, not a session log.
 
-Bad:  `→ wrote tests first (TDD red: 3 failed), then implemented,
-      then ran again: 3 passed, 0 failed [live] (2026-07-02)`
-Good: `→ 3 passed, 0 failed [live] (2026-07-02)`
-
-Bad:  `→ found a naming conflict in foo.py, renamed to bar.py,
-      re-ran, now all pass [live] (2026-07-02)`
-Good: `→ renamed foo→bar (naming conflict); 5 passed, 0 failed
-      [live] (2026-07-02)`
+Write `→ 3 passed, 0 failed [live] (2026-07-02)`, not `→ wrote tests
+first (TDD red: 3 failed), then implemented, then ran again: 3 passed`.
 
 Examples:
 ```
@@ -208,24 +177,18 @@ the *shape* of the observation, not the literal output. No working-state excepti
   The selected mode stays active until it completes or the user
   interrupts; re-ask only at mode boundaries (story end for mode 2).
   In modes 2 and 3, lean hard on DECIDE-OR-ASK: decide every
-  recoverable choice yourself and record it in evidence notes —
-  do not interrupt the run with questions a later review can fix.
-  All other rules stay fully in force in every mode: evidence gates
-  per `[verify:]` type, TDD order, docs-first, and the safety rules
-  (a mode-3 run NEVER authorizes destructive or shared-state
-  actions without their own approval).
-- **Delivering to the repo:** when the run pauses and there is work to
-  deliver, offer two paths — rapid is the default:
-  1. **Rapid** (`/embo:git deliver`) — one commit of the needed files,
-     one plan approval, straight to the branch. The default for most
-     changes.
-  2. **Full commit** (`/embo:git commit`/`pr`) — split into commits with
-     polished messages. For human-reviewed or genuinely large/mixed work.
-
-  Choose full only when the change needs the careful treatment (multiple
-  logical commits, human review, mixed concerns); otherwise rapid. Both
-  keep the plan/commit approval as the single gate — never deliver
-  without it.
+  recoverable choice yourself and record it in evidence notes.
+  All other rules stay in force in every mode: evidence gates per
+  `[verify:]` type, TDD order, docs-first, and the safety rules — a
+  mode-3 run NEVER authorizes destructive or shared-state actions
+  without their own approval.
+- **Delivering to the repo:** when the run pauses with work to deliver,
+  offer two paths. **Rapid** (`/embo:git deliver`) — one commit, one
+  plan approval, straight to the branch; the default. **Full commit**
+  (`/embo:git commit`/`pr`) — split into commits with polished
+  messages; only for human-reviewed or genuinely large/mixed work.
+  Both keep the plan/commit approval as the single gate — never
+  deliver without it.
 
 ## Process
 
@@ -257,19 +220,15 @@ rlm_repl status
 
 ### 1b. Test Plan Check
 
-Check for a test plan for the active feature (once per session, at start):
+Once per session, check for a test plan:
+`ls tasks/{feature-id}-{feature-name}/*-test-plan.md`
 
-```bash
-ls tasks/{feature-id}-{feature-name}/*-test-plan.md 2>/dev/null
-```
-
-- **If found**: read it. Note that `[verify: ...]` tags on tasks
-  should match the Story Coverage table. Flag any mismatches before
-  implementing.
-- **If not found** AND the feature has non-`code-only` tasks: warn
-  once — _"No test plan found for this feature. Consider running
-  `/embo:test-plan` before proceeding."_ Do NOT block. User can proceed.
-- **If not found** AND all tasks are `code-only`: say nothing.
+- **Found**: read it; `[verify: ...]` tags should match the Story
+  Coverage table. Flag mismatches before implementing.
+- **Not found**, feature has non-`code-only` tasks: warn once —
+  _"No test plan found. Consider running `/embo:test-plan` first."_
+  Do NOT block.
+- **Not found**, all tasks `code-only`: say nothing.
 
 ### 2. Load and Understand Current Task
 
@@ -278,12 +237,10 @@ ls tasks/{feature-id}-{feature-name}/*-test-plan.md 2>/dev/null
 - Identify the next incomplete sub-task
 - Extract requirements and acceptance criteria
 - **Notice the current branch.** Compare `git symbolic-ref --short -q
-  HEAD` against the task ID from the folder name. If the branch name
-  does not reference the task, look for an existing local branch that
-  does (`git branch --list '*<task-id>*'`) and suggest switching to
-  it; if none exists, mention the mismatch and continue. One line to
-  the user; no gate. `embo-deliver` warns again at delivery as a
-  safety net.
+  HEAD` against the task ID from the folder name. On a mismatch, look
+  for a local branch that matches (`git branch --list '*<task-id>*'`)
+  and suggest switching; if none exists, mention it and continue. One
+  line, no gate — `embo-deliver` warns again at delivery.
 
 ### 3. RLM-Powered Context Discovery
 
@@ -301,14 +258,19 @@ spawn.
 
 Use the **Glob tool** (not Bash, not `find`) with patterns derived from
 the task keywords — e.g. `**/*ModelPicker*`, `**/stores/jobs*`. Then use
-`rlm_repl exec` with `grep` to locate symbols by name:
+`rlm_repl exec` with `grep` to locate symbols by name. Write the probe
+to `tmp/rlm-probe.py`, then run it — `-c` is required and heredocs are
+not supported:
 
 ```bash
-rlm_repl exec <<'PY'
+rlm_repl exec -c "$(cat tmp/rlm-probe.py)"
+```
+
+```python
+# tmp/rlm-probe.py
 import json
 results = grep(r'def feature_term|class FeatureTerm', max_matches=10)
 print(json.dumps([r['snippet'][:200] for r in results]))
-PY
 ```
 
 Available exec helpers: `grep(pattern, max_matches, window)`,
@@ -331,32 +293,17 @@ Use the **Glob tool** with patterns `**/*.test.*`, `**/*.spec.*`,
 
 ### 4. Synthesize Implementation Plan
 
-Based on RLM analysis and claude-mem history, create a plan:
-
-```
-### Implementation Plan for [sub-task]
-
-**Discovered Patterns (RLM):**
-- Architecture: [from analysis]
-- File organization: [from existing code]
-- Testing approach: [from test analysis]
-
-**Past Lessons (Claude-Mem):**
-- [Relevant decision from memory]
-
-**Files to Modify:**
-- `src/x/handler.py:45` - [change]
-
-**Files to Create:**
-- `src/x/new_feature.py` - [purpose]
-```
+From the RLM analysis and claude-mem history, state for the sub-task:
+discovered patterns (architecture, file organization, testing approach),
+relevant past decisions, files to modify (with line references), and
+files to create (with purpose).
 
 ### 5. Implement Following Discovered Patterns
 
 - Write tests first (TDD) following discovered testing patterns
 - Implement matching discovered architectural patterns
-- Use same naming conventions and code structure
-- Follow dependency injection patterns found in codebase
+- Use the same naming conventions, code structure, and dependency
+  injection patterns found in the codebase
 
 ### 6. Verify and Index in Claude-Mem
 
@@ -395,17 +342,12 @@ When referencing any library, framework, or external API — use the Context7 MC
   commands you generate): design them to be invocable as ONE plain
   command. Parameters go in CLI flags, a config file, or an env file
   the script loads itself — never require callers to prepend `VAR=x`
-  assignments or an `env` wrapper. Prefixed invocations defeat
-  permission-allowlist prefix matching and force prompts on every
-  run; a plain invocation stays prompt-free even where no
-  approval/capture hook is installed.
+  assignments or an `env` wrapper, which defeats permission-allowlist
+  prefix matching and forces a prompt on every run.
 - **Function-based structure for shell and test scripts**: wrap logic
-  in named functions. Keep top-level code minimal and justified —
-  setup (sourcing, temp dirs, traps), a runner list that calls the
-  functions, and the summary. Do not leave logic as a flat procedural
-  tail. In `.test.sh` files specifically, each test case is its own
-  function, and a runner list at the end invokes them; never append
-  test cases as top-level statements.
+  in named functions; keep top-level code to setup, a runner list, and
+  the summary. In `.test.sh` files each test case is its own function
+  invoked by a runner list — never top-level statements.
 
 ## Testing Guidelines
 

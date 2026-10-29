@@ -7,18 +7,11 @@ description: >
 
 # Generate Task List with embo Hybrid
 
-**🔑 KISS Principle: Keep It Stupid Simple**
-All solutions must follow the KISS principle - favor simplicity over complexity.
+**🔑 KISS Principle:** favor simplicity over complexity in every solution.
 
-Create a detailed, step-by-step task list in Markdown format based on an
-existing Technical Design and/or PRD. The task list should guide a junior
-developer through the implementation. Uses RLM complexity analysis + claude-mem
-historical velocity for realistic estimates.
-
-## Content Guidelines
-- **Clear deliverables** - specific outcomes for each task
-- **Reference implementation details** - use `file_path:line_number` when
-  applicable
+Create a step-by-step task list from an existing Technical Design and/or
+PRD. Each task states a clear deliverable and references implementation
+details as `file_path:line_number` where applicable.
 
 ## Output
 - **Format:** Markdown (`.md`)
@@ -63,25 +56,21 @@ Extract:
 
 ### Step 3: RLM Complexity Estimation
 
-```bash
-rlm_repl exec <<'PY'
-# Estimate based on files to modify/create from tech design
-files_to_change = ['{list_from_design}']
+Write the probe to `tmp/rlm-probe.py`, then run
+`rlm_repl exec -c "$(cat tmp/rlm-probe.py)"`. The `-c` flag is required;
+heredocs are not supported.
 
+```python
+# tmp/rlm-probe.py — score the files the tech design will touch
+files_to_change = ['{list_from_design}']
 complexity_score = 0
 for file in files_to_change:
     if file in repo_index['files']:
-        meta = repo_index['files'][file]
-        size = meta['size']
-        # Larger files = more complex to modify
-        complexity_score += min(size / 1000, 10)  # Cap at 10 points
+        complexity_score += min(repo_index['files'][file]['size'] / 1000, 10)
     else:
-        # New file creation
-        complexity_score += 3
-
+        complexity_score += 3  # new file
 print(f"Complexity score: {complexity_score}")
 print(f"Estimated subtasks: {int(complexity_score / 2) + 2}")
-PY
 ```
 
 ### Step 4: Resolve Scope Uncertainties (MANDATORY)
@@ -179,83 +168,54 @@ The generated task list _must_ follow this structure:
   path executes all tests found by the Jest configuration.
 
 ## TDD Planning Guidelines
-When generating tasks, follow Test-Driven Development (TDD) principles where
-feasible:
-- **Test External Functions Only:** Tests should interact with public APIs,
-  exported functions, and external interfaces. Never test internal
-  implementation details.
-- **Focus on Functionality:** Tests should verify behavior and functionality,
-  not how the code works internally.
-- **Module-Level Testing:** Tests should cover modules of code (single file or
-  group of related files working together) as cohesive units.
-- **Small Trackable Chunks:** Break modules into small, user-trackable tasks
-  that alternate between test writing and implementation.
-- **Continuous Test-Code Cycle:** Each chunk should follow: write test →
-  implement code → write test → implement code (repeat for each small
-  functionality within the module).
-- **TDD When Feasible:** Apply TDD for business logic, algorithms, API
-  endpoints, and complex functionality. Skip TDD for simple tasks like:
-  - Entity/model creation (basic data structures)
-  - Simple configuration files
-  - Basic scaffolding or boilerplate code
-  - Static content or styling-only components
+Follow TDD where feasible:
+- **Test external interfaces only** — public APIs, exported functions.
+  Never test internal implementation details.
+- **Test behavior, not mechanism.** Cover modules (a file or a group of
+  related files) as cohesive units.
+- **Alternate in small chunks:** write test → implement → write test →
+  implement, one small piece of functionality at a time.
+- **Apply TDD** to business logic, algorithms, API endpoints, and
+  complex functionality. **Skip it** for entity/model creation, simple
+  config files, scaffolding, and styling-only components.
 
 ## Tasks
 - [ ] 1.0 **User Story:** As a [user type], I want [functionality] so that
   [benefit/outcome] [4/0]
-  - [ ] 1.1 Write tests for [specific functionality A] external interface
+  - [ ] 1.1 Write tests for [functionality A] external interface
     [verify: auto-test]
-  - [ ] 1.2 Implement [specific functionality A] to pass tests
+  - [ ] 1.2 Implement [functionality A] to pass tests [verify: auto-test]
+  - [ ] 1.3 Write tests for [functionality B] external interface
     [verify: auto-test]
-  - [ ] 1.3 Write tests for [specific functionality B] external interface
-    [verify: auto-test]
-  - [ ] 1.4 Implement [specific functionality B] to pass tests
-    [verify: auto-test]
-- [ ] 2.0 **User Story:** As a [user type], I want [functionality] so that
-  [benefit/outcome] [4/0]
-  - [ ] 2.1 Write tests for [module method X] behavior [verify: auto-test]
-  - [ ] 2.2 Implement [module method X] [verify: auto-test]
-  - [ ] 2.3 Write tests for [module method Y] behavior [verify: auto-test]
-  - [ ] 2.4 Implement [module method Y] [verify: auto-test]
-- [ ] 3.0 **User Story:** As a [user type], I want [functionality] so that
-  [benefit/outcome] (may not require sub-tasks if purely structural or
-  configuration)
-  - [ ] 3.1 Update configuration file [verify: code-only]
-  - [ ] 3.2 Verify command output after change [verify: manual-run-claude]
+  - [ ] 1.4 Implement [functionality B] to pass tests [verify: auto-test]
+- [ ] 2.0 **User Story:** … (a purely structural or configuration story
+  may need no test-first pairs)
+  - [ ] 2.1 Update configuration file [verify: code-only]
+  - [ ] 2.2 Verify command output after change [verify: manual-run-claude]
 ```
+
+The `[4/0]` suffix on a parent story is `[subtasks/done]`.
 
 Tasks without `[verify: ...]` tags (from older task files) are treated
 as `code-only` implicitly — no evidence required at completion.
 
-## Interaction Model
-The process explicitly requires a pause after generating parent tasks to get
-user confirmation ("Go") before proceeding to generate the detailed sub-tasks.
-This ensures the high-level plan aligns with user expectations before diving
-into details.
-
 ## Target Audience
-Assume the primary reader of the task list is **Claude Code**, which will
-implement the feature via `/embo:impl`. Write subtasks explicit and
-self-contained enough that no clarifying context is needed mid-implementation.
+The primary reader is **Claude Code**, which implements the feature via
+`/embo:impl`. Write subtasks explicit and self-contained enough that no
+clarifying context is needed mid-implementation.
 
 ## No Effort/Time Estimates
 
 **Never add a person-hours/days or story-points figure** to a task or a
-closing summary (e.g. "~3.5 person-days") — Claude Code implements these,
-not a person, and no data here calibrates complexity to elapsed time. RLM
-complexity + claude-mem velocity inform subtask granularity only. A
-summary line, if used, states counts only (stories, subtasks).
+closing summary — Claude Code implements these, not a person, and no
+data here calibrates complexity to elapsed time. RLM complexity +
+claude-mem velocity inform subtask granularity only. A summary line, if
+used, states counts only (stories, subtasks).
 
 ## Final Instructions
-1. **Create the task list file** as specified above
-2. **Index in claude-mem:** Read the tasks file you just created —
-   the PostToolUse hook captures it as a claude-mem observation
-   automatically. No explicit save call needed.
-3. DO NOT start implementing the task list
-4. Use RLM complexity data + claude-mem velocity to judge task-list
-   granularity (subtask count) — never to produce an effort/time figure
-   in the output (see "No Effort/Time Estimates" above)
-5. After the list is generated, apply RULE:DELEGATE trigger 2: offer
-   a clean-context `examine-advisor` critique of the list (marker
-   `[delegate:trigger-2]`)
-6. Suggest `/embo:impl` as next step
+- **Index in claude-mem:** read the tasks file back after writing — the
+  PostToolUse hook captures it automatically, no explicit save call.
+- **DO NOT start implementing** the task list.
+- After the list is generated, apply RULE:DELEGATE trigger 2: offer a
+  clean-context `examine-advisor` critique (marker `[delegate:trigger-2]`).
+- Suggest `/embo:impl` as the next step.
