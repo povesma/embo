@@ -73,7 +73,7 @@ assert_not_contains() {
     fi
 }
 
-# ANSI color sentinels (the substrings the function emits)
+# ANSI color markers (the substrings the function emits)
 GREEN_CODE=$'\033[32m'
 YELLOW_CODE=$'\033[33m'
 RED_CODE=$'\033[31m'

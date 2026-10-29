@@ -228,7 +228,7 @@ EOF
 
 # gcl_push_targets <subcommand> <current-branch>
 # For a `git push`, the destination branches, one per line. --all and
-# --mirror print themselves as sentinels. No refspec = current branch.
+# --mirror print themselves as the result. No refspec = current branch.
 # Prints nothing for a non-push subcommand.
 gcl_push_targets() {
   local -a W

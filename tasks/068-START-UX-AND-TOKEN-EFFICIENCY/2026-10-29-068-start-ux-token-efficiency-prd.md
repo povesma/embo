@@ -28,7 +28,7 @@ have asked was decided from evidence as follows:
 | D-1 | Who is the primary user? | embo developers and users running `/embo:start` at session start. | claude-mem obs #73354 (double-menu observed in a live session); the draft already states this explicitly. |
 | D-2 | What problem does this solve? | Three concrete defects: double menu, scout-first ordering violation, excessive token cost per run. | claude-mem obs #73354 (double-menu root cause); `start.md` lines 36–618 (7,000-token rules region measured 2026-10-29). |
 | D-3 | Success metric targets for tightening? | ≥ 25% reduction for `start.md` rules region; ≥ 15% for `prd.md`, `impl.md`, `tech-design.md`, `tasks.md`. | Draft already carried these thresholds; they are grounded in the `embo-tokens` measurements recorded in the draft's "Current State" section. Accepted as-is. |
-| D-4 | Subsequent-run detection sentinel? | Match `\| System status \|` alone as the sentinel — it is a required row in every summary table (`start.md` line 703) and appears in no other context output. The `## Session Summary` heading was not found in the command spec and would be unreliable. | `start.md` line 703: `\| System status \| RLM state…` is mandated table content; `grep -rn '## Session Summary' plugin/` → zero results (verified 2026-10-29). |
+| D-4 | Which marker detects a subsequent run? | Match `\| System status \|` alone — it is a required row in every summary table (`start.md` line 703) and appears in no other context output. The `## Session Summary` heading was not found in the command spec and would be unreliable. **Superseded — see D-7 in the task list: that string is inside `start.md` itself, so it is always present.** | `start.md` line 703: `\| System status \| RLM state…` is mandated table content; `grep -rn '## Session Summary' plugin/` → zero results (verified 2026-10-29). |
 | D-5 | Priority of Story 4 (subsequent-run fast path)? | Medium — useful but not a correctness fix. | Correctness defects (Stories 1–2) are the user-visible breakage; the fast path is a performance improvement. Consistent with FR-5 in draft. |
 | D-6 | Which files are out of scope for tightening? | `visual-impl.md` (~9,200 tokens, rare load); hooks, bin wrappers, manifests (not per-session prompt cost). | Draft already justified these exclusions. No counter-evidence found in codebase. |
 
@@ -182,7 +182,7 @@ automatic.
 **Why not a `--delta` flag?** The user does not know or want to track
 which run is the "first". Automatic detection removes that burden.
 Risk: a false positive (the string is present from another source).
-Mitigation: the two-string sentinel is specific enough to avoid most
+Mitigation: the two-string marker is specific enough to avoid most
 false positives.
 
 **Why not skip the git commands too?** New commits and a changing
@@ -238,13 +238,13 @@ completed a `/embo:start` run, the command runs only `git log --oneline
 -10` and `git diff --stat HEAD`, then emits a short delta note instead of
 the full startup document.
 
-The sentinel MUST be a string that only the completed run's *output*
-produces, never a string present in `start.md` itself. (The previously
-proposed sentinel `| System status |` appears at `start.md` line 703
-inside the command file, so it is always present in context on every
-run — this renders the fast path always-active and was rejected.)
+The completion marker MUST be a string that only the completed run's
+*output* produces, never a string present in `start.md` itself. (The
+previously proposed marker `| System status |` appears at `start.md`
+line 703 inside the command file, so it is always present in context on
+every run — this renders the fast path always-active and was rejected.)
 
-The correct sentinel is a literal output-only marker line that the
+The correct marker is a literal output-only line that the
 Summary step writes into its response, for example:
 `<!-- embo-start: complete -->`. This string must not appear anywhere in
 `start.md`, `CLAUDE.md`, hook outputs, or README. Tech-design must verify

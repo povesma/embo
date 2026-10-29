@@ -198,7 +198,7 @@ walk_transcript_for_rejections() {
   # one of:
   #   ACK                 -- an assistant message that contains a
   #                          start-of-line [correction] marker.
-  #                          Acts as the acknowledgment sentinel
+  #                          Acts as the acknowledgment marker
   #                          for a preceding REJECT_NOTE.
   #   ASSIST_NOACK        -- an assistant text message with no
   #                          marker (skipped over during lookahead)

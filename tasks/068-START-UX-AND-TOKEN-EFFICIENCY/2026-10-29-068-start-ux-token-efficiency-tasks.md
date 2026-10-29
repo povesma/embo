@@ -14,7 +14,7 @@ was decided from the PRD, tech-design, and repository evidence.
 | D-4 | Does the subsequent-run fast path (FR-5) require a separate baseline measurement? | No separate measurement task: FR-5 adds prose to `start.md`; it is covered under the start.md before/after measurement in Story 2. | Tech-design §FR-5: FR-5 changes are inline in `start.md` only. |
 | D-5 | Which verify method for the CHECKLIST extraction test? | `manual-run-claude` (awk dry-run) — not `auto-test` because there is no automated test harness for the awk extraction in the repo. | Tech-design §Testing Strategy: "verify via `awk` dry-run on the edited `start.md`"; no test runner in `behavioral-reminder.sh` test block. |
 | D-6 | FR-1 root cause and fix approach (updated post-review)? | The `Agent` tool returns a spawn confirmation immediately; the scout digest arrives later as a `<teammate-message>` notification. The Summary trigger fires on the spawn confirmation, not the digest. Fix: rewrite the trigger to require `<teammate-message teammate_id="session-scout">` presence; the CHECKLIST enforces this specific verifiable condition. | Diagnosed 2026-10-29 from `start.md` lines 658–707 structure. Examiner review confirmed prose-only CHECKLIST is insufficient. |
-| D-7 | FR-5 sentinel — why not `\| System status \|`? | That string appears at `start.md` line 703 inside the command file, so it is always present in context on every invocation, causing the fast path to fire on the first run. Correct sentinel: `<!-- embo-start: complete -->`, written only by the completed summary step's output. | Examiner review finding H1, 2026-10-29. |
+| D-7 | FR-5 completion marker — why not `\| System status \|`? | That string appears at `start.md` line 703 inside the command file, so it is always present in context on every invocation, causing the fast path to fire on the first run. Correct marker: `<!-- embo-start: complete -->`, written only by the completed summary step's output. | Examiner review finding H1, 2026-10-29. |
 | D-8 | Should `session-scout.md` be tightened? | No — explicitly excluded. FR-1 depends on its digest quality; only 848 tokens; marginal savings don't justify the risk. | Examiner review finding M6, 2026-10-29. |
 
 ---
@@ -26,7 +26,7 @@ was decided from the PRD, tech-design, and repository evidence.
 - [tasks/068-START-UX-AND-TOKEN-EFFICIENCY/2026-10-29-068-start-ux-token-efficiency-tech-design.md](2026-10-29-068-start-ux-token-efficiency-tech-design.md)
   :: 068 — Technical Design
 - [plugin/commands/start.md](../../../plugin/commands/start.md)
-  :: Primary target: add SCOUT-FIRST CHECKLIST (FR-1/FR-2), FR-5 sentinel
+  :: Primary target: add SCOUT-FIRST CHECKLIST (FR-1/FR-2), FR-5 marker
   check, and prose tightening (FR-3). Lines 36–618 are the rules region;
   lines 619–740 are the workflow region.
 - [plugin/commands/prd.md](../../../plugin/commands/prd.md)
@@ -162,7 +162,7 @@ No test files are expected to be created alongside these edits.
     and Batch B entirely.
     Before implementing: run `grep -rn 'embo-start: complete' plugin/`
     and `grep -rn 'embo-start: complete' ~/.claude/` to confirm the
-    sentinel string appears nowhere in existing files. If found, choose a
+    marker string appears nowhere in existing files. If found, choose a
     different unique string before proceeding.
     Also add the marker line `<!-- embo-start: complete -->` to the end of
     the Summary section output template (after the AskUserQuestion close).

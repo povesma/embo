@@ -203,7 +203,7 @@ identify when and what changed and recover the prior content.
    **Acceptance Criteria**:
    - [ ] When the recorder can identify the writing actor by
      reliable, locally-available signal (e.g. a process name, an
-     environment marker, an installer-set sentinel), that
+     environment marker, an installer-set marker), that
      attribution is stored with the entry.
    - [ ] When attribution is not available, the entry is still
      stored (the change record itself takes precedence over the

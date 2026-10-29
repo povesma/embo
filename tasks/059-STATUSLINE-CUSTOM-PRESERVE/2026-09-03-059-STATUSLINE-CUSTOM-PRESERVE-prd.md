@@ -45,7 +45,7 @@ serves both.
   of scope; a protected file simply stops receiving updates.
 - Changing how the statusline is installed or where it lives.
 
-## Chosen approach — Plan A: in-file sentinel line
+## Chosen approach — Plan A: in-file marker line
 
 The bundled `statusline.sh` carries a marker line in its header:
 
@@ -64,7 +64,7 @@ token. If the token is absent, the hook skips the overwrite.**
 - To opt back into updates: re-add the marker line, or delete the file
   and re-run `install.sh --statusline-only`.
 
-### Why the sentinel-line wording matters
+### Why the marker-line wording matters
 
 The line does double duty: the `embo:auto-refresh` token is what the
 hook matches (machine-readable, stable), and the trailing prose is the
@@ -119,7 +119,7 @@ found — a developer working on embo never wants their in-repo
 A `settings.json` / `settings.local.json` key (e.g.
 `"emboStatuslineRefresh": false`) the hook reads with `jq`. Settable
 from the CC UI without a terminal. Rejected for now as heavier than the
-sentinel line for the same outcome; revisit if a broader embo settings
+marker line for the same outcome; revisit if a broader embo settings
 namespace is introduced.
 
 ## Acceptance criteria

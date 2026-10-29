@@ -55,7 +55,7 @@ contract to test.
     fenced `cat ~/.claude/active-profile.yaml 2>/dev/null ||
     echo "NO_PROFILE"` block, including the inline "run this
     exact command — do not paraphrase" directive and the
-    sentinel-output handling note. Exact replacement text per
+    printed-word handling note. Exact replacement text per
     tech-design "Edit 1". [verify: code-only]
   - [X] 1.2 Replace Step 3 docs/tasks prose (`start.md:90-91`)
     with the two "use the **Glob tool** (not Bash, not `find`)"

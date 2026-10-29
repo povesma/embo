@@ -179,7 +179,7 @@ problem.
 
 | Site | Pinned shape | Match rule | Notes |
 |---|---|---|---|
-| Step 0 profile load | `cat ~/.claude/active-profile.yaml 2>/dev/null \|\| echo "NO_PROFILE"` | `Bash(cat ~/.claude/active-profile.yaml 2>/dev/null \|\| echo "NO_PROFILE")` — exact line, new | Reads exactly one file at a stable absolute path. Sentinel output `NO_PROFILE` is the explicit miss indicator. No other path can be substituted into this rule. |
+| Step 0 profile load | `cat ~/.claude/active-profile.yaml 2>/dev/null \|\| echo "NO_PROFILE"` | `Bash(cat ~/.claude/active-profile.yaml 2>/dev/null \|\| echo "NO_PROFILE")` — exact line, new | Reads exactly one file at a stable absolute path. The printed word `NO_PROFILE` is the explicit miss indicator. No other path can be substituted into this rule. |
 | Step 1 RLM status | `python3 ~/.claude/rlm_scripts/rlm_repl.py status` | `Bash(python3 ~/.claude/rlm_scripts/rlm_repl.py:*)` — already exists | No change. |
 | Step 2 claude-mem search | MCP tool calls | `mcp__plugin_claude-mem_mcp-search__search`, `mcp__plugin_claude-mem_mcp-search__get_observations` — already exist | No change. |
 | Step 3 docs discovery | **Glob tool** with patterns `**/README*.md`, `**/CLAUDE*.md`, read-only | **No Bash rule needed** — Glob is a Claude Code tool, not Bash | Skill text adds a "use Glob, not Bash" directive. |
@@ -344,7 +344,7 @@ Three failure modes considered:
 
 1. **Profile file missing** — the `2>/dev/null || echo
    "NO_PROFILE"` idiom emits exactly `NO_PROFILE` and exits
-   zero. The skill parses this sentinel and falls back to
+   zero. The skill parses this word and falls back to
    defaults. No prompt, no error to surface.
 2. **Claude-mem worker down** — the existing MCP search calls
    fail at the MCP layer; the skill already documents
@@ -425,13 +425,13 @@ Methods per `/dev:test-plan` canonical list.
   the skill wants. **Chosen**: removes three potential
   paraphrase sites from the Bash surface entirely.
 
-### Sentinel-output vs. exit-code-only profile-miss
+### Printed-word vs. exit-code-only profile-miss
 
 - **Option A — Exit-code only**: `cat ... 2>/dev/null || true`.
   No marker in output. **Rejected**: forces the model to
   inspect `$?` (which it cannot directly observe in tool output
   in the same turn) and adds an inference step.
-- **Option B — `NO_PROFILE` sentinel (chosen)**: the output
+- **Option B — the printed word `NO_PROFILE` (chosen)**: the output
   itself tells the model whether the file existed. Stable,
   cheap, unambiguous. **Chosen**.
 

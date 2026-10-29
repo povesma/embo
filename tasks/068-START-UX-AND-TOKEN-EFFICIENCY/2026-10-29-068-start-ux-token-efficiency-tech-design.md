@@ -16,7 +16,7 @@ from evidence as follows:
 |---|---|---|---|
 | D-1 | How should FR-1/FR-2 (scout-first ordering) be enforced? | Add a `CHECKLIST:SCOUT-FIRST` block to `start.md`, extracted and re-injected by `behavioral-reminder.sh`. Prose-only ordering is the known failure mode. | CLAUDE.md "Core Design Principle — Enforce, Don't Ask"; `behavioral-reminder.sh` lines 110–115: awk extraction of every `CHECKLIST` region; PRD amendment evidence from SkillReducer (arxiv.org/pdf/2605.11774) and LLM-DCP (arxiv.org/pdf/2504.11004). |
 | D-2 | How should token tightening (FR-3/FR-4) be verified? | `embo-tokens` measurement before and after each file. | PRD §NFR-2; `start.md` already references `embo-tokens`; no other token counter exists in the toolchain. |
-| D-3 | Where does the subsequent-run fast-path (FR-5) sentinel go? | Inline in `start.md`'s Batch A section as an explicit conditional check before proceeding to Batch B. | PRD §FR-5 + D-4 decision in PRD: sentinel is `| System status |`; `grep -rn 'System status' plugin/` shows only `start.md` lines 694 and 703. |
+| D-3 | Where does the subsequent-run fast-path (FR-5) check go? | Inline in `start.md`'s Batch A section as an explicit conditional check before proceeding to Batch B. | PRD §FR-5 + D-4 decision in PRD. (The marker named there, `| System status |`, was later superseded — see the Proposed Design section below.) |
 | D-4 | Should FR-5 be a separate file or inline? | Inline in `start.md`. | No flag/config mechanism exists for per-run conditional logic; command files are read in full, so the conditional must be prose within the command. |
 | D-5 | PRD assumption: "Token costs of other files measured 2026-10-29 [assumption, verify in tech-design]" | Verified with a fresh `embo-tokens` run on 2026-10-29: `start.md` 8,866 tok, `prd.md` 4,113 tok, `impl.md` 4,470 tok, `tech-design.md` 2,800 tok, `tasks.md` 2,612 tok, `session-scout.md` 848 tok, `examine-advisor.md` 1,283 tok, `approach-validator.md` 2,711 tok. PRD figures accurate. These are the baselines for Story 2/3 measurement. | `plugin/bin/embo-tokens` run output, 2026-10-29 (in this session). |
 | D-6 | CHECKLIST block format: does the awk extractor fire on the `<!-- CHECKLIST:NAME -->` HTML comment or on the `[NAME checklist]` line inside the block? | The awk fires on `/^\[.*checklist/` — matching lines that START with `[`. The `<!-- CHECKLIST:NAME -->` header is metadata only; the `[NAME checklist]` content line (which starts with `[`) is the actual extraction anchor. Any new SCOUT-FIRST block must include both: the HTML comment header (for human readability) and the `[SCOUT-FIRST checklist]` content line for awk extraction. | `behavioral-reminder.sh` line 114: awk pattern confirmed; `start.md` lines 92–106 (WITHSTAND-CRITICISM block) and lines 155–171 (CLEAR-OPTIONS block): both use `<!-- CHECKLIST:NAME -->` + `[NAME checklist]` format — verified by direct file read 2026-10-29. |
@@ -37,7 +37,7 @@ Three problems in `start.md` are addressed:
    already re-injects per-prompt via CHECKLIST extraction. The rules prose is
    tightened; other high-load command files are tightened to ≥ 15%.
 
-3. **Subsequent-run cost** (FR-5): an inline sentinel check skips the full
+3. **Subsequent-run cost** (FR-5): an inline marker check skips the full
    startup document when this session has already completed a `/embo:start`
    run.
 
@@ -69,7 +69,7 @@ Three problems in `start.md` are addressed:
 - `behavioral-reminder.sh` hook is registered as a `UserPromptSubmit` hook
   (injects into every prompt); re-injection is unconditional — verified via
   `hooks/hooks.json` reference in `CLAUDE.md`.
-- Token sentinel `| System status |`: appears only at `start.md` lines 694
+- The string `| System status |`: appears only at `start.md` lines 694
   and 703. Not present in CLAUDE.md, hook outputs, or README — verified via
   `grep -rn 'System status' plugin/` returning only those two lines.
 
@@ -237,13 +237,13 @@ section (before Step 0 / Batch A), instructing the model:
 > tree clean/dirty") and the next-action `AskUserQuestion`. Skip Batch A
 > and Batch B entirely.
 
-**Sentinel rationale**: The sentinel MUST be a string that only a completed
-run's *output* produces. The previously considered sentinel `| System status |`
-appears at `start.md` line 703 inside the command file itself, so it is
-always present in context on every invocation — this would cause the fast path
+**Why this marker**: it MUST be a string that only a completed run's
+*output* produces. The previously considered `| System status |` appears
+at `start.md` line 703 inside the command file itself, so it is always
+present in context on every invocation — this would cause the fast path
 to fire on the very first run, preventing Batch A/B from ever running.
 
-The correct sentinel is `<!-- embo-start: complete -->`. Before finalising:
+The correct marker is `<!-- embo-start: complete -->`. Before finalising:
 verify via `grep -rn 'embo-start: complete' plugin/ ~/.claude/` that this
 string appears nowhere in existing command files, hook outputs, CLAUDE.md, or
 README. If found, choose a different unique string.
@@ -290,7 +290,7 @@ No new endpoints or tools. The `Task` tool invocation for session-scout
   error or malformed tag), the hook exits 0 silently (existing behavior).
   The fallback is the prose instruction in `start.md`, which is not removed.
   This is a degraded-but-not-broken state.
-- If the sentinel check for FR-5 produces a false positive (some other
+- If the marker check for FR-5 produces a false positive (some other
   context source includes `| System status |`), the command runs a cheaper-
   than-full startup — the user sees a delta note instead of a full summary.
   This is recoverable: the user can re-run `/embo:start` explicitly.
@@ -389,7 +389,7 @@ preambles, redundant sub-bullets while keeping every governing sentence.
 
 **Modify**:
 - `plugin/commands/start.md` — add SCOUT-FIRST CHECKLIST block (FR-1/FR-2);
-  add FR-5 sentinel check; tighten rules region (FR-3)
+  add FR-5 marker check; tighten rules region (FR-3)
 - `plugin/commands/prd.md` — tighten prose (FR-4)
 - `plugin/commands/impl.md` — tighten prose (FR-4)
 - `plugin/commands/tech-design.md` — tighten prose (FR-4)

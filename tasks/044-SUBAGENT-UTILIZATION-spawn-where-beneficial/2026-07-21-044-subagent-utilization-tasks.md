@@ -38,12 +38,12 @@
   - [X] 1.1 Write a throwaway PreToolUse spike hook (matcher
     `Read|Grep|Glob`) in the repo's local `.claude/` config (NOT
     `plugin/`) returning `permissionDecision: "allow"` +
-    `additionalContext` with a unique sentinel string
+    `additionalContext` with a unique marker string
     [verify: code-only]
   - [X] 1.2 Live session: trigger Read calls, then ask the model to
     repeat any bracketed reminder text it received; record whether
-    the sentinel is visible [verify: manual-run-user]
-    → sentinel visible in system-reminder on every Read; allow did
+    the marker is visible [verify: manual-run-user]
+    → marker visible in system-reminder on every Read; allow did
       not block the calls; user confirmed [live] (2026-07-21)
   - [X] 1.3 Record the outcome in this file; remove the spike hook
     [verify: code-only]

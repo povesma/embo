@@ -88,7 +88,7 @@ replaced by one command file — see the Scope correction under story 9.0.
   - [X] 1.5 Wire `resolve_state_path` into every current use of
     `DEFAULT_STATE_PATH` (rlm_repl.py:56 and its call sites); `--state`
     still overrides [verify: auto-test]
-    → `--state` default now sentinel None, resolved in main(); `rlm_repl
+    → `--state` default now None, resolved in main(); `rlm_repl
     status` still finds the main-tree 267-file index [live] (2026-09-05)
 
 - [X] 2.0 **User Story:** As a developer running parallel worktree

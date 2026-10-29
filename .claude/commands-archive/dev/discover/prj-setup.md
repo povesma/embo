@@ -211,7 +211,7 @@ Examine these files and directories:
 - **Goroutine Management**: Identify worker pools, pipeline patterns
 - **Channel Usage**: Buffered vs unbuffered channels, select statements
 - **Context Propagation**: Request context handling and cancellation
-- **Error Handling**: Error wrapping patterns and sentinel errors
+- **Error Handling**: Error wrapping patterns and package-level error values
 - **Dependency Injection**: Service initialization and dependency management
 - **Graceful Shutdown**: Signal handling and cleanup patterns
 

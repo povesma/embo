@@ -89,7 +89,7 @@ CTX_SIZE=$(echo "$input" | jq -r '.context_window.context_window_size // "null"'
 # CTX_SIZE is either a number or the string "null"
 ```
 
-`"null"` string sentinel is used (not shell empty string) because `jq -r` outputs
+the `"null"` string is used (not shell empty string) because `jq -r` outputs
 the literal string `null` for JSON null. `short_num` treats `"null"` as `?`.
 
 **Output format**:

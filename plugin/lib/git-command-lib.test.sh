@@ -299,13 +299,13 @@ test_push_targets_refspec_dst() {
 test_push_targets_all() {
   local out
   out="$(gcl_push_targets "git push --all origin" "feat")"
-  assert_eq "push --all yields --all sentinel" "--all" "$out"
+  assert_eq "push --all yields --all itself" "--all" "$out"
 }
 
 test_push_targets_mirror() {
   local out
   out="$(gcl_push_targets "git push --mirror origin" "feat")"
-  assert_eq "push --mirror yields --mirror sentinel" "--mirror" "$out"
+  assert_eq "push --mirror yields --mirror itself" "--mirror" "$out"
 }
 
 test_push_targets_delete() {
