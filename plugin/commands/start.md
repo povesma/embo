@@ -683,13 +683,24 @@ exits non-zero or prints nothing (no remote, no `origin`), skip
 the retry and report the overview as empty. Never fall back to an
 unscoped search; never guess a prior name.
 
+<!-- CHECKLIST:SCOUT-FIRST
+     This block is injected verbatim on every user prompt by
+     hooks/behavioral-reminder.sh. Keep it short; edit it here only. -->
+[SCOUT-FIRST checklist] Before emitting the session summary or
+AskUserQuestion: check that a `<teammate-message
+teammate_id="session-scout">` block is present in the current turn's
+input. If it is not present, do not emit the summary or AskUserQuestion
+— the scout has not returned yet.
+<!-- /CHECKLIST -->
+
 ### Summary
 
-After Batch A and Batch B return, synthesize the session summary
-below. Output one Markdown document with these sections in this
-order. Every section is populated ONLY from the source in its row
-— never invent a section, never invent data for a slot whose
-source returned nothing (label it explicitly, e.g. "empty").
+After Batch A returns AND a `<teammate-message
+teammate_id="session-scout">` block is present in this turn's input,
+synthesize the session summary below. Output one Markdown document with
+these sections in this order. Every section is populated ONLY from the
+source in its row — never invent a section, never invent data for a slot
+whose source returned nothing (label it explicitly, e.g. "empty").
 Headings are plain text; a status indicator (a check or warning
 mark) is permitted only in the System status row.
 
@@ -705,6 +716,10 @@ mark) is permitted only in the System status row.
 Close the summary with the next-action choice via `AskUserQuestion`
 (per RULE:CLEAR-OPTIONS): the recommended task, plus at minimum
 "review critically / wrap up / tell me what to do".
+If `AskUserQuestion` was already emitted this turn, do NOT emit another
+one — update the earlier response in prose if correction is needed.
+
+<!-- embo-start: complete -->
 
 ## Closing guidance
 
