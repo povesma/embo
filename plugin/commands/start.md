@@ -7,6 +7,23 @@ allowed-tools: Bash(embo-profile *) Bash(rlm_repl *) Bash(git log *) Bash(git di
 
 ## Process
 
+### Fast path (subsequent run)
+
+Check whether this command has already completed in the current session
+by looking for the session-complete marker that the Summary section
+emits as its final line of output (an HTML comment whose content is
+`embo-start: complete`). That marker is never written in the command
+file itself — finding it in context means a prior full run finished.
+
+**If the marker is present, do not emit a second summary or a second
+menu**, regardless of what triggered this turn (a fresh `/embo:start`
+invocation, a scout teammate-message notification, or anything else).
+Instead, run `git log --oneline -10` and `git diff --stat HEAD` in
+parallel, emit a one-paragraph delta note (new commits, dirty tree
+status), then show the `AskUserQuestion` continuation menu.
+
+Do not re-load the profile, re-run RLM, or re-search memory.
+
 ### Step 0: Load Profile (once per session)
 
 ```bash
@@ -470,21 +487,33 @@ unscoped search; never guess a prior name.
 
 ### Summary
 
-After Batch A and Batch B return, synthesize the session summary
-below. Output one Markdown document with these sections in this
-order. Every section is populated ONLY from the source in its row
-— never invent a section, never invent data for a slot whose
-source returned nothing (label it explicitly, e.g. "empty").
-Headings are plain text; a status indicator (a check or warning
-mark) is permitted only in the System status row.
+**The scout runs in the background and its result arrives as a
+`<teammate-message>` notification in a LATER turn — not in the same
+turn as Batch B.** Do NOT emit any summary until that notification
+arrives. The correct sequence is:
+
+1. **This turn (Batch A + Batch B):** run all five Batch A tool calls
+   and the two Batch B calls in parallel. Emit nothing — no partial
+   summary, no "waiting for scout" message, no placeholder text.
+   The turn ends after the tool calls.
+2. **Next turn (scout notification arrives):** the `<teammate-message>`
+   from the scout arrives. THIS is when you emit the full summary and
+   the `AskUserQuestion`. Do not emit another summary in any
+   subsequent turn.
+
+Output one Markdown document with these sections in this order. Every
+section is populated ONLY from the source in its row — never invent
+data for a slot whose source returned nothing (label it "empty").
+Headings are plain text; a status indicator is permitted only in the
+System status row.
 
 | Section | Content (one line) | Source |
 |---|---|---|
 | Project overview | short description of the project | Batch A (README) + Batch B (memory overview) |
 | Repository stats | files indexed, languages, last indexed | Batch A (`rlm_repl status`) |
-| Active tasks | top open tasks with markers, recommended next | Batch B (session-scout digest) |
+| Active tasks | top open tasks with markers, recommended next | Batch B (scout digest, from notification) |
 | Recent activity | latest commits and any uncommitted-change stats | Batch A (the two git commands) |
-| Recommended next task | one task + one-line rationale | Batch B digest + this session's user prompt, if any |
+| Recommended next task | one task + one-line rationale | Scout digest + this session's user prompt, if any |
 | System status | RLM state, memory state, git branch, read depth | Batch A (profile/RLM/git) + Batch B (memory) |
 
 Close the summary with the next-action choice via `AskUserQuestion`

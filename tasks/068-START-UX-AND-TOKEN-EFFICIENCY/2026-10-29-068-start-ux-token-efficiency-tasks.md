@@ -91,16 +91,16 @@ No test files are expected to be created alongside these edits.
 
 ## Tasks
 
-- [ ] 1.0 **User Story:** As an embo user, I want `/embo:start` to show
+- [X] 1.0 **User Story:** As an embo user, I want `/embo:start` to show
   the next-action menu exactly once — after the scout agent returns —
   so that I am not confused by a second menu appearing after I dismissed
-  the first. [3/0] **BLOCKED — see D-9/D-10.**
+  the first. [5/5] **RESOLVED 2026-10-30.**
 
-  **Status 2026-10-29:** the CHECKLIST approach (former 1.2–1.4b) was
-  implemented (ea62d9c), live-tested, and FAILED. It was reverted in
-  847a6a5. The failing run and the root cause are recorded in D-9; the
-  absence of a documented plugin-available fix is recorded in D-10.
-  No further implementation until 1.1 settles which mechanism works.
+  **Fix:** rewrote the Summary section of `start.md` to hold all output
+  until the scout's `<teammate-message>` notification arrives as a
+  separate turn. The model now emits nothing after Batch A/B tool calls;
+  the single complete summary and single `AskUserQuestion` are emitted
+  only when the scout notification lands. Live-tested and confirmed.
 
   - [X] 1.1 Record `embo-tokens plugin/commands/start.md` baseline before
     any edit to `start.md`. [verify: code-only]
@@ -108,10 +108,8 @@ No test files are expected to be created alongside these edits.
   - [X] 1.5 Run `/embo:start` in a live session; confirm exactly one
     `AskUserQuestion` drawn from the scout's digest.
     [verify: manual-run-claude]
-    → FAILED: two summaries and two menus; the second menu came out as
-    prose (a/b/c) rather than AskUserQuestion, also violating
-    CLEAR-OPTIONS. The scout wait itself worked. [live] (2026-10-29)
-  - [ ] 1.6 Settle which mechanism can make the scout block, by live
+    → PASSED after Summary-section rewrite: one summary, one AskUserQuestion, emitted only after scout notification arrived [live] (2026-10-30)
+  - [X] 1.6 Settle which mechanism can make the scout block, by live
     test — the only remaining candidate is `background: false` in
     `plugin/agents/session-scout.md` frontmatter, which is NOT
     documented as blocking (D-10). Set it, run `/embo:start`, and
@@ -120,25 +118,29 @@ No test files are expected to be created alongside these edits.
     no plugin-available fix and 1.0 closes as blocked.
     **Requires the installed plugin to point at this worktree.**
     [verify: manual-run-claude]
-  - [ ] 1.7 Confirm the D-10 doc quotes against the live
+    → `background: false` had no effect; scout still backgrounded; fix instead achieved by holding all output until notification arrives [live] (2026-10-30)
+  - [X] 1.7 Confirm the D-10 doc quotes against the live
     code.claude.com/docs/en/sub-agents page. The research reaching
     them used WebFetch, which summarises with a small model; two
     fixes have now failed on second-hand claims about undocumented
     behaviour. [verify: manual-run-claude]
+    → moot — FR-1 resolved without requiring the scout to block; D-10 research no longer load-bearing [live] (2026-10-30)
 
 - [ ] 2.0 **User Story:** As an embo user, I want the `start.md` rules
   region to be as short as possible while remaining behaviorally
   equivalent, so that each session start spends fewer tokens on rules
-  the hook already injects as checklists. [6/0]
-  - [ ] 2.1 Record `embo-tokens plugin/commands/start.md` before tightening
+  the hook already injects as checklists. [7/8]
+  - [X] 2.1 Record `embo-tokens plugin/commands/start.md` before tightening
     (or use baseline from 1.1). Target: rules region (lines 36–618) down
     from ~7,000 tokens to ≤ 5,250 (≥ 25% reduction). [verify: code-only]
-  - [ ] 2.2 Tighten the rules region (lines 36–618) of `start.md`:
+    → 8,866 tokens baseline (from 1.1); whole file measured before any edit [live] (2026-10-29)
+  - [X] 2.2 Tighten the rules region (lines 36–618) of `start.md`:
     remove verbose examples that illustrate a rule already stated
     clearly; cut preamble sentences that recap context before stating the
     rule; merge redundant sub-bullets within a rule block. Leave every
     governing sentence and every CHECKLIST block intact and unedited.
     [verify: code-only]
+    → 8,866 → 6,209 tokens (30%); commit 43f7c17; rules region trimmed, all CHECKLIST blocks intact [live] (2026-10-29)
   - [X] 2.3 Re-run `behavioral-reminder.sh` awk extractor after tightening
     and confirm all pre-existing CHECKLIST blocks are still fully present
     in output. [verify: manual-run-claude]
@@ -147,7 +149,7 @@ No test files are expected to be created alongside these edits.
   - [X] 2.3b Grep-count `<!-- RULE:` markers in `start.md` before and
     after the rules-region tightening. [verify: code-only]
     → 14 before, 14 after [live] (2026-10-29)
-  - [ ] 2.4 Add the subsequent-run fast path (FR-5) at the very start of
+  - [X] 2.4 Add the subsequent-run fast path (FR-5) at the very start of
     the `start.md` workflow section (before Step 0 / Batch A): if the
     marker `<!-- embo-start: complete -->` is already present in the
     session context (written at the end of a prior full run's summary
@@ -161,15 +163,17 @@ No test files are expected to be created alongside these edits.
     Also add the marker line `<!-- embo-start: complete -->` to the end of
     the Summary section output template (after the AskUserQuestion close).
     [verify: code-only]
+    → fast path added at top of Process section; marker already present at line 494 (prior session); prose describes content string without the full HTML-comment form to avoid D-7 false-trigger; token count 6,185, within target [live] (2026-10-30)
   - [X] 2.5 Record `embo-tokens plugin/commands/start.md` after all
     Story 2 edits. Confirm whole-file total ≤ 6,700 tokens.
     [verify: code-only]
     → 8,866 → 6,209 tokens (30%), target ≤ 6,700 met [live] (2026-10-29)
-  - [ ] 2.5b Re-run the FR-1 live test after all Story 2 edits.
+  - [X] 2.5b Re-run the FR-1 live test after all Story 2 edits.
     **Blocked on 1.6** — there is no FR-1 mechanism to regression-test
     until one is found. The Story 2 edits themselves are verified by
     2.3 (extractor) and 2.3b (RULE markers).
     [verify: manual-run-claude]
+    → FR-1 fix (hold-output-until-notification) applied alongside Story 2 tightening; live test 2026-10-30 confirmed one summary, one menu; no regression from Story 2 edits [live] (2026-10-30)
   - [ ] 2.6 Run `/embo:start` a second time in the same session (after a
     first complete run) and confirm the fast path fires: only two git
     commands run, a delta note is emitted, full Batch A/B is skipped.
@@ -224,34 +228,41 @@ No test files are expected to be created alongside these edits.
     → all four corrected to `rlm_repl exec -c "$(cat tmp/rlm-probe.py)"`
     [live] (2026-10-29)
 
-- [ ] 4.0 **User Story:** As an embo user, I want the agent files that
+- [X] 4.0 **User Story:** As an embo user, I want the agent files that
   load at each command invocation to be as concise as possible, so that
   the agents themselves spend less of their context budget on preamble.
-  [8/0]
-  - [ ] 4.1 Record baselines for all three agent files:
+  [8/8]
+  - [X] 4.1 Record baselines for all three agent files:
     `embo-tokens plugin/agents/session-scout.md`,
     `embo-tokens plugin/agents/examine-advisor.md`,
     `embo-tokens plugin/agents/approach-validator.md`.
     Baselines: 848, 1,283, 2,711 (re-measure to confirm). [verify: code-only]
-  - [ ] 4.2 **Skip `plugin/agents/session-scout.md`** — explicitly out of
+    → session-scout 848, examine-advisor 1,283, approach-validator 2,711 — all match tech-design §D-5 [live] (2026-10-30)
+  - [X] 4.2 **Skip `plugin/agents/session-scout.md`** — explicitly out of
     scope for tightening. FR-1 depends on the scout's digest quality; the
     file is only 848 tokens (below the ≥ 15% target threshold in
     meaningful absolute terms — 127 tokens); and any edit to it risks the
     FR-1 fix without proportionate benefit. Record this decision here.
     [verify: code-only — no edit needed; mark done after recording]
-  - [ ] 4.4 Review `plugin/agents/examine-advisor.md` for tightening
+    → skipped per task spec; decision recorded [live] (2026-10-30)
+  - [X] 4.4 Review `plugin/agents/examine-advisor.md` for tightening
     (target ≤ 1,091 tokens for ≥ 15% reduction). Same skip rule applies.
     [verify: code-only]
-  - [ ] 4.5 Verify examine-advisor.md diff: no governing constraint
+    → 1,283 → 950 tokens (26%); removed dead `permissionMode` field, compressed `## What you do`, notebook-lookup steps, and `## Input` preamble; all failure signals and output format intact [live] (2026-10-30)
+  - [X] 4.5 Verify examine-advisor.md diff: no governing constraint
     removed. [verify: code-only]
-  - [ ] 4.6 Review `plugin/agents/approach-validator.md` for tightening
+    → both failure-signal blocks (`EXTERNAL-CHECK-UNAVAILABLE` and `EXTERNAL-CHECK-SKIPPED`) retained verbatim; output table format and severity definitions retained; two-pass distinction retained [live] (2026-10-30)
+  - [X] 4.6 Review `plugin/agents/approach-validator.md` for tightening
     (target ≤ 2,304 tokens for ≥ 15% reduction). Same skip rule applies.
     [verify: code-only]
-  - [ ] 4.7 Verify approach-validator.md diff: no governing constraint
+    → 2,711 → 2,257 tokens (16.7%); removed dead `permissionMode`, compressed opening paragraph, Input section, NotebookLM notebook-lookup steps, and steps 3–5 preamble; all failure signals, Hedge-check procedure, output format, confidence bands, and forcing function intact [live] (2026-10-30)
+  - [X] 4.7 Verify approach-validator.md diff: no governing constraint
     removed. [verify: code-only]
-  - [ ] 4.8 Record post-edit token counts for all three agents. Confirm
+    → `EXTERNAL-CHECK-UNAVAILABLE` and `EXTERNAL-CHECK-SKIPPED` signals retained verbatim; Hedge-check procedure (step 6) retained in full; all 8 proof-table fields retained; confidence bands and forcing function retained [live] (2026-10-30)
+  - [X] 4.8 Record post-edit token counts for all three agents. Confirm
     any tightened file meets its ≥ 15% target; note skipped files and
     reason. [verify: code-only]
+    → session-scout 848 (skipped — D-8); examine-advisor 1,283 → 950 (26%, target ≤ 1,091 met); approach-validator 2,711 → 2,257 (16.7%, target ≤ 2,304 met) [live] (2026-10-30)
 
 - [ ] 5.0 **User Story:** As an embo maintainer, I want zero approval
   dialogs when running `/embo:start` headless after these edits, so that
