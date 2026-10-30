@@ -19,6 +19,42 @@ fi
 cwd=$(echo "$input" | jq -r '.workspace.current_dir // .cwd // ""')
 cwd_display="${cwd/#$HOME/\~}"
 
+# --- Session-identity record (diagnostic; see hooks/session-identity.sh) ---
+# Records this status line's view of session_id once per session, so it can
+# be compared against the hook's view of the same session. Claude Code does
+# not document whether the two are the same value. /embo:health reports the
+# comparison. Runs at most once per session id; every path is suppressed so
+# `set -e` above can never kill the status line over a diagnostic.
+record_session_identity() {
+    local sid main_root out_dir out_file ts
+    sid=$(echo "$input" | jq -r '.session_id // ""' 2>/dev/null) || return 0
+    [ -n "$sid" ] || return 0
+    [ -n "$cwd" ] || return 0
+
+    # Resolve .claude to the MAIN working tree, matching the hook.
+    main_root=$(git -C "$cwd" --no-optional-locks rev-parse --path-format=absolute \
+        --git-common-dir 2>/dev/null) || return 0
+    [ -n "$main_root" ] || return 0
+    out_dir="$(dirname "$main_root")/.claude"
+    out_file="$out_dir/session-identity.jsonl"
+
+    # Only record a session id not already seen from this observer.
+    [ -f "$out_file" ] || return 0
+    grep -q "\"observer\":\"statusline\",\"event\":\"statusline\",\"source\":\"n/a\",\"session_id\":\"$sid\"" \
+        "$out_file" 2>/dev/null && return 0
+
+    ts=$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null) || return 0
+    jq -n -c \
+        --arg ts "$ts" \
+        --arg observer "statusline" \
+        --arg event "statusline" \
+        --arg source "n/a" \
+        --arg sid "$sid" \
+        '{ts: $ts, observer: $observer, event: $event, source: $source, session_id: $sid}' \
+        >> "$out_file" 2>/dev/null || return 0
+}
+record_session_identity || true
+
 # --- Git branch ---
 git_branch=""
 if [ -n "$cwd" ] && git -C "$cwd" --no-optional-locks rev-parse --git-dir >/dev/null 2>&1; then

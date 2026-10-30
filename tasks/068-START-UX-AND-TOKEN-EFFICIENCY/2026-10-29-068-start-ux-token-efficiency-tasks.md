@@ -13,7 +13,9 @@ was decided from the PRD, tech-design, and repository evidence.
 | D-3 | Should agent tightening (session-scout, examine-advisor, approach-validator) be one story or three? | One story covering all three agents: same strategy, same verification method, same risk. Grouping avoids story-count inflation for low-risk prose edits. | Tech-design §FR-4; baseline tokens: session-scout 848, examine-advisor 1,283, approach-validator 2,711 — only approach-validator is large enough to treat alone but all share the same tightening recipe. |
 | D-4 | Does the subsequent-run fast path (FR-5) require a separate baseline measurement? | No separate measurement task: FR-5 adds prose to `start.md`; it is covered under the start.md before/after measurement in Story 2. | Tech-design §FR-5: FR-5 changes are inline in `start.md` only. |
 | D-5 | Which verify method for the CHECKLIST extraction test? | `manual-run-claude` (awk dry-run) — not `auto-test` because there is no automated test harness for the awk extraction in the repo. | Tech-design §Testing Strategy: "verify via `awk` dry-run on the edited `start.md`"; no test runner in `behavioral-reminder.sh` test block. |
-| D-6 | FR-1 root cause and fix approach (updated post-review)? | The `Agent` tool returns a spawn confirmation immediately; the scout digest arrives later as a `<teammate-message>` notification. The Summary trigger fires on the spawn confirmation, not the digest. Fix: rewrite the trigger to require `<teammate-message teammate_id="session-scout">` presence; the CHECKLIST enforces this specific verifiable condition. | Diagnosed 2026-10-29 from `start.md` lines 658–707 structure. Examiner review confirmed prose-only CHECKLIST is insufficient. |
+| D-6 | FR-1 root cause and fix approach (SUPERSEDED — see D-9) | The `Agent` tool returns a spawn confirmation immediately; the scout digest arrives later as a `<teammate-message>` notification. Fix attempted: rewrite the trigger to require `<teammate-message teammate_id="session-scout">` presence, enforced by a CHECKLIST block. | Diagnosed 2026-10-29 from `start.md` lines 658–707 structure. **This fix was implemented, live-tested, and failed — see D-9.** |
+| D-9 | Why the D-6 fix failed, and what the root cause actually is | A live `/embo:start` run produced two summaries and two menus. The command DID wait for the scout (that part worked), but `<teammate-message>` is the envelope for several events — a mid-flight message, a completion report, an idle notification — so the condition was satisfied by the first, not by the agent finishing. The single-menu guard said "this turn"; the later delivery arrives as a NEW turn, so it never applied. **Real root cause, from the docs: "subagents Claude spawns from the main conversation already start in the background by default", and background results "arrive as a completion notification in a later turn".** The double menu is default behaviour, not a prose-fixable bug. | Live run in another project, 2026-10-29 (transcript provided by the user). Docs: code.claude.com/docs/en/sub-agents, /docs/en/agent-teams. The `<teammate-message>` tag, the `idle_notification` shape and the "Teammate @X finished" line are **all undocumented**; the documented completion signal is the agent ID. |
+| D-10 | Is there a plugin-available way to make the scout block? | **Not one that is documented.** `background` is a real frontmatter boolean, but it only FORCES background ("set to `true` to keep this subagent in the background even when Claude asks to wait for it"); `background: false` is not documented as blocking. No per-call foreground parameter is documented (`model` and `effort` are the only documented per-call overrides). `CLAUDE_CODE_FORK_SUBAGENT=0` is documented as making Claude wait, but it is a session environment variable a plugin cannot set. | Research pass 2026-10-29 against code.claude.com/docs/en/sub-agents. Sources fetched via WebFetch (small-model summarisation) — quotes to be confirmed against the live page before shipping any fix built on them. |
 | D-7 | FR-5 completion marker — why not `\| System status \|`? | That string appears at `start.md` line 703 inside the command file, so it is always present in context on every invocation, causing the fast path to fire on the first run. Correct marker: `<!-- embo-start: complete -->`, written only by the completed summary step's output. | Examiner review finding H1, 2026-10-29. |
 | D-8 | Should `session-scout.md` be tightened? | No — explicitly excluded. FR-1 depends on its digest quality; only 848 tokens; marginal savings don't justify the risk. | Examiner review finding M6, 2026-10-29. |
 
@@ -26,7 +28,7 @@ was decided from the PRD, tech-design, and repository evidence.
 - [tasks/068-START-UX-AND-TOKEN-EFFICIENCY/2026-10-29-068-start-ux-token-efficiency-tech-design.md](2026-10-29-068-start-ux-token-efficiency-tech-design.md)
   :: 068 — Technical Design
 - [plugin/commands/start.md](../../../plugin/commands/start.md)
-  :: Primary target: add SCOUT-FIRST CHECKLIST (FR-1/FR-2), FR-5 marker
+  :: Primary target: FR-5 marker
   check, and prose tightening (FR-3). Lines 36–618 are the rules region;
   lines 619–740 are the workflow region.
 - [plugin/commands/prd.md](../../../plugin/commands/prd.md)
@@ -50,8 +52,8 @@ was decided from the PRD, tech-design, and repository evidence.
   :: Agent tightening target (FR-4): 2,711 tok baseline; same rule.
 - [plugin/hooks/behavioral-reminder.sh](../../../plugin/hooks/behavioral-reminder.sh)
   :: Load-bearing: awk extractor at lines 110–115 reads all CHECKLIST
-  blocks from `start.md`. Must extract the new SCOUT-FIRST block after
-  edits. No changes to this file expected; read-only reference.
+  blocks from `start.md`. Six blocks exist; Story 2 must not break
+  them. No changes to this file expected; read-only reference.
 
 ---
 
@@ -64,9 +66,9 @@ was decided from the PRD, tech-design, and repository evidence.
   tech-design.md 2,800, tasks.md 2,612, session-scout.md 848,
   examine-advisor.md 1,283, approach-validator.md 2,711.
 - The `behavioral-reminder.sh` awk anchor fires on lines starting with
-  `[` containing `checklist` — any new CHECKLIST block must include the
-  `[SCOUT-FIRST checklist]` line as its first content line (see
-  tech-design §Current Architecture, CHECKLIST extraction section).
+  `[` containing `checklist` — any new CHECKLIST block must include a
+  `[<NAME> checklist]` line as its first content line (see tech-design
+  §Current Architecture, CHECKLIST extraction section).
 - **Never abbreviate the governing sentence in any CHECKLIST block.** The
   hook re-injects these verbatim; they are behavioral enforcement, not
   documentation.
@@ -92,46 +94,37 @@ No test files are expected to be created alongside these edits.
 - [ ] 1.0 **User Story:** As an embo user, I want `/embo:start` to show
   the next-action menu exactly once — after the scout agent returns —
   so that I am not confused by a second menu appearing after I dismissed
-  the first. [4/0]
-  - [ ] 1.1 Record `embo-tokens plugin/commands/start.md` baseline before
-    any edit to `start.md`. Note: baseline is 8,866 tokens (tech-design
-    §D-5); re-measure to confirm no drift since 2026-10-29.
-    [verify: code-only]
-  - [ ] 1.2 Add `CHECKLIST:SCOUT-FIRST` block to `start.md` immediately
-    before the Summary section (around line 686). The block must follow
-    the two-part format exactly: HTML-comment header
-    `<!-- CHECKLIST:SCOUT-FIRST ... -->` then a `[SCOUT-FIRST checklist]`
-    line starting with `[` (the awk anchor), then the governing sentence,
-    then `<!-- /CHECKLIST -->`. Full text from tech-design §Proposed
-    Design: "Before emitting the session summary or AskUserQuestion:
-    check that a `<teammate-message teammate_id="session-scout">` block
-    is present in the current turn's input. If it is not present, do not
-    emit the summary or AskUserQuestion — the scout has not returned yet."
-    [verify: code-only]
-  - [ ] 1.2b Rewrite the Summary section trigger (around `start.md` line
-    686): change "After Batch A and Batch B return" to "After Batch A
-    returns AND a `<teammate-message teammate_id="session-scout">` block
-    is present in this turn's input". This is the structural fix for the
-    root cause; the CHECKLIST block (1.2) is the per-prompt enforcement.
-    [verify: code-only]
-  - [ ] 1.3 Add single-menu prose guard in the Summary section
-    (around `start.md` line 705): "If `AskUserQuestion` was already
-    emitted this turn, do NOT emit another one — update the earlier
-    response in prose if correction is needed."
-    [verify: code-only]
-  - [ ] 1.4 Verify `behavioral-reminder.sh` awk extractor picks up the
-    new SCOUT-FIRST block: run
-    `awk '/<!-- \/CHECKLIST -->/{f=0} f{print} /^\[.*checklist/{f=1;print}' plugin/commands/start.md`
-    and confirm `[SCOUT-FIRST checklist]` and its governing sentence
-    appear in output. [verify: manual-run-claude]
-  - [ ] 1.4b Record `behavioral-reminder.sh` injection output size before
-    and after adding the SCOUT-FIRST block. Run the awk extractor on the
-    unmodified `start.md` first, count lines/bytes; repeat after the edit.
-    Note the per-prompt cost increase in NFR-2 accounting. [verify: code-only]
-  - [ ] 1.5 Run `/embo:start` in a live session. Confirm exactly one
-    `AskUserQuestion` appears and its recommended task is drawn from
-    the scout's digest (not empty or pre-scout guess).
+  the first. [3/0] **BLOCKED — see D-9/D-10.**
+
+  **Status 2026-10-29:** the CHECKLIST approach (former 1.2–1.4b) was
+  implemented (ea62d9c), live-tested, and FAILED. It was reverted in
+  847a6a5. The failing run and the root cause are recorded in D-9; the
+  absence of a documented plugin-available fix is recorded in D-10.
+  No further implementation until 1.1 settles which mechanism works.
+
+  - [X] 1.1 Record `embo-tokens plugin/commands/start.md` baseline before
+    any edit to `start.md`. [verify: code-only]
+    → 8,866 tokens, matching tech-design §D-5; no drift [live] (2026-10-29)
+  - [X] 1.5 Run `/embo:start` in a live session; confirm exactly one
+    `AskUserQuestion` drawn from the scout's digest.
     [verify: manual-run-claude]
+    → FAILED: two summaries and two menus; the second menu came out as
+    prose (a/b/c) rather than AskUserQuestion, also violating
+    CLEAR-OPTIONS. The scout wait itself worked. [live] (2026-10-29)
+  - [ ] 1.6 Settle which mechanism can make the scout block, by live
+    test — the only remaining candidate is `background: false` in
+    `plugin/agents/session-scout.md` frontmatter, which is NOT
+    documented as blocking (D-10). Set it, run `/embo:start`, and
+    observe whether the Agent call returns the digest as its tool
+    result with no later notification. If it does not block, FR-1 has
+    no plugin-available fix and 1.0 closes as blocked.
+    **Requires the installed plugin to point at this worktree.**
+    [verify: manual-run-claude]
+  - [ ] 1.7 Confirm the D-10 doc quotes against the live
+    code.claude.com/docs/en/sub-agents page. The research reaching
+    them used WebFetch, which summarises with a small model; two
+    fixes have now failed on second-hand claims about undocumented
+    behaviour. [verify: manual-run-claude]
 
 - [ ] 2.0 **User Story:** As an embo user, I want the `start.md` rules
   region to be as short as possible while remaining behaviorally
@@ -146,13 +139,14 @@ No test files are expected to be created alongside these edits.
     rule; merge redundant sub-bullets within a rule block. Leave every
     governing sentence and every CHECKLIST block intact and unedited.
     [verify: code-only]
-  - [ ] 2.3 Re-run `behavioral-reminder.sh` awk extractor after tightening
+  - [X] 2.3 Re-run `behavioral-reminder.sh` awk extractor after tightening
     and confirm all pre-existing CHECKLIST blocks are still fully present
-    in output (WITHSTAND-CRITICISM, AVOID-APPROVAL, CLEAR-OPTIONS, etc.).
-    [verify: manual-run-claude]
-  - [ ] 2.3b Grep-count `<!-- RULE:` markers in `start.md` before and
-    after the rules-region tightening. Count before must equal count
-    after. [verify: code-only]
+    in output. [verify: manual-run-claude]
+    → all 6 blocks extract intact after tightening and after the 847a6a5
+    revert [live] (2026-10-29)
+  - [X] 2.3b Grep-count `<!-- RULE:` markers in `start.md` before and
+    after the rules-region tightening. [verify: code-only]
+    → 14 before, 14 after [live] (2026-10-29)
   - [ ] 2.4 Add the subsequent-run fast path (FR-5) at the very start of
     the `start.md` workflow section (before Step 0 / Batch A): if the
     marker `<!-- embo-start: complete -->` is already present in the
@@ -167,51 +161,68 @@ No test files are expected to be created alongside these edits.
     Also add the marker line `<!-- embo-start: complete -->` to the end of
     the Summary section output template (after the AskUserQuestion close).
     [verify: code-only]
-  - [ ] 2.5 Record `embo-tokens plugin/commands/start.md` after all
-    Story 1 and Story 2 edits. Confirm whole-file total ≤ 6,700 tokens
-    (baseline 8,866; single target inclusive of all additions). If the
-    total exceeds 6,700, identify additional cuts in the rules region
-    before marking this task done. [verify: code-only]
-  - [ ] 2.5b Re-run FR-1 live test (same as 1.5) after all Story 2 edits:
-    run `/embo:start`, confirm exactly one `AskUserQuestion` appears and
-    its recommended task matches the scout's digest. Story 2 edits the
-    rules region; regression here means a CHECKLIST block or the Summary
-    trigger was damaged. [verify: manual-run-claude]
+  - [X] 2.5 Record `embo-tokens plugin/commands/start.md` after all
+    Story 2 edits. Confirm whole-file total ≤ 6,700 tokens.
+    [verify: code-only]
+    → 8,866 → 6,209 tokens (30%), target ≤ 6,700 met [live] (2026-10-29)
+  - [ ] 2.5b Re-run the FR-1 live test after all Story 2 edits.
+    **Blocked on 1.6** — there is no FR-1 mechanism to regression-test
+    until one is found. The Story 2 edits themselves are verified by
+    2.3 (extractor) and 2.3b (RULE markers).
+    [verify: manual-run-claude]
   - [ ] 2.6 Run `/embo:start` a second time in the same session (after a
     first complete run) and confirm the fast path fires: only two git
     commands run, a delta note is emitted, full Batch A/B is skipped.
     [verify: manual-run-claude]
 
-- [ ] 3.0 **User Story:** As an embo user, I want the per-invocation token
+- [X] 3.0 **User Story:** As an embo user, I want the per-invocation token
   cost of each command file to be as low as possible without losing
   meaning, so that more of my context window is available for code
-  analysis and planning. [10/0]
-  - [ ] 3.1 Record baselines for all four command files before any edits:
-    `embo-tokens plugin/commands/prd.md`,
-    `embo-tokens plugin/commands/impl.md`,
-    `embo-tokens plugin/commands/tech-design.md`,
-    `embo-tokens plugin/commands/tasks.md`.
-    Baselines: prd.md 4,113, impl.md 4,470, tech-design.md 2,800,
-    tasks.md 2,612 (re-measure to confirm). [verify: code-only]
-  - [ ] 3.2 Tighten `plugin/commands/prd.md`: remove verbose examples,
-    restatements, redundant sub-bullets. Keep every governing sentence.
-    Target: ≥ 15% reduction (≤ 3,496 tokens). [verify: code-only]
-  - [ ] 3.3 Verify `prd.md` before/after diff: every instruction that
-    governs model behavior is still present. [verify: code-only]
-  - [ ] 3.4 Tighten `plugin/commands/impl.md`: same strategy as 3.2.
-    Target: ≥ 15% reduction (≤ 3,800 tokens). [verify: code-only]
-  - [ ] 3.5 Verify `impl.md` before/after diff: every governing
-    instruction is still present. [verify: code-only]
-  - [ ] 3.6 Tighten `plugin/commands/tech-design.md`: same strategy.
-    Target: ≥ 15% reduction (≤ 2,380 tokens). [verify: code-only]
-  - [ ] 3.7 Verify `tech-design.md` before/after diff: no governing
-    constraint removed. [verify: code-only]
-  - [ ] 3.8 Tighten `plugin/commands/tasks.md`: same strategy.
-    Target: ≥ 15% reduction (≤ 2,220 tokens). [verify: code-only]
-  - [ ] 3.9 Verify `tasks.md` before/after diff: no governing constraint
-    removed. [verify: code-only]
-  - [ ] 3.10 Record post-edit token counts for all four files. Confirm
-    each meets its ≥ 15% target. [verify: code-only]
+  analysis and planning. [11/11]
+  - [X] 3.1 Record baselines for all four command files before any edits.
+    [verify: code-only]
+    → prd 4,113; impl 4,470; tech-design 2,800; tasks 2,612 — all match
+    tech-design §D-5, no drift [live] (2026-10-29)
+  - [X] 3.2 Tighten `plugin/commands/prd.md`. Target ≤ 3,496.
+    [verify: code-only]
+    → 4,113 → 3,165 (23.0%) [live] (2026-10-29)
+  - [X] 3.3 Verify `prd.md` diff: governing instructions still present.
+    [verify: code-only]
+    → 5 governing-constraint markers retained; cuts were the duplicated
+    Example Output block, the Important Notes rationale, and the Final
+    Instructions list that restated the Process steps [live] (2026-10-29)
+  - [X] 3.4 Tighten `plugin/commands/impl.md`. Target ≤ 3,800.
+    [verify: code-only]
+    → 4,470 → 3,925 (12.2%) — **target missed, deliberately**. What
+    remains is the evidence-gate table, verify-type definitions, marker
+    semantics and profile conditionals; cutting any removes a behavioral
+    constraint, which NFR-1 forbids [live] (2026-10-29)
+  - [X] 3.5 Verify `impl.md` diff: governing instructions still present.
+    [verify: code-only]
+    → 19 governing-constraint markers retained [live] (2026-10-29)
+  - [X] 3.6 Tighten `plugin/commands/tech-design.md`. Target ≤ 2,380.
+    [verify: code-only]
+    → 2,800 → 2,254 (19.5%) [live] (2026-10-29)
+  - [X] 3.7 Verify `tech-design.md` diff: no governing constraint removed.
+    [verify: code-only]
+    → 4 markers retained; every output-template section header kept, since
+    the headers are the output contract [live] (2026-10-29)
+  - [X] 3.8 Tighten `plugin/commands/tasks.md`. Target ≤ 2,220.
+    [verify: code-only]
+    → 2,612 → 2,142 (18.0%) [live] (2026-10-29)
+  - [X] 3.9 Verify `tasks.md` diff: no governing constraint removed.
+    [verify: code-only]
+    → 12 markers retained [live] (2026-10-29)
+  - [X] 3.10 Record post-edit token counts for all four files.
+    [verify: code-only]
+    → prd 23.0%, tech-design 19.5%, tasks 18.0% all met; impl 12.2% under
+    target per 3.4. Four files: 13,995 → 11,486 tokens [live] (2026-10-29)
+  - [X] 3.11 Fix `rlm_repl exec` heredoc examples. Found while tightening:
+    prd.md, impl.md, tech-design.md and tasks.md all documented
+    `rlm_repl exec` invoked with a heredoc, which it does not support.
+    [verify: code-only]
+    → all four corrected to `rlm_repl exec -c "$(cat tmp/rlm-probe.py)"`
+    [live] (2026-10-29)
 
 - [ ] 4.0 **User Story:** As an embo user, I want the agent files that
   load at each command invocation to be as concise as possible, so that

@@ -199,18 +199,37 @@ must always be checked.
 `start.md` MUST NOT be emitted until the session-scout agent result is
 present in context.
 
-Root cause (diagnosed 2026-10-29): the `Agent` tool call returns a spawn
-confirmation immediately; the scout's digest arrives later as a
-`<teammate-message teammate_id="session-scout">` notification in a
-subsequent user-role message. The model's current Summary trigger ("After
-Batch A and Batch B return") fires on the spawn confirmation, not the
-digest — prose ambiguity, not a compliance failure.
+**Status: BLOCKED.** No plugin-available fix is known. See below.
 
-Fix: the Summary section's precondition is rewritten to: "Do not proceed
-to the Summary or AskUserQuestion until a `<teammate-message
-teammate_id="session-scout">` block is present in the current turn's
-input." A CHECKLIST block enforces this specific, verifiable condition
-(presence of a named block in context, not a vague ordering instruction).
+Root cause (confirmed 2026-10-29 by live test and documentation):
+**subagents spawned from the main conversation start in the background
+by default**, and background results "arrive as a completion
+notification in a later turn". The command therefore reaches its
+Summary step before the scout's result exists, and the result lands
+afterwards as a new turn — producing a second summary and a second
+menu. This is documented default behaviour, not a prose defect.
+
+**A first fix was implemented and failed.** It rewrote the Summary
+precondition to require a `<teammate-message teammate_id="session-scout">`
+block, enforced by a CHECKLIST. A live run showed the command did wait,
+then still produced two summaries and two menus: that tag is the
+envelope for several events (a mid-flight message, a completion report,
+an idle notification), so the condition was met by the first, not by the
+agent finishing. The tag, the `idle_notification` shape and the
+"Teammate @X finished" line are **all undocumented**; the documented
+completion signal is the agent ID. The attempt was reverted.
+
+**No documented fix is available to a shipped plugin.** `background`
+frontmatter only *forces* background; `background: false` is not
+documented as blocking. No per-call foreground parameter is documented.
+`CLAUDE_CODE_FORK_SUBAGENT=0` would make Claude wait but is a session
+environment variable a plugin cannot set. Running the scout inline would
+work but discards the delegation that keeps task-file bulk out of
+context — defeating this task's own goal.
+
+Remaining candidate, untested: `background: false` in the agent
+frontmatter. If a live test shows it does not block, FR-1 closes as
+blocked pending a Claude Code capability.
 - Priority: **High** (UX correctness)
 
 **FR-2 Single menu guarantee**: The command must emit exactly one

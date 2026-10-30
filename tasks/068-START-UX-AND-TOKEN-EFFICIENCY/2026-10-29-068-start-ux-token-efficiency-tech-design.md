@@ -116,58 +116,53 @@ header AND the `[SCOUT-FIRST checklist]` content line starting with `[`.
 
 ### Implementation of FR-1 Scout-first menu and FR-2 Single menu guarantee
 
-**Root cause (diagnosed 2026-10-29)**: The `Agent` tool call for the
-session-scout returns a spawn confirmation immediately. The scout's actual
-digest arrives later as a `<teammate-message teammate_id="session-scout">`
-notification in a subsequent user-role message. The model's current Summary
-trigger at `start.md` line 686 ("After Batch A and Batch B return") fires on
-the spawn confirmation, not the digest — so the summary and `AskUserQuestion`
-are emitted before the digest exists in context. This is a structural ambiguity
-in the trigger condition, not a prose-compliance failure.
+**STATUS: BLOCKED.** One design was implemented, live-tested, failed, and
+was reverted. No documented plugin-available replacement exists.
 
-**Why a vague CHECKLIST is insufficient**: a CHECKLIST block re-injecting
-"wait for the scout" is still prose the model must interpret. It does not
-resolve the ambiguity in the trigger condition, because the model can still
-read "Batch B returned" as satisfied when the spawn confirmation lands.
+**Root cause (confirmed 2026-10-29)**: per the Claude Code documentation,
+"subagents Claude spawns from the main conversation already start in the
+background by default", and background results "arrive as a completion
+notification in a later turn". The command reaches its Summary step before
+the scout result exists; the result then lands as a new turn, producing a
+second summary and menu. This is documented default behaviour.
 
-**Enforcement mechanism**: Rewrite the Summary section's precondition to a
-specific, verifiable condition: "Do not proceed to the Summary or
-AskUserQuestion until a `<teammate-message teammate_id="session-scout">` block
-is present in the current turn's input." This is binary and machine-checkable.
-The CHECKLIST block then enforces this specific condition, not a vague ordering
-instruction.
+**Attempt 1 (reverted, commit 847a6a5)**: rewrite the Summary precondition to
+require a `<teammate-message teammate_id="session-scout">` block, enforced by
+a `CHECKLIST:SCOUT-FIRST` block, plus a prose guard against a second
+`AskUserQuestion` in the same turn.
 
-**The CHECKLIST block** (to be added to `start.md` immediately before the
-Summary section):
+Live result: the command DID wait for the scout — that part worked — but still
+produced two summaries and two menus, the second as prose rather than
+`AskUserQuestion`.
 
-```
-<!-- CHECKLIST:SCOUT-FIRST
-     This block is injected verbatim on every user prompt by
-     hooks/behavioral-reminder.sh. Keep it short; edit it here only. -->
-[SCOUT-FIRST checklist] Before emitting the session summary or
-AskUserQuestion: check that a `<teammate-message teammate_id="session-scout">`
-block is present in the current turn's input. If it is not present, do not
-emit the summary or AskUserQuestion — the scout has not returned yet.
-<!-- /CHECKLIST -->
-```
+Why it failed:
+- `<teammate-message>` is the envelope for several distinct events (a
+  mid-flight message, a completion report, an idle notification). The
+  condition was satisfied by the first, not by the agent finishing. In one
+  observed case the two deliveries carried *different content*, so acting on
+  the earlier one is not merely early — it can use worse data.
+- The tag, the `idle_notification` shape and the "Teammate @X finished" line
+  are **undocumented**. The documented completion signal is the agent ID.
+- The single-menu guard said "this turn"; the later delivery arrives as a NEW
+  turn, so the guard was literally true and never applied.
 
-The HTML-comment header is for human readability; the `[SCOUT-FIRST checklist]`
-line (starts with `[`) is the awk extraction anchor matching `/^\[.*checklist/`.
-The close-tag `<!-- /CHECKLIST -->` is required by the extractor.
+**Options assessed, none both documented and available to a plugin:**
 
-The Summary section's trigger (currently "After Batch A and Batch B return")
-must also be rewritten to: "After Batch A returns AND a `<teammate-message
-teammate_id="session-scout">` block is present in this turn's input, synthesize
-the session summary below."
+| Option | Status |
+|---|---|
+| `background: false` in agent frontmatter | `background` is real, but documented only as *forcing* background; `false` as a blocking switch is **undocumented**. The one remaining candidate — must be live-tested. |
+| Per-call foreground parameter | **Undocumented**. Only `model` and `effort` are documented per-call overrides. |
+| `CLAUDE_CODE_FORK_SUBAGENT=0` | **Documented** as making Claude wait, but a session environment variable a plugin cannot set. |
+| Run the scout inline, no subagent | Works, but discards the delegation that keeps task-file bulk out of the main context — contradicting this task's own goal. |
 
-**FR-2 Single-menu guarantee**: The CHECKLIST covers the primary path. An
-additional prose guard in the Summary section: "If `AskUserQuestion` was
-already emitted this turn, do NOT emit another one — update the earlier
-response in prose if correction is needed."
+**Next step**: live-test `background: false`. If it does not block, FR-1 and
+FR-2 close as blocked pending a Claude Code capability, and the finding is
+worth reporting upstream.
 
-**Per-prompt injection cost**: The new SCOUT-FIRST block adds ~15 tokens to
-every `behavioral-reminder.sh` injection (every session, every prompt). This
-cost must be recorded alongside the FR-3/FR-4 savings in NFR-2 accounting.
+**Caveat on the sources**: the documentation above was reached via WebFetch,
+which summarises with a small model. Two fixes have now failed on second-hand
+claims about undocumented behaviour — confirm the quotes against the live
+page before building on them.
 
 **Verification**: `manual-run-claude` — run `/embo:start`; confirm exactly one
 `AskUserQuestion` appears and its recommended task matches the scout's digest.
