@@ -4,6 +4,13 @@ All notable changes to the embo plugin are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- `/embo:worktree` opens a worktree on current Claude Code instead of
+  wrongly reporting the worktree tools as missing.
+- `/embo:worktree` states the worktree's actual base branch, which can
+  be your current checkout, not only the remote default.
+
 ## [0.3.1] - 2026-10-28
 
 ### Added
