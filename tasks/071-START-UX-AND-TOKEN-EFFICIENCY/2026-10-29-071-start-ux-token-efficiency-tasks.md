@@ -1,4 +1,4 @@
-# 068: /embo:start UX fixes and token efficiency — Task List
+# 071: /embo:start UX fixes and token efficiency — Task List
 
 ## Decisions Taken (unattended mode)
 
@@ -23,10 +23,10 @@ was decided from the PRD, tech-design, and repository evidence.
 
 ## Relevant Files
 
-- [tasks/068-START-UX-AND-TOKEN-EFFICIENCY/2026-10-29-068-start-ux-token-efficiency-prd.md](2026-10-29-068-start-ux-token-efficiency-prd.md)
-  :: 068 — Product Requirements Document
-- [tasks/068-START-UX-AND-TOKEN-EFFICIENCY/2026-10-29-068-start-ux-token-efficiency-tech-design.md](2026-10-29-068-start-ux-token-efficiency-tech-design.md)
-  :: 068 — Technical Design
+- [tasks/071-START-UX-AND-TOKEN-EFFICIENCY/2026-10-29-071-start-ux-token-efficiency-prd.md](2026-10-29-071-start-ux-token-efficiency-prd.md)
+  :: 071 — Product Requirements Document
+- [tasks/071-START-UX-AND-TOKEN-EFFICIENCY/2026-10-29-071-start-ux-token-efficiency-tech-design.md](2026-10-29-071-start-ux-token-efficiency-tech-design.md)
+  :: 071 — Technical Design
 - [plugin/commands/start.md](../../../plugin/commands/start.md)
   :: Primary target: FR-5 marker
   check, and prose tightening (FR-3). Lines 36–618 are the rules region;
@@ -266,7 +266,7 @@ No test files are expected to be created alongside these edits.
 
 - [ ] 5.0 **User Story:** As an embo maintainer, I want zero approval
   dialogs when running `/embo:start` headless after these edits, so that
-  CI and unattended runs are not broken by the changes. [2/0]
+  CI and unattended runs are not broken by the changes. [0/2]
   - [ ] 5.1 Run headless `/embo:start` (NFR-3): `claude -p "/embo:start"`
     and confirm the run completes with no Bash approval dialogs.
     Compare behavior before and after the edits in Story 1 and Story 2.

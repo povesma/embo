@@ -1,7 +1,7 @@
-# 068: /embo:start UX fixes and token efficiency — Technical Design
+# 071: /embo:start UX fixes and token efficiency — Technical Design
 
 **Status**: Draft
-**PRD**: [2026-10-29-068-start-ux-token-efficiency-prd.md](2026-10-29-068-start-ux-token-efficiency-prd.md)
+**PRD**: [2026-10-29-071-start-ux-token-efficiency-prd.md](2026-10-29-071-start-ux-token-efficiency-prd.md)
 **Created**: 2026-10-29
 
 ---
@@ -100,7 +100,7 @@ header AND the `[SCOUT-FIRST checklist]` content line starting with `[`.
 
 ## Past Decisions (Claude-Mem)
 
-- No TECH-DESIGN observations for task 068 found in claude-mem (new feature).
+- No TECH-DESIGN observations for task 071 found in claude-mem (new feature).
 - Task 047 (CONCLUSION-HARNESS): shipped the `behavioral-reminder.sh`
   CHECKLIST extraction mechanism. The enforcement pattern for ordering rules
   is well-established: add a CHECKLIST block to `start.md`, extraction is

@@ -1,4 +1,4 @@
-# 068: /embo:start UX fixes and token efficiency — PRD
+# 071: /embo:start UX fixes and token efficiency — PRD
 
 **Status**: Draft
 **Created**: 2026-10-29
