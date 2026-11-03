@@ -1,5 +1,13 @@
 # 071: /embo:start UX fixes and token efficiency — Task List
 
+**Renumbered from 068 to 071 (2026-10-30).** This feature was planned
+and built under task number 068, but by the time it was ready to merge,
+068 had already been taken on `main` by the (separately merged)
+teammate-doctree-pipeline feature, and 069/070 were taken by other seeds
+on this same branch. 071 was the next free number across both. Dates in
+filenames and in this document predate the rename and were left
+unchanged.
+
 ## Decisions Taken (unattended mode)
 
 This task list was generated with `EMBO_DOCTREE_UNATTENDED` set. The
@@ -178,6 +186,13 @@ No test files are expected to be created alongside these edits.
     first complete run) and confirm the fast path fires: only two git
     commands run, a delta note is emitted, full Batch A/B is skipped.
     [verify: manual-run-claude]
+    → attempted 2026-10-30, inconclusive: invoking the Skill tool a
+      second time for an already-loaded skill in the same conversation
+      short-circuits at the harness level ("instructions unchanged, not
+      reloaded") and runs no commands at all — not the fast path firing,
+      just the harness skipping a repeat load. Needs a genuinely fresh
+      session: full first run, then a real second invocation, to produce
+      the git-commands-and-delta-note evidence this item requires.
 
 - [X] 3.0 **User Story:** As an embo user, I want the per-invocation token
   cost of each command file to be as low as possible without losing
