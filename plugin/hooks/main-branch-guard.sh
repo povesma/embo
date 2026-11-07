@@ -67,6 +67,7 @@ printf '%s' "$PAYLOAD" | jq -e . >/dev/null 2>&1 || allow_notice "non-JSON paylo
 
 TOOL="$(printf '%s' "$PAYLOAD" | jq -r '.tool_name // ""')"
 CWD="$(printf '%s' "$PAYLOAD" | jq -r '.cwd // ""')"
+SID="$(printf '%s' "$PAYLOAD" | jq -r '.session_id // ""')"
 
 # --- candidate check: cheap early exit for non-mutating calls -------
 case "$TOOL" in
@@ -101,7 +102,13 @@ case "$PB_MODE" in
      PB_MODE="block" ;;
 esac
 
-[ "$PB_MODE" = "off" ] && allow
+BT_MODE="$(embo-profile get rules.workflow.branch_task_mode 2>/dev/null)"
+case "$BT_MODE" in
+  warn|block|off) : ;;
+  "") BT_MODE="warn" ;;
+  *) printf 'main-branch-guard: unknown branch_task_mode %s; using warn\n' "$BT_MODE" >&2
+     BT_MODE="warn" ;;
+esac
 
 # yq renders a list one element per line; strip brackets/commas so a
 # flow list ([main, master]) and a block list both parse.
@@ -121,8 +128,89 @@ EOF
 
 FIX='Create a feature branch first: git switch -c feat/<name>, then re-run.'
 
+# --- FR-5: branch/task mismatch nudge ------------------------------
+# A softer check than the protected-branch guard: when /embo:impl has
+# recorded an active task number for this session and the checked-out
+# branch does not reference it, nudge once per session. warn -> allow +
+# additionalContext; block -> deny once. A per-session marker (keyed by
+# session_id) suppresses repeats in BOTH modes so a run is never wedged.
+# Skipped on a protected branch (FR-1/2 owns that), on an empty/invalid
+# session id, and whenever no single task is derivable. Fails open.
+
+# Validate a session id with the same charset embo-task-state enforces.
+valid_sid() {
+  case "$1" in
+    "" | *..* | *[!A-Za-z0-9._-]*) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+# Emit the FR-5 decision for BT_MODE, then exit. $1 = reason text.
+decide_bt() {
+  local reason="$1"
+  if [ "$BT_MODE" = "block" ]; then
+    jq -n --arg r "$reason" \
+      '{hookSpecificOutput:{hookEventName:"PreToolUse", permissionDecision:"deny", permissionDecisionReason:$r}}'
+    exit 0
+  fi
+  # warn: allow with additionalContext, and echo to stderr as well.
+  jq -n --arg r "$reason" \
+    '{hookSpecificOutput:{hookEventName:"PreToolUse", additionalContext:$r}}'
+  printf '%s\n' "$reason" >&2
+  exit 0
+}
+
+# fr5_check: run the mismatch nudge. Returns (does not exit) on every
+# silent-allow path so the caller continues to its own allow.
+fr5_check() {
+  # off / protected branch / invalid session id -> no FR-5.
+  [ "$BT_MODE" = "off" ] && return 0
+  is_protected "$BRANCH" && return 0
+  valid_sid "$SID" || return 0
+
+  # Both state dirs anchor on the git toplevel so the guard reads the
+  # same file /embo:impl wrote, and the marker lives in the project tmp/.
+  local top task_dir marker_dir
+  top="$(git -C "$REPO_CTX" rev-parse --show-toplevel 2>/dev/null)"
+  [ -n "$top" ] || return 0
+  task_dir="${EMBO_TASK_STATE_DIR:-$top/tmp/embo-task-state}"
+  marker_dir="${EMBO_GUARD_MARKER_DIR:-$top/tmp/embo-guard}"
+
+  # Primary source: the active-task state file written by /embo:impl.
+  local task
+  task="$(EMBO_TASK_STATE_DIR="$task_dir" "$HERE/../bin/embo-task-state" get "$SID" 2>/dev/null)"
+
+  # Fallback: derive the task from the uncommitted/staged changes.
+  if [ -z "$task" ]; then
+    . "$HERE/../lib/branch-task-lib.sh" 2>/dev/null || return 0
+    task="$(git -C "$REPO_CTX" status --porcelain 2>/dev/null \
+      | branch_task_paths_from_porcelain \
+      | branch_task_derive_from_paths)"
+  fi
+
+  # No single task derivable (clean tree, tie, or absent) -> silent.
+  [ -n "$task" ] || return 0
+
+  # A match is the normal, silent case.
+  . "$HERE/../lib/branch-task-lib.sh" 2>/dev/null || return 0
+  branch_task_matches "$BRANCH" "$task" && return 0
+
+  # Mismatch. The per-session marker suppresses the repeat in both modes.
+  local marker="$marker_dir/$SID"
+  [ -f "$marker" ] && return 0
+  mkdir -p "$marker_dir" 2>/dev/null && : > "$marker" 2>/dev/null \
+    || { printf 'main-branch-guard: cannot record FR-5 marker; allowing\n' >&2; return 0; }
+
+  decide_bt "main-branch-guard: active task $task does not match branch $BRANCH. Create or switch to its branch: git switch -c feat/$task-<name> (or git switch <existing>)."
+}
+
 # --- Edit/Write/NotebookEdit ---------------------------------------
 if [ "$TOOL" != Bash ]; then
+  # FR-5 runs first: it self-skips on a protected branch (where FR-1/2
+  # takes precedence), in off mode, and when no task is derivable. On a
+  # feature-branch mismatch it emits and exits.
+  fr5_check
+  [ "$PB_MODE" = "off" ] && allow   # FR-1/2 disabled; FR-5 already ran
   is_protected "$BRANCH" || allow   # on a feature branch — allow
   # Only tracked files are guarded.
   git -C "$REPO_CTX" ls-files --error-unmatch -- "$TARGET" >/dev/null 2>&1 || allow
@@ -132,6 +220,30 @@ fi
 # --- Bash: commits, mutations, writes, and push targets ------------
 # shellcheck source=../lib/git-command-lib.sh
 . "$HERE/../lib/git-command-lib.sh" 2>/dev/null || allow_notice "git-command-lib unavailable; allowing"
+
+# FR-5 on Bash: only a mutating/writing command spends the one-shot
+# nudge (a read-only `ls`/`git status` must not), and the remedy command
+# (`git switch -c` / `git checkout -b`) is exempt so block mode never
+# denies the very fix it suggests. fr5_check itself self-skips on a
+# protected branch, off mode, and when no task is derivable.
+if [ "$BT_MODE" != "off" ]; then
+  bash_is_fr5_candidate=0
+  while IFS='	' read -r _bt sub; do
+    [ -n "$sub" ] || continue
+    case "$sub" in
+      'git switch -c'* | 'git checkout -b'*) continue ;;  # the remedy
+    esac
+    if gcl_is_git_mutation "$sub"; then bash_is_fr5_candidate=1; break; fi
+    if [ -n "$(gcl_shell_write_paths "$sub")" ]; then bash_is_fr5_candidate=1; break; fi
+  done <<EOF
+$(gcl_walk "$COMMAND" "$BRANCH")
+EOF
+  [ "$bash_is_fr5_candidate" -eq 1 ] && fr5_check
+fi
+
+# FR-1/FR-2 (protected-branch mutations and push targets) are disabled
+# when protected_branch_mode is off; FR-5 above has already run.
+[ "$PB_MODE" = "off" ] && allow
 
 # Push targets are checked regardless of the checked-out branch: a push
 # to a protected ref is refused from anywhere.

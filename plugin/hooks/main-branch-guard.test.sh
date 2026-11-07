@@ -112,15 +112,17 @@ make_profile() {
 #   $2 = cwd (repo path)
 #   $3 = the tool_input value: a path for Edit/Write/NotebookEdit, or the
 #        command string for Bash
+#   $4 = session_id (optional; the FR-5 mismatch check keys its marker and
+#        its active-task lookup on it)
 payload() {
-  local tool="$1" cwd="$2" val="$3"
+  local tool="$1" cwd="$2" val="$3" sid="${4:-}"
   case "$tool" in
-    NotebookEdit) jq -n --arg t "$tool" --arg c "$cwd" --arg v "$val" \
-      '{tool_name:$t, cwd:$c, tool_input:{notebook_path:$v}}' ;;
-    Bash) jq -n --arg t "$tool" --arg c "$cwd" --arg v "$val" \
-      '{tool_name:$t, cwd:$c, tool_input:{command:$v}}' ;;
-    *) jq -n --arg t "$tool" --arg c "$cwd" --arg v "$val" \
-      '{tool_name:$t, cwd:$c, tool_input:{file_path:$v}}' ;;
+    NotebookEdit) jq -n --arg t "$tool" --arg c "$cwd" --arg v "$val" --arg s "$sid" \
+      '{tool_name:$t, cwd:$c, session_id:$s, tool_input:{notebook_path:$v}}' ;;
+    Bash) jq -n --arg t "$tool" --arg c "$cwd" --arg v "$val" --arg s "$sid" \
+      '{tool_name:$t, cwd:$c, session_id:$s, tool_input:{command:$v}}' ;;
+    *) jq -n --arg t "$tool" --arg c "$cwd" --arg v "$val" --arg s "$sid" \
+      '{tool_name:$t, cwd:$c, session_id:$s, tool_input:{file_path:$v}}' ;;
   esac
 }
 
@@ -129,10 +131,24 @@ payload() {
 # JSON decision; stderr carries notices and the deny/warn secondary line.
 #   $1 = payload JSON
 #   $2 = profile file path (may be empty to exercise the default path)
+#   $3 = active-task state dir (optional; EMBO_TASK_STATE_DIR for the
+#        FR-5 task lookup). Defaults to an isolated empty dir so the FR-5
+#        check never reads the real project tmp/.
+#   $4 = guard marker dir (optional; EMBO_GUARD_MARKER_DIR for the FR-5
+#        per-session marker). Defaults to an isolated dir so markers from
+#        one case never leak into another.
+# Both default dirs are unique per call, so FR-5 state is isolated unless
+# a case deliberately reuses a dir to exercise marker suppression.
 run_guard() {
   local pl="$1" profile="${2:-}"
+  local task_dir="${3:-$TMP/taskstate.$$.$RANDOM}"
+  local marker_dir="${4:-$TMP/marker.$$.$RANDOM}"
   local errfile="$TMP/.stderr.$$"
-  OUT="$(printf '%s' "$pl" | EMBO_PROFILE_ACTIVE="$profile" bash "$HOOK" 2>"$errfile")"
+  OUT="$(printf '%s' "$pl" \
+    | EMBO_PROFILE_ACTIVE="$profile" \
+      EMBO_TASK_STATE_DIR="$task_dir" \
+      EMBO_GUARD_MARKER_DIR="$marker_dir" \
+      bash "$HOOK" 2>"$errfile")"
   RC=$?
   ERR="$(cat "$errfile")"
   rm -f "$errfile"
@@ -605,6 +621,202 @@ test_timing_candidate_completes() {
   assert_eq "5.3: candidate call completes -> exit 0" 0 "$RC"
 }
 
+# --- 6.1 branch/task mismatch check (FR-5) --------------------------
+# The guard reads the active task number for the session (written by
+# /embo:impl via embo-task-state) and, on a candidate call, compares it
+# against the checked-out branch. A match is silent. A mismatch nudges —
+# once per session — with a create/switch suggestion: in `warn` as an
+# allow + additionalContext, in `block` as a single deny that then does
+# NOT re-fire on the retry (the per-session marker suppresses repeats in
+# both modes). No derivable task, or a tie, stays silent; `off` is
+# silent. These cases run on a FEATURE branch so the protected-branch
+# guard (FR-1/2) never fires and only the FR-5 path is under test.
+#
+# WRAPPER points at the embo-task-state bin so a case can seed the active
+# task the same way /embo:impl would.
+TASK_STATE_BIN="$HERE/../bin/embo-task-state"
+
+# Seed the active task number for a session into a fresh task-state dir
+# and print the dir, so the case can pass it to run_guard.
+#   $1 = case name  $2 = session_id  $3 = task number
+seed_active_task() {
+  local case_name="$1" sid="$2" task="$3"
+  local dir="$TMP/$case_name.taskstate"
+  EMBO_TASK_STATE_DIR="$dir" bash "$TASK_STATE_BIN" set "$sid" "$task" >/dev/null 2>&1
+  printf '%s\n' "$dir"
+}
+
+# matching branch (feat/055-x, active task 055) -> silent, no nudge
+test_fr5_matching_branch_silent() {
+  local repo profile pl taskdir
+  repo="$(build_repo fr5_match feat/055-x)"
+  profile="$(make_profile fr5_match block warn "main, master")"
+  taskdir="$(seed_active_task fr5_match sid-match 055)"
+  pl="$(payload Edit "$repo" "$repo/tracked.txt" sid-match)"
+  run_guard "$pl" "$profile" "$taskdir"
+  assert_eq "6.1: matching branch -> exit 0" 0 "$RC"
+  assert_not_contains "6.1: matching branch -> no deny" \
+    '"permissionDecision": "deny"' "$OUT"
+  assert_not_contains "6.1: matching branch -> no additionalContext nudge" \
+    '"additionalContext"' "$OUT"
+}
+
+# mismatch in warn (branch feat/055-x, active task 068) -> allow + a one
+# -line nudge carrying a create/switch suggestion, no deny
+test_fr5_mismatch_warn_nudges() {
+  local repo profile pl taskdir
+  repo="$(build_repo fr5_warn feat/055-x)"
+  profile="$(make_profile fr5_warn block warn "main, master")"
+  taskdir="$(seed_active_task fr5_warn sid-warn 068)"
+  pl="$(payload Edit "$repo" "$repo/tracked.txt" sid-warn)"
+  run_guard "$pl" "$profile" "$taskdir"
+  assert_eq "6.1: mismatch warn -> exit 0" 0 "$RC"
+  assert_not_contains "6.1: mismatch warn -> no deny" \
+    '"permissionDecision": "deny"' "$OUT"
+  assert_contains "6.1: mismatch warn -> additionalContext nudge" \
+    '"additionalContext"' "$OUT"
+  assert_contains "6.1: mismatch warn -> names the active task" "068" "$OUT$ERR"
+  assert_contains "6.1: mismatch warn -> offers a switch suggestion" \
+    "switch" "$OUT$ERR"
+}
+
+# mismatch in block -> deny ONCE with the suggestion
+test_fr5_mismatch_block_denies_once() {
+  local repo profile pl taskdir markerdir
+  repo="$(build_repo fr5_block feat/055-x)"
+  profile="$(make_profile fr5_block block block "main, master")"
+  taskdir="$(seed_active_task fr5_block sid-block 068)"
+  markerdir="$TMP/fr5_block.marker"
+  pl="$(payload Edit "$repo" "$repo/tracked.txt" sid-block)"
+  run_guard "$pl" "$profile" "$taskdir" "$markerdir"
+  assert_eq "6.1: mismatch block (first) -> exit 0" 0 "$RC"
+  assert_contains "6.1: mismatch block (first) -> deny decision" \
+    '"permissionDecision": "deny"' "$OUT"
+  assert_contains "6.1: mismatch block deny -> names the active task" "068" "$OUT"
+  assert_contains "6.1: mismatch block deny -> offers a switch suggestion" \
+    "switch" "$OUT"
+}
+
+# the block-mode retry is NOT re-denied: the marker from the first denial
+# suppresses the second identical call, so the run is not wedged
+test_fr5_mismatch_block_retry_not_redenied() {
+  local repo profile pl taskdir markerdir
+  repo="$(build_repo fr5_retry feat/055-x)"
+  profile="$(make_profile fr5_retry block block "main, master")"
+  taskdir="$(seed_active_task fr5_retry sid-retry 068)"
+  markerdir="$TMP/fr5_retry.marker"
+  pl="$(payload Edit "$repo" "$repo/tracked.txt" sid-retry)"
+  # first call records the marker and denies
+  run_guard "$pl" "$profile" "$taskdir" "$markerdir"
+  assert_contains "6.1: retry setup -> first call denied" \
+    '"permissionDecision": "deny"' "$OUT"
+  # second identical call: marker present -> no re-deny (FR-5 is silent)
+  run_guard "$pl" "$profile" "$taskdir" "$markerdir"
+  assert_eq "6.1: block retry -> exit 0" 0 "$RC"
+  assert_not_contains "6.1: block retry -> FR-5 does not re-deny" \
+    '"permissionDecision": "deny"' "$OUT"
+}
+
+# the per-session marker suppresses repeats in WARN mode too
+test_fr5_mismatch_warn_marker_suppresses_repeat() {
+  local repo profile pl taskdir markerdir
+  repo="$(build_repo fr5_warnrepeat feat/055-x)"
+  profile="$(make_profile fr5_warnrepeat block warn "main, master")"
+  taskdir="$(seed_active_task fr5_warnrepeat sid-wr 068)"
+  markerdir="$TMP/fr5_warnrepeat.marker"
+  pl="$(payload Edit "$repo" "$repo/tracked.txt" sid-wr)"
+  run_guard "$pl" "$profile" "$taskdir" "$markerdir"
+  assert_contains "6.1: warn-repeat setup -> first call nudges" \
+    '"additionalContext"' "$OUT"
+  run_guard "$pl" "$profile" "$taskdir" "$markerdir"
+  assert_not_contains "6.1: warn repeat -> no second nudge (marker suppresses)" \
+    '"additionalContext"' "$OUT"
+}
+
+# no active-task state file: fall back to deriving the task from the
+# uncommitted changes. An uncommitted edit under tasks/068-... derives
+# 068, which mismatches feat/055-x -> deny in block.
+test_fr5_fallback_to_path_derivation_denies() {
+  local repo profile pl
+  repo="$(build_repo fr5_fallback feat/055-x)"
+  mkdir -p "$repo/tasks/068-OTHER"
+  printf 'x\n' > "$repo/tasks/068-OTHER/notes.md"
+  git -C "$repo" add -A
+  profile="$(make_profile fr5_fallback block block "main, master")"
+  # no seeded task-state dir -> run_guard uses an empty default, forcing
+  # the path-derivation fallback
+  pl="$(payload Edit "$repo" "$repo/tracked.txt" sid-fallback)"
+  run_guard "$pl" "$profile"
+  assert_contains "6.1: no state file -> derives task from paths and denies" \
+    '"permissionDecision": "deny"' "$OUT"
+  assert_contains "6.1: fallback deny names the derived task" "068" "$OUT"
+}
+
+# no derivable task at all (clean tree, no state file) -> silent
+test_fr5_no_task_silent() {
+  local repo profile pl
+  repo="$(build_repo fr5_notask feat/055-x)"
+  profile="$(make_profile fr5_notask block block "main, master")"
+  pl="$(payload Edit "$repo" "$repo/tracked.txt" sid-notask)"
+  run_guard "$pl" "$profile"
+  assert_eq "6.1: no derivable task -> exit 0" 0 "$RC"
+  assert_not_contains "6.1: no derivable task -> no deny" \
+    '"permissionDecision": "deny"' "$OUT"
+  assert_not_contains "6.1: no derivable task -> no nudge" \
+    '"additionalContext"' "$OUT"
+}
+
+# a tie in path derivation (equal paths under two tasks, no state file)
+# -> silent (no single task to blame)
+test_fr5_tie_silent() {
+  local repo profile pl
+  repo="$(build_repo fr5_tie feat/055-x)"
+  mkdir -p "$repo/tasks/068-A" "$repo/tasks/069-B"
+  printf 'x\n' > "$repo/tasks/068-A/a.md"
+  printf 'x\n' > "$repo/tasks/069-B/b.md"
+  git -C "$repo" add -A
+  profile="$(make_profile fr5_tie block block "main, master")"
+  pl="$(payload Edit "$repo" "$repo/tracked.txt" sid-tie)"
+  run_guard "$pl" "$profile"
+  assert_eq "6.1: tie -> exit 0" 0 "$RC"
+  assert_not_contains "6.1: tie -> no deny" \
+    '"permissionDecision": "deny"' "$OUT"
+}
+
+# off mode -> FR-5 silent even on a clear mismatch
+test_fr5_off_silent() {
+  local repo profile pl taskdir
+  repo="$(build_repo fr5_off feat/055-x)"
+  # protected_branch_mode off would also early-exit; set it block so only
+  # branch_task_mode=off governs the FR-5 path, and run on a feature
+  # branch so FR-1/2 never fires.
+  profile="$(make_profile fr5_off block off "main, master")"
+  taskdir="$(seed_active_task fr5_off sid-off 068)"
+  pl="$(payload Edit "$repo" "$repo/tracked.txt" sid-off)"
+  run_guard "$pl" "$profile" "$taskdir"
+  assert_eq "6.1: branch_task_mode off -> exit 0" 0 "$RC"
+  assert_not_contains "6.1: off -> no deny" \
+    '"permissionDecision": "deny"' "$OUT"
+  assert_not_contains "6.1: off -> no nudge" \
+    '"additionalContext"' "$OUT"
+}
+
+# the protected-branch deny (FR-1/2) takes precedence over FR-5: an Edit
+# on a PROTECTED branch with a task mismatch is denied by FR-1, and the
+# denial is the protected-branch message, not the FR-5 nudge.
+test_fr5_protected_branch_takes_precedence() {
+  local repo profile pl taskdir
+  repo="$(build_repo fr5_precede main)"
+  profile="$(make_profile fr5_precede block block "main, master")"
+  taskdir="$(seed_active_task fr5_precede sid-prec 068)"
+  pl="$(payload Edit "$repo" "$repo/tracked.txt" sid-prec)"
+  run_guard "$pl" "$profile" "$taskdir"
+  assert_contains "6.1: protected branch still denies" \
+    '"permissionDecision": "deny"' "$OUT"
+  assert_contains "6.1: precedence -> protected-branch reason, not FR-5" \
+    "while branch main is checked out" "$OUT"
+}
+
 # --- runner ---------------------------------------------------------
 test_scaffolding_helpers
 test_edit_tracked_main_block_denies
@@ -641,6 +853,16 @@ test_fail_unknown_mode_falls_back
 test_fail_lib_unavailable_allows
 test_timing_non_candidate_quick
 test_timing_candidate_completes
+test_fr5_matching_branch_silent
+test_fr5_mismatch_warn_nudges
+test_fr5_mismatch_block_denies_once
+test_fr5_mismatch_block_retry_not_redenied
+test_fr5_mismatch_warn_marker_suppresses_repeat
+test_fr5_fallback_to_path_derivation_denies
+test_fr5_no_task_silent
+test_fr5_tie_silent
+test_fr5_off_silent
+test_fr5_protected_branch_takes_precedence
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

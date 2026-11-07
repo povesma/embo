@@ -224,16 +224,21 @@
       → non-candidate early-allows silently; candidate completes exit 0
         [live] (2026-11-07)
 
-- [ ] 6.0 **User Story:** As a developer, I want a branch/task mismatch
+- [X] 6.0 **User Story:** As a developer, I want a branch/task mismatch
   reported before the first edit of an implementation run so that work does
-  not land on a finished task's branch [0/0]
-  - [ ] 6.0a Have `/embo:impl` record the active task number in a small
+  not land on a finished task's branch [4/4]
+  - [X] 6.0a Have `/embo:impl` record the active task number in a small
     project-git-ignored `tmp/` state file (keyed by `session_id`), written via
     an `embo-profile`-style bin; this is the guard's PRIMARY task source,
     since at the first edit the tree is usually clean and code-file edits
     carry no task number (the path/uncommitted derivation silently no-ops in
     the seed's own incident) [verify: auto-test]
-  - [ ] 6.1 Write tests for the mismatch check: matching branch silent;
+      → `bin/embo-task-state` set/get/clear writes
+        `<git-toplevel>/tmp/embo-task-state/<session_id>.json` (anchored on
+        the git toplevel so a subdirectory write and the guard's read agree);
+        impl.md Step 2 records the folder task number; 14/14 tests pass
+        (`bash plugin/bin/embo-task-state.test.sh`) [live] (2026-11-07)
+  - [X] 6.1 Write tests for the mismatch check: matching branch silent;
     mismatch in `warn` emits one line with a create/switch suggestion;
     mismatch in `block` denies ONCE then records the marker and does NOT
     re-deny the retry (the single denial delivered the guidance; re-denying
@@ -242,15 +247,41 @@
     BOTH modes; active-task state file present vs absent (fallback to path
     derivation); no derivable task or a tie stays silent; `off` mode silent
     [verify: auto-test]
-  - [ ] 6.2 Implement the mismatch check in the guard: read the active-task
+      → 10 FR-5 cases added to `main-branch-guard.test.sh` (match silent,
+        warn nudge, block deny-once, block retry not re-denied, warn marker
+        suppresses repeat, path-derivation fallback, no-task/tie/off silent,
+        protected-branch precedence). Tests-first: at write time the suite
+        ran 97 pass / 10 fail; after 6.2 it runs 107 pass / 0 fail
+        [live] (2026-11-07)
+  - [X] 6.2 Implement the mismatch check in the guard: read the active-task
     state file first, else fall back to `branch_task_derive_from_paths`;
     reuse `branch_task_matches` from `plugin/lib/branch-task-lib.sh` (no
     second match definition). Mark FR-5 coverage best-effort when no state
     file and no derivable task [verify: auto-test]
-  - [ ] 6.3 Replace the prose-only branch bullet in
+      → `fr5_check` added to `main-branch-guard.sh`: own call-sites before
+        each feature-branch allow (never the unreachable "after FR-1/2"),
+        self-skips on protected branch / off mode / empty-or-invalid
+        session_id / no single task; primary source `embo-task-state get`,
+        fallback `git status --porcelain` → `branch_task_derive_from_paths`;
+        per-session marker (`EMBO_GUARD_MARKER_DIR`, default
+        `<toplevel>/tmp/embo-guard`) suppresses repeats in both modes;
+        Bash FR-5 gated on a git mutation / tracked write and exempts the
+        `git switch -c` / `git checkout -b` remedy. Approach verified by
+        approach-validator before coding (insertion-point refuted, fixed).
+        107/107 guard tests + 89 lib + 14 writer pass; fallback also
+        confirmed with a live throwaway-repo run [live] (2026-11-07).
+        PROVISIONAL: the primary-source path assumes the hook payload
+        `.session_id` equals the `${CLAUDE_SESSION_ID}` impl.md writes with
+        — unverifiable offline; the fallback path covers the mismatch
+        regardless, and the auto-tests drive session_id explicitly
+  - [X] 6.3 Replace the prose-only branch bullet in
     `plugin/commands/impl.md` with a one-line pointer that the guard
     enforces it per the profile mode, with no task numbers
     [verify: code-only]
+      → Step 2's advisory "Notice the current branch" bullet replaced with
+        a one-line "the guard enforces this per branch_task_mode" pointer;
+        the example task number dropped so no task literal remains in the
+        command body (code-only) (2026-11-07)
 
 - [ ] 7.0 **User Story:** As a maintainer, I want the guard registered,
   documented and verified live so that it ships like every other hook
