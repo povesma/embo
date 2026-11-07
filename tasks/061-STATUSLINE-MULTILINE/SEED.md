@@ -37,10 +37,19 @@ by `plugin/statusline.test.sh`. The format contract is documented in
     id — confirming herdr's id == Claude Code's `session_id`.
   - **Open follow-up (cross-session promise):** ATC asked to be pinged
     when this reaches the INSTALLED version (merged to the shared branch +
-    plugin reloaded in `~/.claude`), not just on the feature branch. Until
-    then it only writes when Claude Code runs this branch's `statusline.sh`
-    directly. The next session must send that ping to the ATC session after
-    install/merge.
+    plugin reloaded in `~/.claude`), not just on the feature branch. The
+    next session must send that ping to the ATC session after install/merge.
+  - **Auto-propagation caveat (found 2026-11-07):** `~/.claude/statusline.sh`
+    does NOT stay branch-only. The `statusline-refresh.sh` SessionStart
+    hook copies the active plugin's bundled `statusline.sh` over the
+    installed copy whenever they differ and the copy still carries the
+    `# embo:auto-refresh` marker. So while this branch is the active
+    (dogfood) plugin, every new session refreshes the installed statusline
+    to this branch's version — ATC saw the 2-row line + `.cc.json` from a
+    plain no-`--settings` probe for exactly this reason. Practical effect:
+    the feature is effectively installed already on this machine, ahead of
+    a formal merge. The still-pending formal ping is just to mark a clean,
+    agreed, merged version.
   - **Confirmed consumer:** ATC parses embo's statusline. (An earlier
     message wrongly said it parsed a separate "Claude Code footer"; the
     owner confirmed the line ATC reads IS embo's statusline, set in the
