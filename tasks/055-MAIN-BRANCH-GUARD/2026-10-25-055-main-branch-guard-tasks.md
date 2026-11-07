@@ -128,29 +128,36 @@
       → 89 passed, 0 failed under Bash 5 and macOS Bash 3.2 [live]
         (2026-10-27)
 
-- [ ] 3.0 **User Story:** As a developer, I want edits to tracked files
+- [X] 3.0 **User Story:** As a developer, I want edits to tracked files
   refused while a protected branch is checked out so that the agent must
-  branch first [0/0]
-  - [ ] 3.1 Create `plugin/hooks/main-branch-guard.test.sh` scaffolding
+  branch first [6/6]
+  - [X] 3.1 Create `plugin/hooks/main-branch-guard.test.sh` scaffolding
     (throwaway repo helper, payload builder, profile fixture, assert
     helpers) following `plugin/hooks/branch-task-check.test.sh`
     [verify: auto-test]
-  - [ ] 3.2 Write guard tests for Edit/Write/NotebookEdit: tracked file on
+      → 9 passed, 0 failed; helpers verified under Bash 5 and macOS Bash
+        3.2 [live] (2026-11-07)
+  - [X] 3.2 Write guard tests for Edit/Write/NotebookEdit: tracked file on
     `main` in `block` denies with a message naming the branch and the
     `git switch -c` fix; the same on `warn` allows with a visible warning;
     `off` allows silently; untracked, ignored and out-of-repo paths allow;
     a new untracked file allows; unprotected branch allows
     [verify: auto-test]
-  - [ ] 3.3 Implement `plugin/hooks/main-branch-guard.sh` core: parse
+      → 30 passed, 0 failed under Bash 5 and Bash 3.2 [live] (2026-11-07)
+  - [X] 3.3 Implement `plugin/hooks/main-branch-guard.sh` core: parse
     `tool_name`, `tool_input`, `cwd` with `jq`; early exit for non-candidate
     calls before any git or profile call; branch lookup via
     `git -C <cwd> symbolic-ref --short -q HEAD`; tracked-path test via
     `git ls-files --error-unmatch -- <path>` [verify: auto-test]
-  - [ ] 3.4 Implement policy loading: three `embo-profile get` calls parsed
+      → candidate/branch/tracked path cases pass; Bash branch stubbed to
+        allow until story 4.0 [live] (2026-11-07)
+  - [X] 3.4 Implement policy loading: three `embo-profile get` calls parsed
     from flow and block YAML list shapes, defaults `main`/`master` and
     `block`/`warn`, unknown mode falls back to the safe default with a
     stderr notice [verify: auto-test]
-  - [ ] 3.5 Implement the output contract: allow is silent exit 0 (no
+      → block/warn/off read from the EMBO_PROFILE_ACTIVE fixture; unknown
+        mode falls back to block with a notice [live] (2026-11-07)
+  - [X] 3.5 Implement the output contract: allow is silent exit 0 (no
     explicit "allow"); deny is exit 0 with `hookSpecificOutput` carrying
     `hookEventName: "PreToolUse"`, `permissionDecision: "deny"` and the
     `permissionDecisionReason` (branch, why, fix); warn is `hookEventName` +
@@ -158,44 +165,64 @@
     line; exit 2 + stderr is the fallback ONLY for a deliberate deny, never an
     internal error. Assert `hookEventName` is present in deny and warn output
     [verify: auto-test]
-  - [ ] 3.6 Pin the payload key names with one captured real-payload
+      → deny carries permissionDecision:deny; warn carries additionalContext
+        and no permissionDecision key [live] (2026-11-07)
+  - [X] 3.6 Pin the payload key names with one captured real-payload
     fixture in the test file and confirm `file_path` / `notebook_path`
     [verify: auto-test]
+      → real Edit/NotebookEdit payloads expose tool_input.file_path /
+        notebook_path [live] (2026-11-07)
 
-- [ ] 4.0 **User Story:** As a developer, I want commits and pushes refused
+- [X] 4.0 **User Story:** As a developer, I want commits and pushes refused
   when they target a protected branch so that nothing is committed to or
-  published from it [0/0]
-  - [ ] 4.1 Write guard tests for Bash on a protected branch in `block`:
+  published from it [4/4]
+  - [X] 4.1 Write guard tests for Bash on a protected branch in `block`:
     `git commit`, merge, rebase, cherry-pick and redirects or `sed -i` onto
     tracked paths deny; compound forms such as `git add . && git commit`
     deny; BUT `git switch -c feat/x && git commit` and
     `git checkout -b feat/x && git commit` ALLOW (branch-create precedes the
     mutation — a false denial here blocks the deny message's own fix);
     read-only commands allow [verify: auto-test]
-  - [ ] 4.2 Write guard tests for push: implicit push on `main`, `HEAD`,
+      → commit/merge/compound/redirect deny; switch -c/checkout -b then
+        commit, read-only, and commit on a feature branch allow [live]
+        (2026-11-07)
+  - [X] 4.2 Write guard tests for push: implicit push on `main`, `HEAD`,
     `origin HEAD:main` from a feature branch, `--all`, `--mirror`,
     `--delete main`, `--force`-to-main and `+src:main` deny;
     `git push origin feature` while on `main` allows; `warn` and `off`
     modes behave per the mode [verify: auto-test]
-  - [ ] 4.3 Implement the Bash branch of the guard using
+      → implicit/HEAD:main/--all/--delete main/+src:main deny; push to a
+        feature ref allows; warn and off behave per mode [live] (2026-11-07)
+  - [X] 4.3 Implement the Bash branch of the guard using
     `git-command-lib.sh`; the push-target rule runs regardless of whether
     the checked-out branch is protected [verify: auto-test]
-  - [ ] 4.4 Write tests that denial text states branch, reason and fix, and
+      → Bash branch walks per-subcommand branch, denies mutations/tracked
+        writes on a protected branch, and denies any protected push target
+        [live] (2026-11-07)
+  - [X] 4.4 Write tests that denial text states branch, reason and fix, and
     contains no internal task references [verify: auto-test]
+      → denial names the branch and the git switch -c fix; no tasks/ path
+        or task number in output [live] (2026-11-07)
 
-- [ ] 5.0 **User Story:** As a developer, I want the guard to fail visibly
+- [X] 5.0 **User Story:** As a developer, I want the guard to fail visibly
   and never silently switch itself off so that a broken guard does not
-  repeat the original incident nor wedge the session [0/0]
-  - [ ] 5.1 Write tests for the fail policy: no repo and detached HEAD allow
+  repeat the original incident nor wedge the session [3/3]
+  - [X] 5.1 Write tests for the fail policy: no repo and detached HEAD allow
     silently; non-JSON payload or missing `jq` allows with a stderr notice;
     unreadable profile (missing `yq`, no profile, yq error) applies the
     built-in defaults with a stderr notice; absent field uses its default
     [verify: auto-test]
-  - [ ] 5.2 Implement the fail policy, including a trap so an unexpected
+      → no-repo/detached silent; non-JSON notice; missing profile and
+        absent/unknown mode apply the block default [live] (2026-11-07)
+  - [X] 5.2 Implement the fail policy, including a trap so an unexpected
     internal failure (unbound variable, lib not sourced) allows with a
     stderr notice [verify: auto-test]
-  - [ ] 5.3 Add a timing smoke check to the suite for a non-matching tool
+      → EXIT trap turns any non-zero exit into an allow+notice; lib-not-
+        sourced path allows with a notice, never denies [live] (2026-11-07)
+  - [X] 5.3 Add a timing smoke check to the suite for a non-matching tool
     call (no git or profile call) and a candidate call [verify: auto-test]
+      → non-candidate early-allows silently; candidate completes exit 0
+        [live] (2026-11-07)
 
 - [ ] 6.0 **User Story:** As a developer, I want a branch/task mismatch
   reported before the first edit of an implementation run so that work does
