@@ -1,8 +1,58 @@
 # 061: Multi-line status line for more dynamic info — Seed
 
-**Status**: Not started (run /embo:prd to begin).
+**Status**: Partially done — the minimal 2-row *layout* shipped
+2026-11-07; the richer focus-anchor design below is still not started
+(run /embo:prd to begin that part).
 **Origin**: raised 2026-09-03 — one status line row is not enough to fit
 the dynamic information wanted.
+
+## Done 2026-11-07 — minimal 2-row layout (the "display" half)
+
+The single-row overflow (long path + long branch pushed metrics
+off-screen, worsened by task 070's new `embo:` stage segment) was fixed
+by splitting `plugin/statusline.sh` into two rows:
+
+- **Row 1 (identity):** `<path> | <branch>` — the two long items.
+- **Row 2 (metrics):** `<model> | <used>/<total> $<cost> | ctx <pct>% |
+  embo:<stage> | mem:<freshness> | <HH:MM:SS>`.
+
+No `COLUMNS` math was needed — the plain split alone keeps the long items
+off the metrics row. The `embo:auto-refresh` marker is preserved. Covered
+by `plugin/statusline.test.sh`. The format contract is documented in
+`docs/REFERENCE.md` §Statusline so external consumers can parse it.
+
+### Remaining scope (still task 061)
+
+- **Raw Claude Code stdin JSON, saved to a per-session file** (agreed with
+  the ATC consumer, 2026-11-07 — supersedes the earlier "env-gated stdout
+  JSON mode" idea, which cannot reach ATC: ATC sees only the screen via
+  herdr, not the script's stdout, so a file is required).
+  - **Confirmed consumer:** ATC parses embo's statusline. (An earlier
+    message wrongly said it parsed a separate "Claude Code footer"; the
+    owner confirmed the line ATC reads IS embo's statusline, set in the
+    owner's user settings.)
+  - **Design (agreed):** the statusline writes the raw stdin JSON blob,
+    unchanged, to `${XDG_STATE_HOME:-$HOME/.local/state}/embo/session-state/<session_id>.cc.json`
+    — a SEPARATE file from task 070's own `<session_id>.json` so the two
+    never collide. Atomic write (temp + rename), mode 0600, mtime prune
+    reuses task 070's prune. **Always on** (ATC needs every session),
+    **but the write must NEVER affect the statusline output or exit code**
+    — errors swallowed, statusline prints regardless.
+  - **Rationale for raw:** ATC treats every field as optional and many
+    fields are version-dependent / null early (`used_percentage`,
+    `current_usage`), so a raw blob means embo maintains no schema.
+  - **Resolved with ATC 2026-11-07:** (1) NO redaction — save fully raw
+    (ATC already shows the dir to its signed-in owner). (2) NO forced
+    `refreshInterval` — ATC reads staleness from the file's mtime. (3) The
+    path and the `.cc.json` name are a **contract between embo and ATC**:
+    do not change either without telling ATC first. (4) 14-day prune is
+    fine — a pruned file just makes ATC fall back to screen parsing until
+    the next write.
+  - **Stale-doc note:** the earlier REFERENCE claim that embo also emits a
+    trailing "`<n> tokens`" field was wrong — that field is Claude Code's
+    own footer, never embo's.
+- The **current-focus anchor** (3-level "you are here") and its freshness
+  / decay mechanism, below — the original richer-signal idea, unbuilt.
 
 ## Problem
 

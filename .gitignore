@@ -38,6 +38,10 @@ Desktop.ini
 # Correction capture JSONL (per-project, written by the capture-correction hook)
 .claude/corrections.jsonl
 
+# Stale session-identity probe log (the probe retired; the hook now writes
+# the out-of-tree session-state file instead — never commit a leftover copy)
+.claude/session-identity.jsonl
+
 # Scratch dir for redirected command output (read back via the Read tool)
 tmp/
 

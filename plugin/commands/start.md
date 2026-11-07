@@ -9,13 +9,21 @@ allowed-tools: Bash(embo-profile *) Bash(rlm_repl *) Bash(git log *) Bash(git di
 
 ### Fast path (subsequent run)
 
-Check whether this command has already completed in the current session
-by looking for the session-complete marker that the Summary section
-emits as its final line of output (an HTML comment whose content is
-`embo-start: complete`). That marker is never written in the command
-file itself — finding it in context means a prior full run finished.
+Check whether `/embo:start` has already run in this session by reading
+the per-session state file's phase:
 
-**If the marker is present, do not emit a second summary or a second
+```bash
+embo-session-state path ${CLAUDE_SESSION_ID}
+```
+
+Read that file: if its `phase` is `started`, a prior `/embo:start`
+already ran this session. (`phase: new` — the SessionStart hook's
+baseline — is NOT a repeat start; run the full flow. No file, or an
+unreadable one, also means run the full flow.) The literal
+`${CLAUDE_SESSION_ID}` token is substituted by Claude Code before the
+Bash call.
+
+**If the phase is `started`, do not emit a second summary or a second
 menu**, regardless of what triggered this turn (a fresh `/embo:start`
 invocation, a scout teammate-message notification, or anything else).
 Instead, run `git log --oneline -10` and `git diff --stat HEAD` in
@@ -437,6 +445,28 @@ for identical work.
   file IS the "skip" — do NOT probe with a Bash `test -f` or any
   other existence check first. Do not read `CLAUDE.md` here; the
   harness injects it into every session already.
+- `Bash: embo-session-state start ${CLAUDE_SESSION_ID} <sha> <branch> <root>`
+  — records this session's phase as `started` for the statusline and the
+  fast path. **Substitute `<sha>`, `<branch>`, `<root>` as LITERAL text
+  before emitting the call — never `$(git ...)`, backticks, or any other
+  shell substitution** (an unquoted-substitution command triggers an
+  approval prompt on every session start, and violates AVOID-APPROVAL).
+  You already have all three values this turn without a new git call:
+  - `<sha>`: the short HEAD hash from the `git log --oneline -10` output
+    above (its first line).
+  - `<branch>`: the current branch — it is shown in the git context /
+    status line for this session; paste it literally.
+  - `<root>`: the repository root path, home-relative (`~/…`) — it is the
+    session's working directory; paste it literally.
+
+  So the emitted call is fully expanded text, e.g.
+  `embo-session-state start abc123de e23b176-feat feat/foo ~/code/embo`.
+  This is the ONLY writer that sets `started`; the SessionStart hook wrote
+  the `new` baseline. The literal `${CLAUDE_SESSION_ID}` token is
+  substituted by Claude Code before the Bash call; the wrapper rejects an
+  empty or unsubstituted id with a non-zero exit (not fatal to the
+  session). If a value is genuinely unavailable, pass an empty string
+  `""` for it rather than reaching for a `$(...)` call.
 
 Recent activity is already in context: claude-mem's SessionStart
 hook injects a "recent context" block (recent observations + stats)
@@ -520,7 +550,9 @@ Close the summary with the next-action choice via `AskUserQuestion`
 (per RULE:CLEAR-OPTIONS): the recommended task, plus at minimum
 "review critically / wrap up / tell me what to do".
 
-<!-- embo-start: complete -->
+(The session's `started` phase — set by the Batch A `embo-session-state
+start` call — is what the Fast path above keys on for a repeat run. No
+in-context completion marker is emitted.)
 
 ## Closing guidance
 

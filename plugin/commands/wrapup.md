@@ -91,3 +91,16 @@ If non-empty, list the files and ask via `AskUserQuestion`: commit now
   of content was dropped.
 - Anything deferred for genuine doubt — what, and why undecided.
 - Commit status (Step 4).
+
+### 6. Mark the session wrapped up
+
+```bash
+embo-session-state wrapup ${CLAUDE_SESSION_ID}
+```
+
+Sets this session's phase to `wrapped_up`, so the statusline shows the
+`✓` indicator. The literal `${CLAUDE_SESSION_ID}` token is substituted by
+Claude Code before the Bash call; the wrapper rejects an empty or
+unsubstituted id with a non-zero exit (not fatal). If work resumes after
+this, the UserPromptSubmit hook flips the phase back to `started` on the
+next prompt — so a `✓` never lingers while work continues.

@@ -38,9 +38,15 @@ be on disk.
   (code.claude.com/docs/en/hooks).
 - A slash command body can expand `${CLAUDE_SESSION_ID}`
   (code.claude.com/docs/en/slash-commands).
-- **Undocumented**: whether the statusline's `session_id` equals the
-  hook's for the same session.
-- **Undocumented**: whether `session_id` survives `claude --resume`.
+- **Confirmed (2026-11-06)**: the statusline's `session_id` equals the
+  hook's for the same session. Both recorded
+  `ecc8d58d-5040-49d4-a2a5-da36ae0aa162` for one live session.
+- **Confirmed (2026-11-06)**: `session_id` survives `claude --resume`.
+  Session `ecc8d58d-…` recorded a `startup` and a later `resume` line
+  under the same id.
+
+**Conclusion**: `session_id` is safe to use as the per-session
+state-file key. No fallback to `transcript_path` is needed.
 
 ## Already built, NOT committed
 
@@ -59,11 +65,14 @@ Records append to `.claude/session-identity.jsonl` in the **main**
 working tree (via the `resolve_claude_dir()` pattern copied from
 `capture-correction.sh`), so they survive a worktree being removed.
 
-## Why the probe has not run
+## Probe result (2026-11-06)
 
-It needs the installed plugin to point at a tree containing the hook,
-then a session exit and `claude --resume`. The user's plugin currently
-loads from a different worktree.
+Ran: installed `statusline.sh` (with the diagnostic) via
+`statusline-setup`, in a live session whose SessionStart hook had
+already recorded. The statusline recorded its own line on the next
+render — no restart needed. Both observer lines carry the same
+`session_id`, and the hook also showed a `resume` line under that id.
+Gate (PRD Story 1) passed; Stories 2–4 may key on `session_id`.
 
 ## Open design questions
 

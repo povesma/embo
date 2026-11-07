@@ -1,29 +1,25 @@
 #!/usr/bin/env bash
-# session-identity.sh — SessionStart hook that records the session id.
+# session-identity.sh — SessionStart hook that records the per-session
+# state-file baseline.
 #
-# Why this exists: embo wants per-session state on disk (a start/wrapup
-# record the status line can read). That requires a key that is unique
-# per session and stable for its lifetime. Claude Code documents
-# `session_id` on both hook stdin and status-line stdin, but does NOT
-# document two facts the design depends on:
+# Why this exists: embo keeps per-session state on disk (a start/wrapup
+# record the status line reads and the /embo:start fast path uses). The
+# state file is keyed by `session_id`, which Claude Code provides on hook
+# stdin. This hook writes the baseline (`phase: new`) from the real stdin
+# id, so the id can never be empty or unsubstituted and the model cannot
+# forget the write. On a re-fire (resume/compact) the writer preserves the
+# existing phase, so a session that has already run /embo:start is not
+# reset to `new`.
 #
-#   1. whether the hook's session_id and the status line's are the same
-#      value for the same session;
-#   2. whether session_id is preserved across `claude --resume`.
-#
-# This hook records one line per session start so both can be answered
-# from data instead of inference. `/embo:health` reads the file and
-# reports what it found.
+# This baseline write REPLACES the old session-identity.jsonl append; the
+# diagnostic log has served its purpose.
 #
 # Input: JSON on stdin with:
 #   - session_id:       current session id
 #   - source:           startup | resume | clear | compact | fork
-#   - hook_event_name:  which event fired
 #
-# Output: one JSON line appended to .claude/session-identity.jsonl in the
-# MAIN working tree (see resolve_claude_dir below).
-#
-# Never fails the harness. Any error exits 0.
+# Output: none to stdout (a SessionStart hook must not print to the
+# harness channel). Never fails the harness: any error exits 0.
 
 set -u
 
@@ -32,45 +28,28 @@ log_err() { printf '[session-identity] %s\n' "$*" >&2; }
 INPUT="$(cat 2>/dev/null || true)"
 [ -n "$INPUT" ] || exit 0
 
-if ! SESSION_ID="$(printf '%s' "$INPUT" | jq -r '.session_id // "unknown"' 2>/dev/null)"; then
+SESSION_ID="$(printf '%s' "$INPUT" | jq -r '.session_id // ""' 2>/dev/null)" || {
   log_err "unparseable stdin JSON"
   exit 0
-fi
+}
+[ -n "$SESSION_ID" ] || exit 0
 SOURCE="$(printf '%s' "$INPUT" | jq -r '.source // "unknown"' 2>/dev/null)"
-EVENT_NAME="$(printf '%s' "$INPUT" | jq -r '.hook_event_name // "unknown"' 2>/dev/null)"
 
-# Resolve .claude to the MAIN working tree, so a record written from
-# inside a git worktree survives that worktree's removal.
-# --git-common-dir points at the main tree's .git from any worktree; its
-# parent is the main root. Falls back to CWD-relative outside a repo.
-resolve_claude_dir() {
-  local common main_root
-  common="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || {
-    printf '.claude'; return
-  }
-  [ -n "$common" ] || { printf '.claude'; return; }
-  main_root="$(dirname "$common")"
-  printf '%s/.claude' "$main_root"
-}
+# Resolve this script's directory (following symlinks) so the writer is
+# found wherever the plugin is installed.
+src="${BASH_SOURCE[0]}"
+while [ -h "$src" ]; do
+  dir="$(cd -P "$(dirname "$src")" >/dev/null 2>&1 && pwd)"
+  src="$(readlink "$src")"
+  case "$src" in /*) ;; *) src="$dir/$src" ;; esac
+done
+hook_dir="$(cd -P "$(dirname "$src")" >/dev/null 2>&1 && pwd)"
+STATE_BIN="$hook_dir/../bin/embo-session-state"
 
-OUT_DIR="$(resolve_claude_dir)"
-OUT_FILE="$OUT_DIR/session-identity.jsonl"
-mkdir -p "$OUT_DIR" 2>/dev/null || {
-  log_err "cannot create $OUT_DIR in $(pwd)"
-  exit 0
-}
+[ -x "$STATE_BIN" ] || { log_err "writer not found at $STATE_BIN"; exit 0; }
 
-TS="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null)" || TS="unknown"
-
-jq -n -c \
-  --arg ts "$TS" \
-  --arg observer "hook" \
-  --arg event "$EVENT_NAME" \
-  --arg source "$SOURCE" \
-  --arg sid "$SESSION_ID" \
-  '{ts: $ts, observer: $observer, event: $event, source: $source, session_id: $sid}' \
-  >> "$OUT_FILE" 2>/dev/null || {
-  log_err "cannot append to $OUT_FILE"
+bash "$STATE_BIN" baseline "$SESSION_ID" "$SOURCE" >/dev/null 2>&1 || {
+  log_err "baseline write failed for $SESSION_ID"
   exit 0
 }
 

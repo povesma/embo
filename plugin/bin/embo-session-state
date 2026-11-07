@@ -1,0 +1,207 @@
+#!/usr/bin/env bash
+# embo-session-state — shared writer for the per-session state file that
+# the statusline reads and the /embo:start fast path uses.
+#
+# The file is user-global and git-free:
+#   ${XDG_STATE_HOME:-$HOME/.local/state}/embo/session-state/<session_id>.json
+# session_id is globally unique, so the path depends only on $HOME +
+# session_id — no git call here or in the statusline reader. This is why
+# a worktree, a non-repo session, and a fresh-process statusline all work.
+#
+# Every write is a read-modify-write that PRESERVES every key the form
+# does not own (including `ext` and any unrecognised top-level key) and is
+# atomic (write a sibling .tmp, then mv). An unreadable existing file is
+# treated as absent (start fresh), never partially merged.
+#
+# Id safety: an empty id, the literal ${CLAUDE_SESSION_ID}, or an id not
+# matching ^[A-Za-z0-9._-]+$ or containing `..` is rejected (non-zero
+# exit), so a hostile or missing id can never build a path outside
+# session-state/.
+#
+# Subcommands:
+#   path     <id>                       Print the resolved state-file path.
+#   baseline <id> <source>              SessionStart: create phase `new`;
+#                                       on re-fire preserve the phase.
+#                                       Never prunes.
+#   start    <id> <sha> <branch> <root> Set phase `started`, sha/branch/
+#                                       root; then prune.
+#   wrapup   <id>                       Set phase `wrapped_up` (minimal
+#                                       file if none).
+#   resume   <id>                       Flip `wrapped_up`→`started`; else
+#                                       touch updated_at; no file → no-op.
+#
+# Overridable for tests: XDG_STATE_HOME, HOME. jq is required.
+
+set -uo pipefail
+
+SCHEMA_VERSION=1
+PRUNE_MIN_FILES=50
+PRUNE_DAYS="${EMBO_SESSION_STATE_PRUNE_DAYS:-14}"
+
+die() { printf 'embo-session-state: %s\n' "$*" >&2; exit 2; }
+
+command -v jq >/dev/null 2>&1 || die "jq is required but not found."
+
+now_utc() { date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || printf 'unknown'; }
+
+# Resolve the session-state directory from $HOME / XDG_STATE_HOME only.
+state_dir() {
+  local base="${XDG_STATE_HOME:-}"
+  if [ -z "$base" ]; then
+    [ -n "${HOME:-}" ] || die "neither XDG_STATE_HOME nor HOME is set"
+    base="$HOME/.local/state"
+  fi
+  printf '%s/embo/session-state' "$base"
+}
+
+# Validate an id: non-empty, charset ^[A-Za-z0-9._-]+$, no `..`.
+valid_id() {
+  local id="$1"
+  [ -n "$id" ] || return 1
+  case "$id" in *..*) return 1 ;; esac
+  case "$id" in *[!A-Za-z0-9._-]*) return 1 ;; esac
+  return 0
+}
+
+state_path() {
+  local id="$1"
+  valid_id "$id" || die "invalid session id"
+  printf '%s/%s.json' "$(state_dir)" "$id"
+}
+
+# Read the existing file as a JSON object, or empty string if absent or
+# unreadable (treated as absent — never partially merged).
+read_state() {
+  local path="$1"
+  [ -f "$path" ] || return 0
+  jq -e 'type == "object"' "$path" >/dev/null 2>&1 || return 0
+  cat "$path"
+}
+
+# Atomically write JSON (stdin) to a path: sibling .tmp, then mv.
+atomic_write() {
+  local path="$1" dir tmp
+  dir="$(dirname "$path")"
+  mkdir -p "$dir" 2>/dev/null || die "cannot create $dir"
+  tmp="$(mktemp "$dir/.state.XXXXXX")" || die "cannot create temp file"
+  if ! cat > "$tmp"; then
+    rm -f "$tmp"
+    die "write failed"
+  fi
+  mv -f "$tmp" "$path" || { rm -f "$tmp"; die "atomic rename failed"; }
+}
+
+# Merge a jq expression onto the existing state (or a fresh envelope),
+# always touching updated_at, and write atomically.
+# Args: <path> <jq-merge-expr>
+merge_write() {
+  local path="$1" expr="$2" existing ts
+  existing="$(read_state "$path")"
+  ts="$(now_utc)"
+  if [ -z "$existing" ]; then
+    existing='{}'
+  fi
+  printf '%s' "$existing" | jq \
+    --argjson schema "$SCHEMA_VERSION" \
+    --arg ts "$ts" \
+    "
+      ({
+        schema: \$schema,
+        session_id: (.session_id // null),
+        phase: (.phase // \"new\"),
+        source: (.source // null),
+        started_at: (.started_at // null),
+        wrapped_up_at: (.wrapped_up_at // null),
+        head_sha: (.head_sha // null),
+        branch: (.branch // null),
+        repo_root: (.repo_root // null),
+        updated_at: (.updated_at // null),
+        ext: (.ext // {})
+      } + .)
+      | $expr
+      | .schema = \$schema
+      | .updated_at = \$ts
+    " | atomic_write "$path"
+}
+
+# Prune session-state/*.json older than PRUNE_DAYS by mtime. Skips when
+# fewer than PRUNE_MIN_FILES files are present. Only deletes; ignores *.tmp.
+prune() {
+  local dir count
+  dir="$(state_dir)"
+  [ -d "$dir" ] || return 0
+  count="$(find "$dir" -maxdepth 1 -type f -name '*.json' 2>/dev/null | wc -l | tr -d ' ')"
+  [ "$count" -ge "$PRUNE_MIN_FILES" ] 2>/dev/null || return 0
+  find "$dir" -maxdepth 1 -type f -name '*.json' -mtime "+$PRUNE_DAYS" \
+    -delete 2>/dev/null || true
+}
+
+cmd_path() {
+  local id="${1:-}"
+  state_path "$id"
+}
+
+cmd_baseline() {
+  local id="${1:-}" source="${2:-unknown}" path
+  path="$(state_path "$id")"
+  # New file → phase new. Existing file → preserve phase, record source.
+  merge_write "$path" "
+    .session_id = \"$id\"
+    | .source = \"$source\"
+  "
+}
+
+cmd_start() {
+  local id="${1:-}" sha="${2:-}" branch="${3:-}" root="${4:-}" path ts
+  path="$(state_path "$id")"
+  ts="$(now_utc)"
+  # started_at is stamped once (first start); a later start keeps it.
+  merge_write "$path" "
+    .session_id = \"$id\"
+    | .phase = \"started\"
+    | .head_sha = \"$sha\"
+    | .branch = \"$branch\"
+    | .repo_root = \"$root\"
+    | .started_at = (.started_at // \"$ts\")
+  "
+  prune
+}
+
+cmd_wrapup() {
+  local id="${1:-}" path ts
+  path="$(state_path "$id")"
+  ts="$(now_utc)"
+  merge_write "$path" "
+    .session_id = \"$id\"
+    | .phase = \"wrapped_up\"
+    | .wrapped_up_at = \"$ts\"
+  "
+}
+
+cmd_resume() {
+  local id="${1:-}" path
+  path="$(state_path "$id")"
+  # No file → no-op (the baseline hook should have created one).
+  [ -f "$path" ] || return 0
+  [ -n "$(read_state "$path")" ] || return 0
+  if [ "$(jq -r '.phase // ""' "$path" 2>/dev/null)" = "wrapped_up" ]; then
+    merge_write "$path" ".phase = \"started\""
+  else
+    merge_write "$path" "."
+  fi
+}
+
+main() {
+  local cmd="${1:-}"
+  [ "$#" -gt 0 ] && shift
+  case "$cmd" in
+    path)     cmd_path "$@" ;;
+    baseline) cmd_baseline "$@" ;;
+    start)    cmd_start "$@" ;;
+    wrapup)   cmd_wrapup "$@" ;;
+    resume)   cmd_resume "$@" ;;
+    *) die "usage: embo-session-state {path|baseline|start|wrapup|resume} <session_id> [...]" ;;
+  esac
+}
+
+main "$@"

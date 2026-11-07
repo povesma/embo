@@ -236,14 +236,44 @@ PreToolUse hook approach was attempted and abandoned (it broke Shift+Tab
 
 ## Statusline
 
-`statusline.sh` shows live session info:
+`statusline.sh` shows live session info across **two rows** — the long
+items (path, branch) get row 1 so they never push the metrics off-screen:
 
 ```
-~/AI/my-project | feature/my-branch | Sonnet 4.6 | 30K/200K $0.072 | ctx 6% | mem:2m | 09:32:39
+~/AI/my-project | feature/my-branch
+embo:▶ | Sonnet 4.6 | 30K/200K $0.072 | ctx 6% | mem:2m | 09:32:39
 ```
 
-path | git branch | model | used/total context | cost | context % |
-claude-mem freshness | time.
+### Output format contract (for external consumers)
+
+The output is colored human-readable text (ANSI escape codes), not a data
+feed. A program consuming it should strip ANSI codes, then split each row
+on the literal ` | ` separator. The layout is stable:
+
+- **Row 1 — identity:** `<path> | <branch>`
+  - `<path>`: working directory, home-abbreviated (`~/…`).
+  - `<branch>`: current git branch. **Omitted entirely (no empty field)
+    when not in a git repo** — row 1 is then just the path.
+- **Row 2 — metrics:** `embo:<stage> | <model> | <used>/<total> $<cost> | ctx <pct>% | mem:<freshness> | <HH:MM:SS>`
+  - `embo:<stage>` leads the row so `<model>` is flanked by a pipe on
+    **both** sides (`| model |`) — a consumer matching model with a
+    both-sides-pipe regex keeps working.
+  - `embo:<stage>`: session stage — `?` not started (no state file or
+    phase `new`), `▶` started, `✓` wrapped up. Degrades to `?` on any
+    read error or an unsafe session id. Glyphs may fall back to text in
+    a terminal that cannot render them.
+  - `<model>`: model display name, pipe-flanked.
+  - `<used>/<total>`: context tokens used / window size, short form
+    (`30K`, `200K`); `?` when unknown.
+  - `mem:<freshness>`: see below.
+
+Stability contract: row order, the ` | ` separator, and each segment's
+position are stable. New segments are appended within their row, never
+inserted mid-row, so a positional parser keeps working. An opt-in
+**machine-readable (JSON) output mode** is possible if a consumer of
+embo's plugin statusline appears, but none is known today (the one
+checked parses Claude Code's own TUI footer, a different line), so it is
+deferred rather than built.
 
 The `mem:` segment = minutes since the most recent claude-mem
 observation, traffic-light colored: green ≤10 min, yellow 11–30,

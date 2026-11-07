@@ -111,6 +111,26 @@ responsive:
 - Required MCPs that fail → ❌ with fix suggestion
 - Optional MCPs that fail → ⚠️ warning only
 
+### Check 6 — Session-state file
+
+The SessionStart hook writes a per-session state file (phase `new`);
+`/embo:start` advances it to `started`. This check reads the file for the
+live session and flags its absence — a live session with no state file
+means the SessionStart writer never fired.
+
+```bash
+cat "$(embo-session-state path ${CLAUDE_SESSION_ID})"
+```
+
+The literal `${CLAUDE_SESSION_ID}` token is substituted by Claude Code
+before the Bash call.
+
+| Outcome | `state_result` |
+|---------|---------------|
+| File present, valid JSON with a `phase` | pass · notes: `"phase: {phase}"` |
+| File missing (`No such file`) | fail · notes: `"No session-state file for this session"` · fix: `"Check the SessionStart hook (hooks/session-identity.sh) is registered in hooks.json"` |
+| Present but unparseable | fail · notes: `"session-state file is corrupt"` · fix: `"It is rebuilt on the next /embo:start"` |
+
 ### Render Summary
 
 ```
@@ -121,6 +141,7 @@ responsive:
 | RLM state         | ✅/❌  | {rlm_result.notes}   |
 | claude-mem plugin | ✅/❌  | {mem_result.notes}   |
 | PostToolUse hook  | ✅/❌  | {hook_result.notes}  |
+| Session-state     | ✅/❌  | {state_result.notes} |
 ```
 
 - **0 failures**: print `All systems operational. Ready for /embo:start`
