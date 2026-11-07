@@ -1,8 +1,10 @@
 # 061: Multi-line status line for more dynamic info — Seed
 
-**Status**: Partially done — the minimal 2-row *layout* shipped
-2026-11-07; the richer focus-anchor design below is still not started
-(run /embo:prd to begin that part).
+**Status**: Partially done — the minimal 2-row *layout* and the ATC
+`.cc.json` consumer writer shipped 2026-11-07 (commit `1b513ae`, ATC
+live-verified); the richer focus-anchor design below is still not started
+(run /embo:prd to begin that part). One open cross-session promise: ping
+ATC when this reaches the installed version (see Remaining scope).
 **Origin**: raised 2026-09-03 — one status line row is not enough to fit
 the dynamic information wanted.
 
@@ -23,10 +25,22 @@ by `plugin/statusline.test.sh`. The format contract is documented in
 
 ### Remaining scope (still task 061)
 
-- **Raw Claude Code stdin JSON, saved to a per-session file** (agreed with
-  the ATC consumer, 2026-11-07 — supersedes the earlier "env-gated stdout
-  JSON mode" idea, which cannot reach ATC: ATC sees only the screen via
-  herdr, not the script's stdout, so a file is required).
+- **Raw Claude Code stdin JSON, saved to a per-session file** — BUILT,
+  committed in `1b513ae`, verified live by ATC 2026-11-07 (agreed with
+  the ATC consumer — supersedes the earlier "env-gated stdout JSON mode"
+  idea, which cannot reach ATC: ATC sees only the screen via herdr, not
+  the script's stdout, so a file is required).
+  - **Status:** implemented as `save_cc_stdin()` in `plugin/statusline.sh`,
+    covered by `plugin/statusline.test.sh` (6 cc cases). ATC measured the
+    committed branch build: 2-row line parses (model/ctx/limit/cost read),
+    `.cc.json` present at the agreed path, 0600, named by herdr's session
+    id — confirming herdr's id == Claude Code's `session_id`.
+  - **Open follow-up (cross-session promise):** ATC asked to be pinged
+    when this reaches the INSTALLED version (merged to the shared branch +
+    plugin reloaded in `~/.claude`), not just on the feature branch. Until
+    then it only writes when Claude Code runs this branch's `statusline.sh`
+    directly. The next session must send that ping to the ATC session after
+    install/merge.
   - **Confirmed consumer:** ATC parses embo's statusline. (An earlier
     message wrongly said it parsed a separate "Claude Code footer"; the
     owner confirmed the line ATC reads IS embo's statusline, set in the
