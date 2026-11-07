@@ -13,13 +13,22 @@ Check whether `/embo:start` has already run in this session by reading
 the per-session state file's phase:
 
 ```bash
-embo-session-state path ${CLAUDE_SESSION_ID}
+embo-session-state phase ${CLAUDE_SESSION_ID}
 ```
 
-Read that file: if its `phase` is `started`, a prior `/embo:start`
-already ran this session. (`phase: new` — the SessionStart hook's
-baseline — is NOT a repeat start; run the full flow. No file, or an
-unreadable one, also means run the full flow.) The literal
+This prints only the phase value — never read the state file itself by
+path. The file lives under `~/.local/state/embo/` (deliberately outside
+any repo working directory, so a worktree, a non-repo session, and the
+statusline all share one store), so handing its path to a file-reading
+tool trips a permission prompt under
+`blockReadsOutsideWorkingDirectories` when that setting is on. The
+`phase` subcommand avoids this by doing the read internally and
+printing only the value.
+
+If the printed phase is `started`, a prior `/embo:start` already ran
+this session. (`phase: new` — the SessionStart hook's baseline — is NOT
+a repeat start; run the full flow. An empty or unreadable file also
+prints `new`, so that too means run the full flow.) The literal
 `${CLAUDE_SESSION_ID}` token is substituted by Claude Code before the
 Bash call.
 

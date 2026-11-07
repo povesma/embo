@@ -20,6 +20,15 @@
 #
 # Subcommands:
 #   path     <id>                       Print the resolved state-file path.
+#   phase    <id>                       Print just the phase value to
+#                                       stdout ("new" if absent/unreadable).
+#                                       Lets callers avoid reading the
+#                                       state file directly — the file
+#                                       lives outside any repo working
+#                                       directory, so a file-reading tool
+#                                       given its path trips a permission
+#                                       prompt under
+#                                       blockReadsOutsideWorkingDirectories.
 #   baseline <id> <source>              SessionStart: create phase `new`;
 #                                       on re-fire preserve the phase.
 #                                       Never prunes.
@@ -141,6 +150,12 @@ cmd_path() {
   state_path "$id"
 }
 
+cmd_phase() {
+  local id="${1:-}" path
+  path="$(state_path "$id")"
+  jq -r '.phase // "new"' "$path" 2>/dev/null || printf 'new'
+}
+
 cmd_baseline() {
   local id="${1:-}" source="${2:-unknown}" path
   path="$(state_path "$id")"
@@ -196,11 +211,12 @@ main() {
   [ "$#" -gt 0 ] && shift
   case "$cmd" in
     path)     cmd_path "$@" ;;
+    phase)    cmd_phase "$@" ;;
     baseline) cmd_baseline "$@" ;;
     start)    cmd_start "$@" ;;
     wrapup)   cmd_wrapup "$@" ;;
     resume)   cmd_resume "$@" ;;
-    *) die "usage: embo-session-state {path|baseline|start|wrapup|resume} <session_id> [...]" ;;
+    *) die "usage: embo-session-state {path|phase|baseline|start|wrapup|resume} <session_id> [...]" ;;
   esac
 }
 
