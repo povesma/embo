@@ -418,27 +418,41 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
   set -uo pipefail
   trap 'exit 0' ERR
 
+  _t0="$(date +%s%N)"
   INPUT="$(cat)"
+  _t1="$(date +%s%N)"
   TOOL="$(printf '%s' "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null)" || exit 0
   [ "$TOOL" = "Bash" ] || exit 0
   CMD="$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)" || exit 0
   [ -n "$CMD" ] || exit 0
   PROJ="$(printf '%s' "$INPUT" | jq -r '.cwd // empty' 2>/dev/null)" || exit 0
   [ -n "$PROJ" ] || PROJ="$PWD"
+  _t2="$(date +%s%N)"
 
   # Re-entrancy guard FIRST: never touch an already-wrapped command.
   case "$CMD" in
-    *embo-capture.sh\ *) exit 0 ;;
+    *embo-capture.sh\ *)
+      _t3="$_t2"; _t4="$_t2"; _t5="$_t2"; DECISION="reentrant"
+      printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+        "$_t0" "$_t1" "$_t2" "$_t3" "$_t4" "$_t5" "$DECISION" "$CMD" \
+        | awk -F'\t' '{printf "[approve-compound] read=%dms parse=%dms strip=%dms decide=%dms final=%dms total=%dms decision=%s cmd=%.80s\n",($2-$1)/1e6,($3-$2)/1e6,($4-$3)/1e6,($5-$4)/1e6,($6-$5)/1e6,($6-$1)/1e6,$7,$8}' \
+        >> "$HOME/.claude/approve-compound-timing.log" 2>/dev/null || true
+      exit 0 ;;
   esac
 
   STRIPPED="$(strip_redundant_tail "$CMD")"
+  _t3="$(date +%s%N)"
+
   DECISION="$(decide "$STRIPPED" "$PROJ")"
+  _t4="$(date +%s%N)"
+
   case "$DECISION" in
     allow)
       # Order: tail already stripped; now pick the execution shape for
       # the survivor: filter decomposition, whole-command wrap, or
       # unchanged (final_command applies all eligibility rules).
       FINAL="$(final_command "$STRIPPED")"
+      _t5="$(date +%s%N)"
       if [ "$FINAL" != "$CMD" ]; then
         jq -n --arg c "$FINAL" '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"allow",updatedInput:{command:$c}}}'
       else
@@ -446,11 +460,26 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
       fi
       ;;
     deny)
+      _t5="$(date +%s%N)"
       jq -n '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:"a subcommand matches a deny rule"}}'
       ;;
     *)
+      _t5="$(date +%s%N)"
       : # fall through: no output, normal prompt
       ;;
   esac
+
+  # Write timing to a single shared log (one awk call, no extra forks).
+  # Phases: read=stdin wait, parse=jq parse+guard, strip=strip_redundant_tail,
+  #         decide=load_rules+matching, final=final_command.
+  # Shared across all repos/sessions. Remove the file to reset.
+  _log="$HOME/.claude/approve-compound-timing.log"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    "$_t0" "$_t1" "$_t2" "$_t3" "$_t4" "$_t5" "$DECISION" "$PROJ" "$CMD" \
+    | awk -F'\t' '{
+        printf "[approve-compound] read=%dms parse=%dms strip=%dms decide=%dms final=%dms total=%dms decision=%s proj=%s cmd=%.80s\n",
+          ($2-$1)/1e6, ($3-$2)/1e6, ($4-$3)/1e6, ($5-$4)/1e6, ($6-$5)/1e6, ($6-$1)/1e6, $7, $8, $9
+      }' >> "$_log" 2>/dev/null || true
+
   exit 0
 fi
