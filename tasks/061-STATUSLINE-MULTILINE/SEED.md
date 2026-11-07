@@ -71,6 +71,13 @@ by `plugin/statusline.test.sh`. The format contract is documented in
     do not change either without telling ATC first. (4) 14-day prune is
     fine — a pruned file just makes ATC fall back to screen parsing until
     the next write.
+  - **ATC confirmed consuming the file 2026-11-07 (post-push):** ATC now
+    reads the per-session `.cc.json` through its own code on a live probe
+    session — at a gate every value came from the file; on the idle screen
+    the file and the rendered line agreed on model, context, window size
+    and cost. ATC's consumer code is NOT yet committed on their side and
+    now depends on the path and name, so the contract in (3) is firm:
+    notify ATC before changing either.
   - **Stale-doc note:** the earlier REFERENCE claim that embo also emits a
     trailing "`<n> tokens`" field was wrong — that field is Claude Code's
     own footer, never embo's.
