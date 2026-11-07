@@ -1,5 +1,5 @@
 {
-  "description": "embo workflow hooks: context guard + behavioral reminders on prompt, compound-Bash auto-approve + output capture on tool use, statusline refresh on session start, correction marker capture on tool-use and end-of-turn, filtered judgment-rule injection on subagent start",
+  "description": "embo workflow hooks: context guard + behavioral reminders on prompt, compound-Bash auto-approve + output capture and protected-branch/task guard on tool use, statusline refresh on session start, correction marker capture on tool-use and end-of-turn, filtered judgment-rule injection on subagent start",
   "hooks": {
     "SessionStart": [
       {
@@ -46,6 +46,15 @@
           {
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/approve-compound.sh\""
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/main-branch-guard.sh\""
           }
         ]
       }

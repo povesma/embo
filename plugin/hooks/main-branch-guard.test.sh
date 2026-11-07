@@ -817,8 +817,25 @@ test_fr5_protected_branch_takes_precedence() {
     "while branch main is checked out" "$OUT"
 }
 
+# --- 7.2 registration check -----------------------------------------
+# The guard must be registered as a PreToolUse hook in hooks.json with a
+# matcher covering Edit|Write|NotebookEdit|Bash, WITHOUT disturbing the
+# existing approve-compound.sh Bash entry.
+test_registered_in_hooks_json() {
+  local hj="$HERE/hooks.json"
+  assert_eq "7.2: hooks.json exists and is valid JSON" "0" \
+    "$(jq -e . "$hj" >/dev/null 2>&1; echo $?)"
+  assert_eq "7.2: a PreToolUse entry calls main-branch-guard.sh" "true" \
+    "$(jq -r '[.hooks.PreToolUse[].hooks[].command | select(test("main-branch-guard.sh"))] | length > 0' "$hj")"
+  assert_eq "7.2: the guard matcher covers Edit, Write, NotebookEdit and Bash" "true" \
+    "$(jq -r '[.hooks.PreToolUse[] | select(.hooks[].command | test("main-branch-guard.sh")) | .matcher] | any(. == "Edit|Write|NotebookEdit|Bash")' "$hj")"
+  assert_eq "7.2: the approve-compound Bash entry is still present" "true" \
+    "$(jq -r '[.hooks.PreToolUse[] | select(.hooks[].command | test("approve-compound.sh")) | .matcher] | any(. == "Bash")' "$hj")"
+}
+
 # --- runner ---------------------------------------------------------
 test_scaffolding_helpers
+test_registered_in_hooks_json
 test_edit_tracked_main_block_denies
 test_edit_tracked_main_warn_allows_with_warning
 test_edit_tracked_main_off_silent

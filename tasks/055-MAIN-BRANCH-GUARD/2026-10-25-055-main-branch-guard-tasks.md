@@ -285,19 +285,33 @@
 
 - [ ] 7.0 **User Story:** As a maintainer, I want the guard registered,
   documented and verified live so that it ships like every other hook
-  [0/0]
-  - [ ] 7.1 Add a second PreToolUse entry to `plugin/hooks/hooks.json` with
+  [5/6]
+  - [X] 7.1 Add a second PreToolUse entry to `plugin/hooks/hooks.json` with
     matcher `Edit|Write|NotebookEdit|Bash` calling the guard, leaving the
     `approve-compound.sh` entry untouched; update the manifest description
     [verify: auto-test]
-  - [ ] 7.2 Add a test (or test-file assertion) that checks the registered
+      → second PreToolUse entry added (matcher Edit|Write|NotebookEdit|Bash
+        → main-branch-guard.sh); the approve-compound Bash entry is left as
+        its own entry; description updated. jq confirms two PreToolUse
+        entries [live] (2026-11-07)
+  - [X] 7.2 Add a test (or test-file assertion) that checks the registered
     entry with `jq` and that the guard test file exits 0
     [verify: auto-test]
-  - [ ] 7.3 Add the terse Safety Rules note to `CLAUDE.md` pointing at the
+      → test_registered_in_hooks_json added to the guard suite: jq-checks
+        the guard entry, its matcher, and that the approve-compound Bash
+        entry survives; suite exits 0 at 111/111 [live] (2026-11-07)
+  - [X] 7.3 Add the terse Safety Rules note to `CLAUDE.md` pointing at the
     hook as the enforcement [verify: code-only]
-  - [ ] 7.4 Add the guard to the README hook list and state the best-effort
+      → Safety Rules protected-branch note now points at
+        main-branch-guard.sh as the fuller enforcement, with the
+        best-effort caveat (2026-11-07)
+  - [X] 7.4 Add the guard to the README hook list and state the best-effort
     limit and the remote-branch-protection complement, with no task
     references [verify: code-only]
+      → added as a row in the docs/REFERENCE.md hook table (the catalog the
+        README points to) with the best-effort + remote-protection note;
+        manual-install block and prompt-free allowlist updated for parity;
+        no task references [live] (2026-11-07)
   - [X] 7.5 Confirm the provisional behaviours against current hooks docs
     (`additionalContext` for warn, deny precedence with two matching
     PreToolUse hooks) and record the outcome in the design notes — DONE
@@ -305,15 +319,22 @@
     recorded in the tech-design "Past Decisions" and final BLOCKED note).
     Note: this gates the 3.5 emission contract, so it belongs FIRST in the
     work order, not last [verify: manual-run-claude]
-  - [ ] 7.6 Add an integration fixture that runs BOTH registered PreToolUse
+  - [X] 7.6 Add an integration fixture that runs BOTH registered PreToolUse
     hooks on `git push origin main` (approve-compound + the guard) and
     confirms a clean deny, and on a compound approve-compound would rewrite
     (`updatedInput`) that the guard still denies against the ORIGINAL command
     [verify: auto-test]
+      → `main-branch-guard.integration.test.sh`: drives both hooks on one
+        payload. push origin main → guard denies, approve does not allow;
+        `echo x > tracked.txt` (echo allowed) → approve ALLOWS while the
+        guard denies the original (the binding deny); read-only compound →
+        no deny. 6/6 pass [live] (2026-11-07)
   - [ ] 7.7 After `/reload-plugins`, in a live session on `main`: a real
     Edit of a tracked file is refused with the guard message and
     `approve-compound` still approves a compound Bash command
-    [verify: manual-run-user]
+    [verify: manual-run-user] — NOT done: requires a live user session
+    (`/reload-plugins` + a real Edit on main); cannot be run offline. Hand
+    off to the user.
 
 ## Decisions-taken
 
