@@ -283,9 +283,9 @@
         the example task number dropped so no task literal remains in the
         command body (code-only) (2026-11-07)
 
-- [ ] 7.0 **User Story:** As a maintainer, I want the guard registered,
+- [X] 7.0 **User Story:** As a maintainer, I want the guard registered,
   documented and verified live so that it ships like every other hook
-  [5/6]
+  [6/6]
   - [X] 7.1 Add a second PreToolUse entry to `plugin/hooks/hooks.json` with
     matcher `Edit|Write|NotebookEdit|Bash` calling the guard, leaving the
     `approve-compound.sh` entry untouched; update the manifest description
@@ -329,12 +329,18 @@
         `echo x > tracked.txt` (echo allowed) → approve ALLOWS while the
         guard denies the original (the binding deny); read-only compound →
         no deny. 6/6 pass [live] (2026-11-07)
-  - [ ] 7.7 After `/reload-plugins`, in a live session on `main`: a real
+  - [X] 7.7 After `/reload-plugins`, in a live session on `main`: a real
     Edit of a tracked file is refused with the guard message and
     `approve-compound` still approves a compound Bash command
-    [verify: manual-run-user] — NOT done: requires a live user session
-    (`/reload-plugins` + a real Edit on main); cannot be run offline. Hand
-    off to the user.
+    [verify: manual-run-user]
+      → verified live: marketplace repointed to this checkout, plugin
+        reinstalled + reloaded; in a session on `main`, a real Edit tool
+        call on a tracked file was refused with
+        `PreToolUse:Edit hook error: main-branch-guard: refusing to edit a
+        tracked file while branch main is checked out…`, and the read-only
+        compound `git status && git log --oneline -3` still ran (guard
+        silent). This also confirms the live `session_id` path end to end,
+        de-provisionalizing 6.2 [live] (2026-11-08)
 
 ## Decisions-taken
 
