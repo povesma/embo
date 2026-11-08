@@ -44,6 +44,12 @@
 - Shipped command/agent bodies and README must not carry task numbers or
   `tasks/` paths; hook scripts and tests are exempt.
 - Use the bare `embo-profile` wrapper, never an inlined plugin-root path.
+- The bare `embo-profile` on PATH is the INSTALLED plugin's copy and reads
+  the installed profiles, so working-tree profile edits do not show through
+  it until `/reload-plugins` (check the plugin cache if they still do not).
+  To read the working tree during development, run
+  `EMBO_PROFILE_DIRS=plugin/profiles plugin/bin/embo-profile get <field>`.
+  The live check 7.7 needs the reload first.
 - Provisional items to confirm during implementation (tech design): the
   PreToolUse `additionalContext` for warn, deny-vs-allow precedence when two
   PreToolUse hooks match `Bash`, and the `file_path`/`notebook_path` key
@@ -56,82 +62,102 @@
   config and docs edits.
 
 ## Tasks
-- [ ] 1.0 **User Story:** As a maintainer, I want the profile to carry the
+- [X] 1.0 **User Story:** As a maintainer, I want the profile to carry the
   guard policy with safe defaults so that a branching policy change is a
-  profile edit, not a code change [0/0]
-  - [ ] 1.1 Add `protected_branches: [main, master]`,
+  profile edit, not a code change [4/4]
+  - [X] 1.1 Add `protected_branches: [main, master]`,
     `protected_branch_mode: block` and `branch_task_mode: warn` under
     `rules.workflow` in `plugin/profiles/default.yaml`, with explanatory
     comments in the file's existing style [verify: code-only]
-  - [ ] 1.2 Add the same three fields explicitly to the `quality`, `fast`,
+  - [X] 1.2 Add the same three fields explicitly to the `quality`, `fast`,
     `minimal` and `research` profiles [verify: code-only]
-  - [ ] 1.3 Run `embo-profile get rules.workflow.protected_branches` and
+  - [X] 1.3 Run `embo-profile get rules.workflow.protected_branches` and
     `embo-profile get rules.workflow.protected_branch_mode`; confirm the
     list prints as `[main, master]` and the mode as `block`
     [verify: manual-run-claude]
-  - [ ] 1.4 Document the three fields and the best-effort limit in the
+      → `[main, master]` and `block` confirmed via working-tree binary [live] (2026-10-27)
+  - [X] 1.4 Document the three fields and the best-effort limit in the
     profile field explanations (locate the profile command's explanation
     section first) [verify: code-only]
 
-- [ ] 2.0 **User Story:** As the guard, I want to recognise git history
+- [X] 2.0 **User Story:** As the guard, I want to recognise git history
   mutations, push targets and shell writes in a command string so that Bash
-  denials are decided by a unit-tested parser [0/0]
-  - [ ] 2.1 Write `plugin/lib/git-command-lib.test.sh` for `gcl_split`:
+  denials are decided by a unit-tested parser [11/11]
+  - [X] 2.1 Write `plugin/lib/git-command-lib.test.sh` for `gcl_split`:
     splits on `&&`, `||`, `;`, `|`, `&`, newline, mirroring the separator
     set in `plugin/hooks/approve-compound.sh:12-28` [verify: auto-test]
-  - [ ] 2.2 Implement `gcl_split` in `plugin/lib/git-command-lib.sh` (pure
+  - [X] 2.2 Implement `gcl_split` in `plugin/lib/git-command-lib.sh` (pure
     function, no output side effects or exits, same convention as
     `branch-task-lib.sh`) [verify: auto-test]
-  - [ ] 2.3 Write tests for `gcl_is_git_mutation`: commit, merge, rebase,
+      → split cases pass; `2>&1` and `&>` kept intact [live] (2026-10-27)
+  - [X] 2.3 Write tests for `gcl_is_git_mutation`: commit, merge, rebase,
     cherry-pick, am, and `git reset --hard`/`--soft`/`--mixed` to a ref are
     mutations; status, log, diff, branch listing, bare `switch`/`checkout`/
     `fetch`/`pull`/`stash`/`add`, and bare `git reset` (default unstage) are
     NOT; decide per flag, not per verb [verify: auto-test]
-  - [ ] 2.4 Implement `gcl_is_git_mutation` (per-subcommand AND per-flag)
+  - [X] 2.4 Implement `gcl_is_git_mutation` (per-subcommand AND per-flag)
     [verify: auto-test]
-  - [ ] 2.4b Write tests for branch-change tracking across a compound:
-    `git switch -c <b> && git commit`, `git checkout -b <b> && …`,
-    `git worktree add …` leave the protected branch BEFORE the mutation, so
-    the mutation is judged against the new branch and is NOT denied; implement
-    a `gcl_simulated_branch <subcommands> <current>` helper [verify: auto-test]
-  - [ ] 2.5 Write tests for `gcl_push_targets`: implicit current branch,
+      → mutation matrix passes, incl. `git -C`, env prefix, `--abort`
+        treated as recovery [live] (2026-10-27)
+  - [X] 2.4b Write tests for branch-change tracking across a compound and
+    implement `gcl_walk <command> <current>`, which reports the branch in
+    effect at EACH subcommand (so `git commit && git switch -c b` is still
+    judged on the protected branch). `switch <b>`/`-c <b>`, `checkout -b`/
+    `-B`/`--orphan` change it; plain `checkout <x>` (branch or path) does
+    not; `git worktree add` changes nothing until a later `cd` into that
+    worktree path [verify: auto-test]
+      → walk cases pass; worktree add without `cd` stays on main (the
+        shell does not move) [live] (2026-10-27)
+  - [X] 2.5 Write tests for `gcl_push_targets`: implicit current branch,
     `HEAD`, `origin HEAD:main`, explicit `src:dst`, `--all`, `--mirror`,
     `--delete`, and `git push origin feature` while on `main` yields only
     `feature` [verify: auto-test]
-  - [ ] 2.6 Implement `gcl_push_targets` [verify: auto-test]
-  - [ ] 2.7 Write tests for `gcl_shell_write_paths`: `>` and `>>` targets,
+  - [X] 2.6 Implement `gcl_push_targets` [verify: auto-test]
+      → push-target cases pass, incl. `+src:main` [live] (2026-10-27)
+  - [X] 2.7 Write tests for `gcl_shell_write_paths`: `>` and `>>` targets,
     `tee`, `sed -i`; read-only commands yield none [verify: auto-test]
-  - [ ] 2.8 Implement `gcl_shell_write_paths` [verify: auto-test]
-  - [ ] 2.9 Write tests for unparseable constructs (`$(`, backticks, `<<`,
+  - [X] 2.8 Implement `gcl_shell_write_paths` [verify: auto-test]
+      → write-path cases pass, incl. BSD `sed -i ''`, fd dups and quoted
+        `>` ignored [live] (2026-10-27)
+  - [X] 2.9 Write tests for unparseable constructs (`$(`, backticks, `<<`,
     `eval`, `bash -c`, `sh -c`): flagged as a candidate only when a literal
     `git commit|push|merge` or write token is present, otherwise not
     [verify: auto-test]
-  - [ ] 2.10 Implement the unparseable-construct handling
+  - [X] 2.10 Implement the unparseable-construct handling
     [verify: auto-test]
+      → 89 passed, 0 failed under Bash 5 and macOS Bash 3.2 [live]
+        (2026-10-27)
 
-- [ ] 3.0 **User Story:** As a developer, I want edits to tracked files
+- [X] 3.0 **User Story:** As a developer, I want edits to tracked files
   refused while a protected branch is checked out so that the agent must
-  branch first [0/0]
-  - [ ] 3.1 Create `plugin/hooks/main-branch-guard.test.sh` scaffolding
+  branch first [6/6]
+  - [X] 3.1 Create `plugin/hooks/main-branch-guard.test.sh` scaffolding
     (throwaway repo helper, payload builder, profile fixture, assert
     helpers) following `plugin/hooks/branch-task-check.test.sh`
     [verify: auto-test]
-  - [ ] 3.2 Write guard tests for Edit/Write/NotebookEdit: tracked file on
+      → 9 passed, 0 failed; helpers verified under Bash 5 and macOS Bash
+        3.2 [live] (2026-11-07)
+  - [X] 3.2 Write guard tests for Edit/Write/NotebookEdit: tracked file on
     `main` in `block` denies with a message naming the branch and the
     `git switch -c` fix; the same on `warn` allows with a visible warning;
     `off` allows silently; untracked, ignored and out-of-repo paths allow;
     a new untracked file allows; unprotected branch allows
     [verify: auto-test]
-  - [ ] 3.3 Implement `plugin/hooks/main-branch-guard.sh` core: parse
+      → 30 passed, 0 failed under Bash 5 and Bash 3.2 [live] (2026-11-07)
+  - [X] 3.3 Implement `plugin/hooks/main-branch-guard.sh` core: parse
     `tool_name`, `tool_input`, `cwd` with `jq`; early exit for non-candidate
     calls before any git or profile call; branch lookup via
     `git -C <cwd> symbolic-ref --short -q HEAD`; tracked-path test via
     `git ls-files --error-unmatch -- <path>` [verify: auto-test]
-  - [ ] 3.4 Implement policy loading: three `embo-profile get` calls parsed
+      → candidate/branch/tracked path cases pass; Bash branch stubbed to
+        allow until story 4.0 [live] (2026-11-07)
+  - [X] 3.4 Implement policy loading: three `embo-profile get` calls parsed
     from flow and block YAML list shapes, defaults `main`/`master` and
     `block`/`warn`, unknown mode falls back to the safe default with a
     stderr notice [verify: auto-test]
-  - [ ] 3.5 Implement the output contract: allow is silent exit 0 (no
+      → block/warn/off read from the EMBO_PROFILE_ACTIVE fixture; unknown
+        mode falls back to block with a notice [live] (2026-11-07)
+  - [X] 3.5 Implement the output contract: allow is silent exit 0 (no
     explicit "allow"); deny is exit 0 with `hookSpecificOutput` carrying
     `hookEventName: "PreToolUse"`, `permissionDecision: "deny"` and the
     `permissionDecisionReason` (branch, why, fix); warn is `hookEventName` +
@@ -139,55 +165,80 @@
     line; exit 2 + stderr is the fallback ONLY for a deliberate deny, never an
     internal error. Assert `hookEventName` is present in deny and warn output
     [verify: auto-test]
-  - [ ] 3.6 Pin the payload key names with one captured real-payload
+      → deny carries permissionDecision:deny; warn carries additionalContext
+        and no permissionDecision key [live] (2026-11-07)
+  - [X] 3.6 Pin the payload key names with one captured real-payload
     fixture in the test file and confirm `file_path` / `notebook_path`
     [verify: auto-test]
+      → real Edit/NotebookEdit payloads expose tool_input.file_path /
+        notebook_path [live] (2026-11-07)
 
-- [ ] 4.0 **User Story:** As a developer, I want commits and pushes refused
+- [X] 4.0 **User Story:** As a developer, I want commits and pushes refused
   when they target a protected branch so that nothing is committed to or
-  published from it [0/0]
-  - [ ] 4.1 Write guard tests for Bash on a protected branch in `block`:
+  published from it [4/4]
+  - [X] 4.1 Write guard tests for Bash on a protected branch in `block`:
     `git commit`, merge, rebase, cherry-pick and redirects or `sed -i` onto
     tracked paths deny; compound forms such as `git add . && git commit`
     deny; BUT `git switch -c feat/x && git commit` and
     `git checkout -b feat/x && git commit` ALLOW (branch-create precedes the
     mutation — a false denial here blocks the deny message's own fix);
     read-only commands allow [verify: auto-test]
-  - [ ] 4.2 Write guard tests for push: implicit push on `main`, `HEAD`,
+      → commit/merge/compound/redirect deny; switch -c/checkout -b then
+        commit, read-only, and commit on a feature branch allow [live]
+        (2026-11-07)
+  - [X] 4.2 Write guard tests for push: implicit push on `main`, `HEAD`,
     `origin HEAD:main` from a feature branch, `--all`, `--mirror`,
     `--delete main`, `--force`-to-main and `+src:main` deny;
     `git push origin feature` while on `main` allows; `warn` and `off`
     modes behave per the mode [verify: auto-test]
-  - [ ] 4.3 Implement the Bash branch of the guard using
+      → implicit/HEAD:main/--all/--delete main/+src:main deny; push to a
+        feature ref allows; warn and off behave per mode [live] (2026-11-07)
+  - [X] 4.3 Implement the Bash branch of the guard using
     `git-command-lib.sh`; the push-target rule runs regardless of whether
     the checked-out branch is protected [verify: auto-test]
-  - [ ] 4.4 Write tests that denial text states branch, reason and fix, and
+      → Bash branch walks per-subcommand branch, denies mutations/tracked
+        writes on a protected branch, and denies any protected push target
+        [live] (2026-11-07)
+  - [X] 4.4 Write tests that denial text states branch, reason and fix, and
     contains no internal task references [verify: auto-test]
+      → denial names the branch and the git switch -c fix; no tasks/ path
+        or task number in output [live] (2026-11-07)
 
-- [ ] 5.0 **User Story:** As a developer, I want the guard to fail visibly
+- [X] 5.0 **User Story:** As a developer, I want the guard to fail visibly
   and never silently switch itself off so that a broken guard does not
-  repeat the original incident nor wedge the session [0/0]
-  - [ ] 5.1 Write tests for the fail policy: no repo and detached HEAD allow
+  repeat the original incident nor wedge the session [3/3]
+  - [X] 5.1 Write tests for the fail policy: no repo and detached HEAD allow
     silently; non-JSON payload or missing `jq` allows with a stderr notice;
     unreadable profile (missing `yq`, no profile, yq error) applies the
     built-in defaults with a stderr notice; absent field uses its default
     [verify: auto-test]
-  - [ ] 5.2 Implement the fail policy, including a trap so an unexpected
+      → no-repo/detached silent; non-JSON notice; missing profile and
+        absent/unknown mode apply the block default [live] (2026-11-07)
+  - [X] 5.2 Implement the fail policy, including a trap so an unexpected
     internal failure (unbound variable, lib not sourced) allows with a
     stderr notice [verify: auto-test]
-  - [ ] 5.3 Add a timing smoke check to the suite for a non-matching tool
+      → EXIT trap turns any non-zero exit into an allow+notice; lib-not-
+        sourced path allows with a notice, never denies [live] (2026-11-07)
+  - [X] 5.3 Add a timing smoke check to the suite for a non-matching tool
     call (no git or profile call) and a candidate call [verify: auto-test]
+      → non-candidate early-allows silently; candidate completes exit 0
+        [live] (2026-11-07)
 
-- [ ] 6.0 **User Story:** As a developer, I want a branch/task mismatch
+- [X] 6.0 **User Story:** As a developer, I want a branch/task mismatch
   reported before the first edit of an implementation run so that work does
-  not land on a finished task's branch [0/0]
-  - [ ] 6.0a Have `/embo:impl` record the active task number in a small
+  not land on a finished task's branch [4/4]
+  - [X] 6.0a Have `/embo:impl` record the active task number in a small
     project-git-ignored `tmp/` state file (keyed by `session_id`), written via
     an `embo-profile`-style bin; this is the guard's PRIMARY task source,
     since at the first edit the tree is usually clean and code-file edits
     carry no task number (the path/uncommitted derivation silently no-ops in
     the seed's own incident) [verify: auto-test]
-  - [ ] 6.1 Write tests for the mismatch check: matching branch silent;
+      → `bin/embo-task-state` set/get/clear writes
+        `<git-toplevel>/tmp/embo-task-state/<session_id>.json` (anchored on
+        the git toplevel so a subdirectory write and the guard's read agree);
+        impl.md Step 2 records the folder task number; 14/14 tests pass
+        (`bash plugin/bin/embo-task-state.test.sh`) [live] (2026-11-07)
+  - [X] 6.1 Write tests for the mismatch check: matching branch silent;
     mismatch in `warn` emits one line with a create/switch suggestion;
     mismatch in `block` denies ONCE then records the marker and does NOT
     re-deny the retry (the single denial delivered the guidance; re-denying
@@ -196,31 +247,71 @@
     BOTH modes; active-task state file present vs absent (fallback to path
     derivation); no derivable task or a tie stays silent; `off` mode silent
     [verify: auto-test]
-  - [ ] 6.2 Implement the mismatch check in the guard: read the active-task
+      → 10 FR-5 cases added to `main-branch-guard.test.sh` (match silent,
+        warn nudge, block deny-once, block retry not re-denied, warn marker
+        suppresses repeat, path-derivation fallback, no-task/tie/off silent,
+        protected-branch precedence). Tests-first: at write time the suite
+        ran 97 pass / 10 fail; after 6.2 it runs 107 pass / 0 fail
+        [live] (2026-11-07)
+  - [X] 6.2 Implement the mismatch check in the guard: read the active-task
     state file first, else fall back to `branch_task_derive_from_paths`;
     reuse `branch_task_matches` from `plugin/lib/branch-task-lib.sh` (no
     second match definition). Mark FR-5 coverage best-effort when no state
     file and no derivable task [verify: auto-test]
-  - [ ] 6.3 Replace the prose-only branch bullet in
+      → `fr5_check` added to `main-branch-guard.sh`: own call-sites before
+        each feature-branch allow (never the unreachable "after FR-1/2"),
+        self-skips on protected branch / off mode / empty-or-invalid
+        session_id / no single task; primary source `embo-task-state get`,
+        fallback `git status --porcelain` → `branch_task_derive_from_paths`;
+        per-session marker (`EMBO_GUARD_MARKER_DIR`, default
+        `<toplevel>/tmp/embo-guard`) suppresses repeats in both modes;
+        Bash FR-5 gated on a git mutation / tracked write and exempts the
+        `git switch -c` / `git checkout -b` remedy. Approach verified by
+        approach-validator before coding (insertion-point refuted, fixed).
+        107/107 guard tests + 89 lib + 14 writer pass; fallback also
+        confirmed with a live throwaway-repo run [live] (2026-11-07).
+        PROVISIONAL: the primary-source path assumes the hook payload
+        `.session_id` equals the `${CLAUDE_SESSION_ID}` impl.md writes with
+        — unverifiable offline; the fallback path covers the mismatch
+        regardless, and the auto-tests drive session_id explicitly
+  - [X] 6.3 Replace the prose-only branch bullet in
     `plugin/commands/impl.md` with a one-line pointer that the guard
     enforces it per the profile mode, with no task numbers
     [verify: code-only]
+      → Step 2's advisory "Notice the current branch" bullet replaced with
+        a one-line "the guard enforces this per branch_task_mode" pointer;
+        the example task number dropped so no task literal remains in the
+        command body (code-only) (2026-11-07)
 
-- [ ] 7.0 **User Story:** As a maintainer, I want the guard registered,
+- [X] 7.0 **User Story:** As a maintainer, I want the guard registered,
   documented and verified live so that it ships like every other hook
-  [0/0]
-  - [ ] 7.1 Add a second PreToolUse entry to `plugin/hooks/hooks.json` with
+  [6/6]
+  - [X] 7.1 Add a second PreToolUse entry to `plugin/hooks/hooks.json` with
     matcher `Edit|Write|NotebookEdit|Bash` calling the guard, leaving the
     `approve-compound.sh` entry untouched; update the manifest description
     [verify: auto-test]
-  - [ ] 7.2 Add a test (or test-file assertion) that checks the registered
+      → second PreToolUse entry added (matcher Edit|Write|NotebookEdit|Bash
+        → main-branch-guard.sh); the approve-compound Bash entry is left as
+        its own entry; description updated. jq confirms two PreToolUse
+        entries [live] (2026-11-07)
+  - [X] 7.2 Add a test (or test-file assertion) that checks the registered
     entry with `jq` and that the guard test file exits 0
     [verify: auto-test]
-  - [ ] 7.3 Add the terse Safety Rules note to `CLAUDE.md` pointing at the
+      → test_registered_in_hooks_json added to the guard suite: jq-checks
+        the guard entry, its matcher, and that the approve-compound Bash
+        entry survives; suite exits 0 at 111/111 [live] (2026-11-07)
+  - [X] 7.3 Add the terse Safety Rules note to `CLAUDE.md` pointing at the
     hook as the enforcement [verify: code-only]
-  - [ ] 7.4 Add the guard to the README hook list and state the best-effort
+      → Safety Rules protected-branch note now points at
+        main-branch-guard.sh as the fuller enforcement, with the
+        best-effort caveat (2026-11-07)
+  - [X] 7.4 Add the guard to the README hook list and state the best-effort
     limit and the remote-branch-protection complement, with no task
     references [verify: code-only]
+      → added as a row in the docs/REFERENCE.md hook table (the catalog the
+        README points to) with the best-effort + remote-protection note;
+        manual-install block and prompt-free allowlist updated for parity;
+        no task references [live] (2026-11-07)
   - [X] 7.5 Confirm the provisional behaviours against current hooks docs
     (`additionalContext` for warn, deny precedence with two matching
     PreToolUse hooks) and record the outcome in the design notes — DONE
@@ -228,15 +319,28 @@
     recorded in the tech-design "Past Decisions" and final BLOCKED note).
     Note: this gates the 3.5 emission contract, so it belongs FIRST in the
     work order, not last [verify: manual-run-claude]
-  - [ ] 7.6 Add an integration fixture that runs BOTH registered PreToolUse
+  - [X] 7.6 Add an integration fixture that runs BOTH registered PreToolUse
     hooks on `git push origin main` (approve-compound + the guard) and
     confirms a clean deny, and on a compound approve-compound would rewrite
     (`updatedInput`) that the guard still denies against the ORIGINAL command
     [verify: auto-test]
-  - [ ] 7.7 After `/reload-plugins`, in a live session on `main`: a real
+      → `main-branch-guard.integration.test.sh`: drives both hooks on one
+        payload. push origin main → guard denies, approve does not allow;
+        `echo x > tracked.txt` (echo allowed) → approve ALLOWS while the
+        guard denies the original (the binding deny); read-only compound →
+        no deny. 6/6 pass [live] (2026-11-07)
+  - [X] 7.7 After `/reload-plugins`, in a live session on `main`: a real
     Edit of a tracked file is refused with the guard message and
     `approve-compound` still approves a compound Bash command
     [verify: manual-run-user]
+      → verified live: marketplace repointed to this checkout, plugin
+        reinstalled + reloaded; in a session on `main`, a real Edit tool
+        call on a tracked file was refused with
+        `PreToolUse:Edit hook error: main-branch-guard: refusing to edit a
+        tracked file while branch main is checked out…`, and the read-only
+        compound `git status && git log --oneline -3` still ran (guard
+        silent). This also confirms the live `session_id` path end to end,
+        de-provisionalizing 6.2 [live] (2026-11-08)
 
 ## Decisions-taken
 
