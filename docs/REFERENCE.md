@@ -156,6 +156,9 @@ never blocks Claude).
 | `behavioral-reminder.sh` | `UserPromptSubmit` | Injects rule-tag reminders; targeted on criticism, implementation, git requests | `BEHAVIORAL_REMINDER_DISABLED=1` in `settings.json` env |
 | `approve-compound.sh` | `PreToolUse` (Bash) | Auto-approves a Bash command when every subcommand (after stripping redirects/env/wrappers, splitting on `&& \|\| ; \| &`) already matches your `permissions.allow` and none matches `deny`. Falls through to the normal prompt on anything unparseable; never overrides `deny` or protected-dir checks | Remove the `PreToolUse` matcher |
 | `embo-capture.sh` | (helper, not a registered hook) | Output capture wrapper: approved commands are rewritten through it; full output saved to `tmp/cap/`, small output inline, large output a preview + `[embo-capture]` marker (path + real exit code). Filter-tail pipelines are decomposed (see below) | Remove the `approve-compound.sh` registration |
+| `embo-telemetry-start.sh` | `SessionStart` | Records the session start time (epoch) for duration tracking | Remove the `SessionStart` entry |
+| `embo-telemetry-write.sh` | `Stop` | Writes one per-session telemetry record (tool counts, per-tool breakdown, failed calls, embo commands, profile, duration) to `.claude/embo_state/telemetry/`; sweeps records older than 90 days | Remove the `Stop` telemetry entry |
+| `embo-telemetry-subagent.sh` | `SubagentStop` | Folds a subagent's own tool calls into the session breakdown (a flat parent scan misses them) | Remove the `SubagentStop` entry |
 
 ### Hook setup
 
@@ -224,6 +227,32 @@ Tuning (env in `settings.json`): `EMBO_CAPTURE_MAX_LINES` /
 `EMBO_CAPTURE_MAX_BYTES` (inline thresholds, default 10/300),
 `EMBO_CAPTURE_PREVIEW_LINES` (default 5), `EMBO_CAPTURE_DIR`
 (default `tmp/cap`).
+
+### Session telemetry (`embo-usage`)
+
+The three `embo-telemetry-*` hooks record one JSONL line per session
+under `.claude/embo_state/telemetry/` (gitignored, never committed).
+Each record holds the active profile, session duration, total tool
+calls, a per-tool breakdown (subagent calls included), the number of
+failed calls, and the embo commands used. Records are per-session
+files, so parallel worktree sessions never collide; files older than
+90 days are swept automatically.
+
+`embo-usage` reads them:
+
+```
+embo-usage                 # table of every recorded session
+embo-usage --last 10       # the 10 most recent
+embo-usage --profile fast  # only sessions run under the fast profile
+embo-usage --stats         # totals, mean/median tool calls, profile mix
+embo-usage --json          # the same stats as a JSON object
+```
+
+Use it to check whether a profile change actually reduced tool calls,
+or to find which sessions were the most expensive. For fully
+prompt-free access, add `"Bash(embo-usage *)"` to `permissions.allow`.
+No API token counts are recorded — hooks cannot see them; the metric
+is tool calls, not tokens.
 
 ### Docs-first enforcement (prompt-based, not a hook)
 
