@@ -39,6 +39,15 @@ rules:
     # Response when a request falls outside the active task. `warn` =
     # flag and suggest documenting; `off` = say nothing.
     scope_drift: warn
+    # Branches the main-branch-guard will protect. Exact names; no globs.
+    protected_branches: [main, master]
+    # What the guard does on a protected branch. `block` = deny the call;
+    # `warn` = allow with a visible warning; `off` = disabled.
+    protected_branch_mode: block
+    # Response when the active task does not match the checked-out branch.
+    # `block` = deny once then record a marker (avoids wedging);
+    # `warn` = emit one line; `off` = silent.
+    branch_task_mode: warn
 
 git:
   # Commit-message convention. `conventional` = Conventional Commits;

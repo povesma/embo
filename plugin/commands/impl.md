@@ -277,13 +277,19 @@ ls tasks/{feature-id}-{feature-name}/*-test-plan.md 2>/dev/null
   `/tasks/[JIRA-ID]-[feature-name]/`
 - Identify the next incomplete sub-task
 - Extract requirements and acceptance criteria
-- **Notice the current branch.** Compare `git symbolic-ref --short -q
-  HEAD` against the task ID from the folder name. If the branch name
-  does not reference the task, look for an existing local branch that
-  does (`git branch --list '*<task-id>*'`) and suggest switching to
-  it; if none exists, mention the mismatch and continue. One line to
-  the user; no gate. `embo-deliver` warns again at delivery as a
-  safety net.
+- **Record the active task number** so the branch guard can check it
+  against the current branch on your first edit. Using the task ID from
+  the folder name (its leading digits):
+  ```bash
+  embo-task-state set ${CLAUDE_SESSION_ID} <task-number>
+  ```
+  `${CLAUDE_SESSION_ID}` is substituted by Claude Code before the call.
+  This writes a small git-ignored `tmp/` state file; the guard reads it
+  as its primary source for the branch/task match. Skip only if the
+  session id is unavailable.
+- **Branch/task match is enforced by the guard**, per the profile's
+  `branch_task_mode` (warn nudges once; block refuses the first edit once;
+  off is silent) — no manual check here.
 
 ### 3. RLM-Powered Context Discovery
 

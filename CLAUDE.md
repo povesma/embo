@@ -380,6 +380,23 @@ This includes but is not limited to:
 **Protocol**: State what you intend to do and why, then wait for the user to
 explicitly approve before running the command.
 
+**Protected branches**: never push directly to `main`/`master`; branch and
+open a PR. Enforcement is a `permissions.deny` rule in the repo-tracked
+`.claude/settings.json` (`Bash(git push origin main *)` and the
+`master` equivalent), which the `approve-compound.sh` hook turns into a
+hard deny at the point of the push. The deny rule must use the space-star
+shape (`cmd *`), not a glued glob (`cmd*`) — the latter silently fails to
+match. It covers only the literal `git push origin <branch>` form — a bare
+`git push`, a `HEAD:main` refspec, or a flag before the remote
+(`git push --force origin main`) are NOT caught — so it is a stopgap, not
+a complete branch guard. The fuller enforcement is the
+`main-branch-guard.sh` PreToolUse hook: it refuses edits and history
+mutations while a protected branch is checked out and refuses pushes that
+target a protected ref (implicit, `HEAD:main`, `--all`, refspecs), per
+the profile's `protected_branch_mode`. It is still best-effort — Bash is
+Turing-complete, so wrapped or scripted forms can evade it; remote branch
+protection is the real backstop.
+
 ## Task Marking Convention
 
 - **`[X]`** — done: ONLY when tested/verified AND passing, or explicitly confirmed by user

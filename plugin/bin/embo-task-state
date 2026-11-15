@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+# embo-task-state — records the active task number for the running
+# /embo:impl session, so the main-branch guard's branch/task mismatch
+# check (FR-5) has a reliable primary source instead of deriving the
+# task from the edited path or from uncommitted changes — both of which
+# silently no-op at the first edit of a run, when the tree is usually
+# clean and the first edited file carries no task number itself.
+#
+# Like bin/embo-profile and bin/embo-session-state, this is a thin
+# wrapper shipped in the plugin's bin/ (on the Bash tool PATH while the
+# plugin is enabled) so commands and hooks call a bare
+# `embo-task-state ...` — no expansion in the command string, so no
+# approval prompt, and a single narrow `Bash(embo-task-state *)` allow
+# rule matches.
+#
+# The file is project-scoped and git-ignored:
+#   <git-toplevel>/tmp/embo-task-state/<session_id>.json
+# keyed by session_id so concurrent sessions (worktrees, parallel
+# terminals) never collide. The dir is anchored on the git toplevel (not
+# the process cwd) so a write from a subdirectory and the guard's later
+# read land on the same file; each worktree has its own toplevel, so the
+# writer and reader still agree within a worktree. It never leaves the
+# project tree, unlike embo-session-state's user-global store — the
+# active task is specific to one project's working copy, not a
+# cross-project concept.
+#
+# Subcommands:
+#   set <session_id> <task_number>   Record the active task number
+#                                     (e.g. "055"). Overwrites any
+#                                     prior value for this session.
+#   get <session_id>                 Print the recorded task number, or
+#                                     nothing if absent/unreadable.
+#   clear <session_id>               Remove the state file for this
+#                                     session. Idempotent.
+#
+# Id safety: an empty id, or one not matching ^[A-Za-z0-9._-]+$ or
+# containing `..`, is rejected (non-zero exit) so a hostile or missing
+# id can never build a path outside the state dir.
+#
+# Overridable for tests: EMBO_TASK_STATE_DIR (default:
+# <git-toplevel>/tmp/embo-task-state). jq is required.
+
+set -uo pipefail
+
+die() { printf 'embo-task-state: %s\n' "$*" >&2; exit 2; }
+
+command -v jq >/dev/null 2>&1 || die "jq is required but not found."
+
+# Resolve the state dir. An explicit EMBO_TASK_STATE_DIR is honoured as
+# given (used by tests). Otherwise anchor on the git toplevel so a write
+# from a subdirectory and the guard's later read resolve to the SAME
+# file; fall back to a cwd-relative path only outside a git tree.
+if [ -n "${EMBO_TASK_STATE_DIR:-}" ]; then
+  STATE_DIR="$EMBO_TASK_STATE_DIR"
+else
+  _top="$(git rev-parse --show-toplevel 2>/dev/null)"
+  if [ -n "$_top" ]; then
+    STATE_DIR="$_top/tmp/embo-task-state"
+  else
+    STATE_DIR="tmp/embo-task-state"
+  fi
+fi
+
+valid_id() {
+  local id="$1"
+  [ -n "$id" ] || return 1
+  case "$id" in *..*) return 1 ;; esac
+  case "$id" in *[!A-Za-z0-9._-]*) return 1 ;; esac
+  return 0
+}
+
+state_path() {
+  local id="$1"
+  valid_id "$id" || die "invalid session id"
+  printf '%s/%s.json' "$STATE_DIR" "$id"
+}
+
+cmd_set() {
+  local id="${1:-}" task="${2:-}" path tmp
+  valid_id "$id" || die "invalid session id"
+  [ -n "$task" ] || die "usage: embo-task-state set <session_id> <task_number>"
+  path="$(state_path "$id")"
+  mkdir -p "$STATE_DIR" 2>/dev/null || die "cannot create $STATE_DIR"
+  tmp="$(mktemp "$STATE_DIR/.state.XXXXXX")" || die "cannot create temp file"
+  jq -n --arg task "$task" '{task_number: $task}' > "$tmp" || {
+    rm -f "$tmp"
+    die "write failed"
+  }
+  mv -f "$tmp" "$path" || { rm -f "$tmp"; die "atomic rename failed"; }
+}
+
+cmd_get() {
+  local id="${1:-}" path
+  valid_id "$id" || die "invalid session id"
+  path="$(state_path "$id")"
+  [ -f "$path" ] || return 0
+  jq -r '.task_number // empty' "$path" 2>/dev/null
+}
+
+cmd_clear() {
+  local id="${1:-}" path
+  valid_id "$id" || die "invalid session id"
+  path="$(state_path "$id")"
+  rm -f "$path"
+}
+
+main() {
+  local cmd="${1:-}"
+  [ "$#" -gt 0 ] && shift
+  case "$cmd" in
+    set)   cmd_set "$@" ;;
+    get)   cmd_get "$@" ;;
+    clear) cmd_clear "$@" ;;
+    *) die "usage: embo-task-state {set <session_id> <task_number>|get <session_id>|clear <session_id>}" ;;
+  esac
+}
+
+main "$@"
