@@ -28,7 +28,13 @@ Read the mode from the user's words; ask only if genuinely unclear.
 
 ## Before anything: the tool gate
 
-If `EnterWorktree` is not available in this session, stop and say:
+Check that `EnterWorktree` is callable. It may be a deferred tool —
+listed by name but with its schema not yet loaded. A deferred tool is
+not absent: load it first (via the session's tool-search mechanism,
+e.g. `ToolSearch` with `select:EnterWorktree`), then treat it as
+available. Only conclude the tool is unavailable once that load fails.
+
+If `EnterWorktree` cannot be loaded, stop and say:
 
 > Worktree tools are not available here (they need a recent Claude
 > Code). You can run `git worktree add` by hand, or work in the main
@@ -50,13 +56,15 @@ git rev-parse --path-format=absolute --git-common-dir
 Different means you are already inside a linked worktree. Stop and
 say so — worktrees are opened from the main tree.
 
-**2. Check the base.** Native worktrees branch from the remote default
-branch (`worktree.baseRef: "fresh"`), NOT from where you are. So a
-worktree opened off a feature branch will not contain that branch's
-work, and uncommitted or unpushed files will be missing inside it.
+**2. Check the base.** Where a native worktree branches from depends on
+the `worktree.baseRef` setting: the shipped default `"fresh"` branches
+from the remote default branch, NOT from where you are, while `"head"`
+branches from the current checkout. Under `"fresh"`, a worktree opened
+off a feature branch will not contain that branch's work, and
+uncommitted or unpushed files will be missing inside it.
 
-Say in one line which base the worktree will have and what that means
-for the files in play.
+Read the effective setting and say in one line which base the worktree
+will have and what that means for the files in play.
 
 If the branch is not the default one, or the tree is dirty, show the
 fix and offer to apply it (`AskUserQuestion`, once per session):
@@ -135,8 +143,16 @@ in those terms, having been told what it drops.
 - **No dependency install.** A fresh worktree may need the project's
   own setup (`npm install` and the like); say so rather than guessing
   at the command.
-- **Subagents do not call these tools.** The worktree lifecycle
-  belongs to the session that opened it; a subagent cannot exit one.
+- **Subagents do not drive the worktree lifecycle.** A subagent may
+  *run inside* a worktree with full Bash, file, and git access, but the
+  open/exit tools belong to the session that opened the worktree; a
+  subagent cannot enter or exit one.
+- **Isolation guard.** A worktree-isolated session refuses commands
+  whose effect reaches the main checkout — editing it, redirecting git
+  into it, or a git scope it cannot verify. It does not catch everything
+  (plain `cp` and shell redirects are not checked). A command rejected
+  inside a worktree that would run in the main tree is this guard, not
+  embo — rephrase it rather than working around the guard.
 
 ## Enforcement note
 

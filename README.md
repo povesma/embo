@@ -496,6 +496,20 @@ Full agent reference in [docs/REFERENCE.md](docs/REFERENCE.md#test-subagents).
 
 ---
 
+## Tips
+
+### Multiple GitHub accounts — per-directory isolation
+
+If you work across GitHub accounts (personal vs. work), `gh auth switch`
+is a global state change that breaks other open terminals. The
+`GH_CONFIG_DIR` + direnv pattern and the `ghx` wrapper both give true
+per-directory isolation on macOS, Linux, and WSL without touching global
+auth state.
+
+Full setup guide: **[docs/GH-ACCOUNTS.md](docs/GH-ACCOUNTS.md)**
+
+---
+
 ## Reference
 
 Depth on every feature — prerequisites, the manual (no-plugin) install,

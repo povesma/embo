@@ -143,6 +143,35 @@ assert_eq "unsafe -> fall"   "fallthrough" "$(dec 'echo $(whoami)')"
 assert_eq "one unknown fall" "fallthrough" "$(dec 'ls && unknowncmd')"
 rm -rf "$_TMPH"
 
+# ---- 3.3b protected-branch deny rule (task 055 guard) ----
+# matches_rule supports three rule shapes only: exact `Bash(cmd)`,
+# space-star `Bash(cmd *)`, colon-star `Bash(cmd:*)`. A glued glob like
+# `Bash(git push origin main*)` is NONE of these: the `*` is treated as a
+# literal to match, so it silently fails to match `git push origin main`.
+# This is the cause of the "deny rule did not fire" report (NOT a zsh or
+# production-runtime defect). The shape that guards the protected branch,
+# covering a bare push and any trailing flags, is the space-star
+# `Bash(git push origin main *)`.
+_TMPG="$(mktemp -d)"
+mkdir -p "$_TMPG/.claude"
+printf '{"permissions":{"allow":["Bash(git status *)","Bash(git push *)"],"deny":["Bash(git push origin main *)"]}}' \
+  > "$_TMPG/.claude/settings.json"
+decg() { HOME="$_TMPG" decide "$1" "$_TMPG/noproj"; }
+assert_eq "push to main denied"        "deny"        "$(decg 'git push origin main')"
+assert_eq "push to main --force denied" "deny"       "$(decg 'git push origin main --force')"
+assert_eq "push to feature allowed"    "allow"       "$(decg 'git push origin feat/x')"
+rm -rf "$_TMPG"
+
+# The glued-glob shape the SEED originally tried does NOT match: this
+# pins the failure mode so the wrong rule shape is not reintroduced.
+_TMPGB="$(mktemp -d)"
+mkdir -p "$_TMPGB/.claude"
+printf '{"permissions":{"allow":["Bash(git push *)"],"deny":["Bash(git push origin main*)"]}}' \
+  > "$_TMPGB/.claude/settings.json"
+assert_eq "glued-glob deny does NOT fire" "allow" \
+  "$(HOME="$_TMPGB" decide 'git push origin main' "$_TMPGB/noproj")"
+rm -rf "$_TMPGB"
+
 # ---- 3.1 / 3.5 main I/O wrapper (invoke the script via stdin) ----
 HOOK="$HERE/approve-compound.sh"
 run_hook() { printf '%s' "$1" | bash "$HOOK"; }
@@ -163,6 +192,16 @@ _OUT="$(HOME="$_TMPH2" run_hook '{"tool_name":"Bash","tool_input":{"command":"ls
 assert_eq "allow emits allow" "allow" \
   "$(printf '%s' "$_OUT" | jq -r '.hookSpecificOutput.permissionDecision')"
 rm -rf "$_TMPH2"
+
+# deny path emits permissionDecision deny through the full hook I/O
+# (task 055 protected-branch guard, proven in the bash runtime).
+_TMPH3="$(mktemp -d)"; mkdir -p "$_TMPH3/.claude"
+printf '{"permissions":{"allow":["Bash(git push *)"],"deny":["Bash(git push origin main *)"]}}' \
+  > "$_TMPH3/.claude/settings.json"
+_OUTD="$(HOME="$_TMPH3" run_hook '{"tool_name":"Bash","tool_input":{"command":"git push origin main"},"cwd":"/nope"}')"
+assert_eq "deny emits deny" "deny" \
+  "$(printf '%s' "$_OUTD" | jq -r '.hookSpecificOutput.permissionDecision')"
+rm -rf "$_TMPH3"
 
 # ---- 3.2 strip redundant capture tail ----
 # strip_redundant_tail <command> -> command with a trailing

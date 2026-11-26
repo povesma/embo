@@ -55,5 +55,8 @@ tmp/
 # Personal git-context marker (gh-context account switcher; per-user, never shared)
 .ghcontext
 
+# Per-directory gh account config (direnv; per-user, never shared)
+.envrc
+
 # Author mapping (personal; not tracked in the repo)
 .mailmap

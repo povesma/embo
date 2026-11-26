@@ -4,6 +4,23 @@ All notable changes to the embo plugin are documented here.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-15
+
+### Added
+
+- embo refuses edits, commits and pushes while `main` or `master` is
+  checked out; set `protected_branch_mode` in your profile to `warn` or `off`.
+- embo warns, or refuses, when the checked-out branch does not match the
+  task you are working on.
+- embo keeps a local per-session log of what each session did (profile,
+  duration, tool calls, commands); `embo-usage` summarizes it.
+- A guide for using several GitHub accounts, one per directory.
+
+### Fixed
+
+- `/embo:worktree` opens a worktree on current Claude Code instead of
+  reporting the worktree tools as missing, and names the real base branch.
+
 ## [0.3.1] - 2026-10-28
 
 ### Added

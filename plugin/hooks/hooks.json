@@ -1,5 +1,5 @@
 {
-  "description": "embo workflow hooks: context guard + behavioral reminders on prompt, compound-Bash auto-approve + output capture on tool use, statusline refresh on session start, correction marker capture on tool-use and end-of-turn, filtered judgment-rule injection on subagent start",
+  "description": "embo workflow hooks: context guard + behavioral reminders on prompt, compound-Bash auto-approve + output capture and protected-branch/task guard on tool use, statusline refresh on session start, correction marker capture on tool-use and end-of-turn, filtered judgment-rule injection on subagent start, per-session usage log on session start/stop and subagent stop",
   "hooks": {
     "SessionStart": [
       {
@@ -11,6 +11,10 @@
           {
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/branch-task-check.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/embo-telemetry-start.sh\""
           }
         ]
       }
@@ -48,6 +52,15 @@
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/approve-compound.sh\""
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/main-branch-guard.sh\""
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -66,6 +79,20 @@
           {
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/capture-correction.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/embo-telemetry-write.sh\""
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/embo-telemetry-subagent.sh\""
           }
         ]
       }
